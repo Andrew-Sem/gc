@@ -206,9 +206,13 @@ export type DomainCommand =
       readonly now: Timestamp
     }
 
-export type DomainError =
-  | { readonly type: "UnknownPr"; readonly pr: PrRef }
-  | { readonly type: "PrAlreadyClosed"; readonly pr: PrRef }
+/**
+ * `decide` не отклоняет команды. Неприменимая, дублирующая или относящаяся к
+ * чужому PR команда — это `{ ok: true, events: [] }`, а не ошибка. Вариантов
+ * здесь нет намеренно: если появится первый, это изменение семантики, а не
+ * добавление кода.
+ */
+export type DomainError = never
 
 export type Effect =
   | {
