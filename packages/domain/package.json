@@ -12,6 +12,7 @@
     "./contract": "./src/contract.ts"
   },
   "devDependencies": {
+    "@types/node": "^24.12.4",
     "typescript": "~6",
     "vitest": "^4.1.10"
   }

@@ -7,7 +7,9 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
   },
   "include": ["src"],
   "exclude": ["node_modules"]
