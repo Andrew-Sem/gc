@@ -31,3 +31,6 @@ dist-ssr
 
 # typescript
 *.tsbuildinfo
+
+# Claude Code: локальные настройки сессии, включая включённую заморозку
+.claude/settings.local.json

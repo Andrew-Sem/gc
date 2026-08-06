@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(./specs/**)",
+      "Write(./specs/**)",
+      "Edit(./AGENTS.md)",
+      "Write(./AGENTS.md)",
+      "Edit(./PROMPT.md)",
+      "Write(./PROMPT.md)",
+      "Edit(./packages/*/src/contract.ts)",
+      "Write(./packages/*/src/contract.ts)",
+      "Edit(./packages/*/src/fixtures.ts)",
+      "Write(./packages/*/src/fixtures.ts)",
+      "Edit(./packages/*/src/**/*.spec.ts)",
+      "Write(./packages/*/src/**/*.spec.ts)",
+      "Edit(./packages/*/freeze-manifest.json)",
+      "Write(./packages/*/freeze-manifest.json)",
+      "Edit(./packages/domain/src/framework/**)",
+      "Write(./packages/domain/src/framework/**)"
+    ]
+  }
+}

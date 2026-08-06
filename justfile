@@ -37,3 +37,14 @@ lint-fix:
 # Пример: just ui-add button dialog
 ui-add +components:
     pnpm dlx shadcn@latest add {{components}} -c apps/web
+
+# Включить заморозку: запретить правку спек и контрактов в этой сессии.
+# Выполняется человеком перед запуском реализующей сессии по PROMPT.md.
+freeze-on:
+    cp .claude/freeze-deny.json .claude/settings.local.json
+    @echo "Заморозка включена. Спеки, контракты и манифесты защищены от правки."
+
+# Выключить заморозку: вернуться в режим авторинга спек.
+freeze-off:
+    rm -f .claude/settings.local.json
+    @echo "Заморозка выключена. Режим авторинга."

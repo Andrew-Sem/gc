@@ -5,7 +5,8 @@
     "approvedAt": "2026-08-06",
     "files": {
       "src/contract.ts": "02c5bc70fc4b7f14a83a5e3d0fb74e3855d87b2ffb9ed91f7e99ab957efa27b4",
-      "src/fixtures.ts": "4bfcde2e5d5d0f95d9a6d4c35f75c5f7e980dcc046c56c17359225abca60ef94"
+      "src/fixtures.ts": "4bfcde2e5d5d0f95d9a6d4c35f75c5f7e980dcc046c56c17359225abca60ef94",
+      "src/freeze.spec.ts": "a2ce31eae8d58f270f77b0ff059e8627af01f8ff53ff6c4bae4b26994533d496"
     }
   },
   "slices": {

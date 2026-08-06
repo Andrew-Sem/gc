@@ -4,9 +4,10 @@
     "status": "domain-approved",
     "approvedAt": "2026-08-06",
     "files": {
-      "src/contract.ts": "c2d242da43a4070319cdcfb87bafc6bc3f7e9f8654fe2ee23ae692d5edd8f987",
+      "src/contract.ts": "4bbf1b424100540d8daaf22e6f1e75bc003da9fa3d36cf431cd1953a12986703",
       "src/fixtures.ts": "747e3574e610e4ec94c5272323392341de892d2830c57e22191789af78009a5c",
-      "src/framework/runner.ts": "b58a539f9c2a508f0985d5b3669f970f4395069446d9f12b2e3a77de0b6af49d"
+      "src/framework/runner.ts": "b58a539f9c2a508f0985d5b3669f970f4395069446d9f12b2e3a77de0b6af49d",
+      "src/freeze.spec.ts": "a2ce31eae8d58f270f77b0ff059e8627af01f8ff53ff6c4bae4b26994533d496"
     }
   },
   "slices": {
@@ -15,6 +16,13 @@
       "approvedAt": "2026-08-06",
       "files": {
         "src/admission.spec.ts": "52be06643bf261c7799782ffe3cf392fc946b2356eaa7869542196ba78544c3b"
+      }
+    },
+    "ingestion": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-06",
+      "files": {
+        "src/ingestion.spec.ts": "18233d000e252fa3f536f9cf9b6c3cbcfedfad51ee82fdf4f53f6dc54b22062a"
       }
     },
     "merge-gate": {
