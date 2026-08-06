@@ -7,7 +7,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "typecheck": "turbo typecheck",
-    "test": "turbo test"
+    "test": "turbo test --continue"
   },
   "devDependencies": {
     "@andrew-semyonov/harness-linter": "^0.1.2",
