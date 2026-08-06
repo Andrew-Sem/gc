@@ -16,6 +16,13 @@
       "files": {
         "src/admission.spec.ts": "52be06643bf261c7799782ffe3cf392fc946b2356eaa7869542196ba78544c3b"
       }
+    },
+    "merge-gate": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-06",
+      "files": {
+        "src/merge-gate.spec.ts": "4915e3f8a195d7e29c4b17f4e6285472c9ae1811303fa626c9737ba651596727"
+      }
     }
   }
 }
