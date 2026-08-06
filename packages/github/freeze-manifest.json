@@ -1,0 +1,20 @@
+{
+  "schema": "gc.domain-executable-specs-freeze.v1",
+  "shared": {
+    "status": "domain-approved",
+    "approvedAt": "2026-08-06",
+    "files": {
+      "src/contract.ts": "02c5bc70fc4b7f14a83a5e3d0fb74e3855d87b2ffb9ed91f7e99ab957efa27b4",
+      "src/fixtures.ts": "4bfcde2e5d5d0f95d9a6d4c35f75c5f7e980dcc046c56c17359225abca60ef94"
+    }
+  },
+  "slices": {
+    "webhook": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-06",
+      "files": {
+        "src/webhook.spec.ts": "d3661568da6c8fa4b2c1c825c2298ecc343ed3203ab587881ac6a192c1e6b562"
+      }
+    }
+  }
+}

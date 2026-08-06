@@ -4,7 +4,7 @@
     "status": "domain-approved",
     "approvedAt": "2026-08-06",
     "files": {
-      "src/contract.ts": "ec1ee8db203c64ad707604a97f3cf7da3453590c072bb96094bed765ec8135a1",
+      "src/contract.ts": "c2d242da43a4070319cdcfb87bafc6bc3f7e9f8654fe2ee23ae692d5edd8f987",
       "src/fixtures.ts": "747e3574e610e4ec94c5272323392341de892d2830c57e22191789af78009a5c",
       "src/framework/runner.ts": "b58a539f9c2a508f0985d5b3669f970f4395069446d9f12b2e3a77de0b6af49d"
     }
@@ -22,6 +22,27 @@
       "approvedAt": "2026-08-06",
       "files": {
         "src/merge-gate.spec.ts": "4915e3f8a195d7e29c4b17f4e6285472c9ae1811303fa626c9737ba651596727"
+      }
+    },
+    "effects": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-06",
+      "files": {
+        "src/effects.spec.ts": "f1e32ce5283311d7fffb57c5834cd577571b93685da6489e39316de02d3ec823"
+      }
+    },
+    "why-stuck": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-06",
+      "files": {
+        "src/why-stuck.spec.ts": "c21e913ed9d1fe7b6aeaf9b86e4452dcf9fa8553cb1ca34b3107cc80134285c1"
+      }
+    },
+    "wiring": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-06",
+      "files": {
+        "src/wiring.spec.ts": "40254e406d5a4ea5e0fd81446e2a42e31c9be5b457ee088f72a093525eff8197"
       }
     }
   }

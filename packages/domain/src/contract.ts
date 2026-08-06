@@ -209,3 +209,69 @@ export type DomainCommand =
 export type DomainError =
   | { readonly type: "UnknownPr"; readonly pr: PrRef }
   | { readonly type: "PrAlreadyClosed"; readonly pr: PrRef }
+
+export type Effect =
+  | {
+      readonly type: "RunAgent"
+      readonly tenant: string
+      readonly repo: string
+    }
+  | {
+      readonly type: "MergePr"
+      readonly pr: PrRef
+      readonly headSha: string
+    }
+  | {
+      readonly type: "ClosePr"
+      readonly pr: PrRef
+    }
+
+export type Verdict = "will_merge" | "waiting" | "will_close"
+
+export type PrStatusLine = {
+  readonly pr: PrRef
+  readonly headSha: string
+  readonly verdict: Verdict
+  readonly reason: MergeRefusal | null
+  readonly ageHours: number
+  readonly hoursUntilClose: number
+}
+
+export const HOUR_MS = 3_600_000
+
+export type CronSpec = {
+  readonly name: string
+  readonly intervalMs: number
+  readonly target: string
+}
+
+export const EXPECTED_CRONS: readonly CronSpec[] = [
+  { name: "production", intervalMs: HOUR_MS, target: "tick:production" },
+  { name: "sweep", intervalMs: 6 * HOUR_MS, target: "tick:sweep" },
+]
+
+export type RouteSpec = {
+  readonly path: string
+  readonly method: "GET" | "POST"
+}
+
+export const EXPECTED_ROUTES: readonly RouteSpec[] = [
+  { path: "/github/webhook", method: "POST" },
+]
+
+export type SandboxMode = "read-only" | "workspace-write" | "danger-full-access"
+
+export type CodexSettings = {
+  readonly model: string
+  readonly reasoning: "low" | "medium" | "high" | "xhigh"
+  readonly checkoutPath: string
+}
+
+export type CodexOptions = {
+  readonly model: string
+  readonly modelReasoningEffort: CodexSettings["reasoning"]
+  readonly workingDirectory: string
+  readonly sandboxMode: SandboxMode
+  readonly networkAccessEnabled: boolean
+  readonly skipGitRepoCheck: boolean
+}
