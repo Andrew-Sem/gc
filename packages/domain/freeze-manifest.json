@@ -29,7 +29,7 @@
       "status": "domain-approved",
       "approvedAt": "2026-08-06",
       "files": {
-        "src/merge-gate.spec.ts": "4915e3f8a195d7e29c4b17f4e6285472c9ae1811303fa626c9737ba651596727"
+        "src/merge-gate.spec.ts": "e42096f3267256f196f83dbddce955785dbb6df741686d44053a14a09af35223"
       }
     },
     "effects": {

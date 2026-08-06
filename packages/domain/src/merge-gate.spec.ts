@@ -3,6 +3,7 @@ import { decider } from "./decider"
 import {
   check,
   checkSeen,
+  created,
   HEAD,
   HOUR,
   mergeablePr,
@@ -78,14 +79,22 @@ examples("одно непройденное условие — отказ с п�
   },
 ])
 
-spec("обязательных проверок нет вообще — не мержим", {
-  given: [
-    ...mergeablePr(1),
-    checkSeen(1, check({ required: false, name: "preview" })),
-  ],
-  when: sweep,
-  then: [declined(1, { kind: "no_required_checks" })],
-})
+examples("обязательных проверок нет вообще — не мержим", [
+  {
+    given: [created(1), prSeen(1, { createdAt: NOW - 2 * HOUR })],
+    when: sweep,
+    then: [declined(1, { kind: "no_required_checks" })],
+  },
+  {
+    given: [
+      created(1),
+      prSeen(1, { createdAt: NOW - 2 * HOUR }),
+      checkSeen(1, check({ required: false, name: "preview" })),
+    ],
+    when: sweep,
+    then: [declined(1, { kind: "no_required_checks" })],
+  },
+])
 
 spec("зелёное относится к другому коммиту — не мержим", {
   given: [
