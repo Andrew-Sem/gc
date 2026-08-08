@@ -1,10 +1,15 @@
-import { HomePage } from "@/pages/home"
-import { ThemeProvider } from "@/shared/theme"
+import { ThemeProvider } from "../shared/theme"
+import type { ProductionBrowserClient } from "./browser-client"
 
-export function App() {
+type AppProps = {
+  readonly client: ProductionBrowserClient
+}
+
+export function App({ client }: AppProps) {
+  void client
   return (
     <ThemeProvider>
-      <HomePage />
+      <main />
     </ThemeProvider>
   )
 }

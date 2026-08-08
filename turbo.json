@@ -13,6 +13,10 @@
     "test": {
       "dependsOn": ["^test"]
     },
+    "@workspace/acceptance#test": {
+      "dependsOn": ["^test"],
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true

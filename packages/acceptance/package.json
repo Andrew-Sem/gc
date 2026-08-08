@@ -1,0 +1,35 @@
+{
+  "name": "@workspace/acceptance",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "smoke-release": "tsx src/release-smoke.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@workspace/convex": "workspace:*",
+    "@workspace/domain": "workspace:*",
+    "@workspace/github": "workspace:*",
+    "@workspace/worker": "workspace:*",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "web": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^24.12.4",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "convex-test": "^0.0.54",
+    "jsdom": "^30.0.1",
+    "tsx": "^4.23.1",
+    "typescript": "~6",
+    "vitest": "^4.1.10",
+    "yaml": "^2.9.0"
+  }
+}

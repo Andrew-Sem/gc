@@ -2,10 +2,10 @@
   "schema": "gc.domain-executable-specs-freeze.v1",
   "shared": {
     "status": "domain-approved",
-    "approvedAt": "2026-08-06",
+    "approvedAt": "2026-08-07",
     "files": {
-      "src/contract.ts": "4bbf1b424100540d8daaf22e6f1e75bc003da9fa3d36cf431cd1953a12986703",
-      "src/fixtures.ts": "747e3574e610e4ec94c5272323392341de892d2830c57e22191789af78009a5c",
+      "src/contract.ts": "dbf717270d4b33e9b919b5f1fa4ee3b1c738427353ff4fafc81771b14abb55fc",
+      "src/fixtures.ts": "9fd80cd19cd3e88bbc554483f341489db100bc870ea4a69619bfa1bd814af613",
       "src/framework/runner.ts": "b58a539f9c2a508f0985d5b3669f970f4395069446d9f12b2e3a77de0b6af49d",
       "src/freeze.spec.ts": "a2ce31eae8d58f270f77b0ff059e8627af01f8ff53ff6c4bae4b26994533d496"
     }
@@ -13,44 +13,44 @@
   "slices": {
     "admission": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-06",
+      "approvedAt": "2026-08-07",
       "files": {
-        "src/admission.spec.ts": "52be06643bf261c7799782ffe3cf392fc946b2356eaa7869542196ba78544c3b"
+        "src/admission.spec.ts": "4764831db881245869feab47b60bcf4bce2c9000fcefed8920e831cf1adff3ad"
       }
     },
     "ingestion": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-06",
+      "approvedAt": "2026-08-07",
       "files": {
-        "src/ingestion.spec.ts": "18233d000e252fa3f536f9cf9b6c3cbcfedfad51ee82fdf4f53f6dc54b22062a"
+        "src/ingestion.spec.ts": "3b51c078ea7a6fc18fd0ac74522d7ff8cfc4f0f6f6d90af304c6dcccedd3fc3f"
       }
     },
     "merge-gate": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-06",
+      "approvedAt": "2026-08-07",
       "files": {
-        "src/merge-gate.spec.ts": "e42096f3267256f196f83dbddce955785dbb6df741686d44053a14a09af35223"
+        "src/merge-gate.spec.ts": "36cbffd7e2dc20d07193a93c667429bfad16e2d56fc912f92e7c4fda6f2a6529"
       }
     },
     "effects": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-06",
+      "approvedAt": "2026-08-07",
       "files": {
-        "src/effects.spec.ts": "f1e32ce5283311d7fffb57c5834cd577571b93685da6489e39316de02d3ec823"
+        "src/effects.spec.ts": "2aba630e7a3c014b5d2d4ef47a9e46ea6c8aad44b9545e8592cbc16de0c68bd3"
       }
     },
     "why-stuck": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-06",
+      "approvedAt": "2026-08-07",
       "files": {
-        "src/why-stuck.spec.ts": "c21e913ed9d1fe7b6aeaf9b86e4452dcf9fa8553cb1ca34b3107cc80134285c1"
+        "src/why-stuck.spec.ts": "4456ff06dcba5b270ef0c97786af183c41a97cae7a327758ccff78da32a9b967"
       }
     },
     "wiring": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-06",
+      "approvedAt": "2026-08-07",
       "files": {
-        "src/wiring.spec.ts": "40254e406d5a4ea5e0fd81446e2a42e31c9be5b457ee088f72a093525eff8197"
+        "src/wiring.spec.ts": "0e47c5e86531b79aae92030fc6a2a6fdc278fef15dc9abe806feba944424f39c"
       }
     }
   }

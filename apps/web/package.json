@@ -3,6 +3,14 @@
   "version": "0.0.1",
   "type": "module",
   "private": true,
+  "exports": {
+    "./app": "./src/app/index.ts",
+    "./client": "./src/app/browser-client.ts",
+    "./screens": "./src/app/production-screens.ts",
+    "./source": "./src/app/production-source.ts",
+    "./setup": "./src/pages/setup/index.ts",
+    "./why-stuck": "./src/pages/why-stuck/index.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -11,7 +19,11 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "@workspace/convex": "workspace:*",
+    "@workspace/domain": "workspace:*",
     "@workspace/ui": "workspace:*",
+    "better-auth": "^1.6.25",
+    "convex": "^1.42.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

@@ -1,0 +1,117 @@
+{
+  "schema": "gc.domain-executable-specs-freeze.v1",
+  "shared": {
+    "status": "domain-approved",
+    "approvedAt": "2026-08-07",
+    "files": {
+      "src/contract.ts": "7e9fb2ce386dae2a599e6fb824b6361ad3a6229592e6cc285ea431bfb17b1b2b",
+      "src/fixtures.ts": "66d4055f02d16af2cbfcd8914e37752802b566ff3a5b845d83603bf0369fdad5",
+      "src/freeze.spec.ts": "cf1e37648966b53c57295ff27159cd5d66f099a0a89d30644d3a2f0fdd532841"
+    }
+  },
+  "slices": {
+    "production-wiring": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-07",
+      "files": {
+        "src/production-wiring.spec.ts": "43e43a5a5a7683746b896cce60a0952786429b49e81f708b1cd2d8446fd0fe93"
+      }
+    },
+    "browser-application": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-08",
+      "files": {
+        "src/browser-app.spec.tsx": "d06923febe886302ac5421a8dabb289850710bda398a9bd642a4225cfe077cea",
+        "src/auth-bootstrap.spec.tsx": "37c12e8cb460158d119fe12880696c2510d3fa0448edceb79317a16bab42ff34"
+      }
+    },
+    "runtime": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-08",
+      "files": {
+        "src/runtime-contract.spec.ts": "4bd658a4315ecbf04eff4dad27dd680c70aed1df70337349bae7263ac42ac832",
+        "src/runtime-env.spec.ts": "4057b6a59993ca130fcce00edab98b52ee8ce0840cca84bbaf0b8d6b468e52d9",
+        "src/status-check.spec.ts": "6457815dc273bf98bb57441a9dbbcbff910462b6de5243b58a22558f9d65d00a"
+      }
+    },
+    "worker-runtime": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-08",
+      "files": {
+        "src/worker-loop.spec.ts": "4c67c8332b82d6b51a56fd16601d42466b5400dfc28a6f9ca2beb5bfb5e701c2",
+        "src/worker-program.spec.ts": "b88738b08e2e3ad293a4bb3d107ea3107b304f2954cf085230a6378b4af080ee",
+        "src/worker-protocol.spec.ts": "1a2022b4adf8454482b72be5e8497268671d1c5973f842bd76fbaba2c2942d10",
+        "src/real-git.integration.ts": "140abdf286e9d484f397ae2106eb38e25ba460d111c5c7c0faa53239d931e297"
+      }
+    },
+    "release-smoke": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-08",
+      "files": {
+        "src/release-smoke.spec.ts": "2e0b543525e841d10dc6ae96d7ef080f3a16fe1cbc79e8ff7eaff51c4435a520"
+      }
+    },
+    "workspace-contract": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-07",
+      "files": {
+        "workspace:AGENTS.md": "7fa60eb007ac972dbea9ca6f2c83a5ae3796f5d3f722f3cce8e05dd6ad287e53",
+        "workspace:PROMPT.md": "3cdab66d4882f416909c67116b7acf614171c98964797257cc7dde3d7a530b7d",
+        "workspace:package.json": "706724a7a7d13dff58f7e979dabaf7a66b10ae4060577b8afee4c5a6661c1103",
+        "workspace:pnpm-workspace.yaml": "62cd7488aaaff369a3ac9195ba2f910ffdef8005de647c2efbcc36d1336a73c7",
+        "workspace:turbo.json": "797b53f8e3f294b1a9aa0a714bae272b916138063fa7312cec8c88f55bc9d789",
+        "workspace:pnpm-lock.yaml": "c8f295d7938c7f14689ce655e6d1058d1fa035b845c3e493366227c6f950aed1",
+        "workspace:tsconfig.json": "243ba4bdad86e6183ee8050f63b1bfab2838a6e3d2fea53abaf8ddde44284968",
+        "workspace:biome.json": "88ceedc42be01ed9a3a6d515788fdf9e9db44877999215b7eca53cfecb0626ea",
+        "workspace:harnesslint.json": "7f8158601db882010fa6266f251a08566b2df1a155c712c615256ded8f9e2989",
+        "workspace:steiger.config.js": "578549f74c49cd92ad05199d3dc9e5d3cf459cb25d3fe8440606a5666455c271",
+        "workspace:justfile": "f4707be49b84eab9e26bd7217f737da24d6f00c8a7bbde24b6eb9b76c668d189",
+        "workspace:.claude/freeze-deny.json": "610cfabdc3fdba3c476d7336a70ecccd42cc2e0371b8f71e5fc42f7d39257585"
+      }
+    },
+    "documented-behavior": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-07",
+      "files": {
+        "workspace:specs/use-cases.md": "daee16ab2dd1fca7bf2357397447a863a3dd20ea9758351c5c0cc45a3e42f3de",
+        "workspace:specs/facts.md": "020795682ec3080bbe298ff684f398d875dd88ce3bc77f0dd2974bcef2945a48",
+        "workspace:specs/glossary.md": "0f7b8986e15a73dfc3fd87e55690703eea259b2019ea0e9a902aed828fa6828e",
+        "workspace:specs/runtime.md": "2160001fef4deb0e4aede2cb15685f230275f5706e0bb6dbfc380898456f5d7c",
+        "workspace:docs/architecture.md": "dcc191dcc1df4157820f56513b433e00c28a59cde1622777dfd86540a3ee460b",
+        "workspace:docs/executable-specs.md": "7e6419e0329d2064c8a38f11585d0b1a5722420bdc7618792f8db8affb440880"
+      }
+    },
+    "package-configuration": {
+      "status": "domain-approved",
+      "approvedAt": "2026-08-07",
+      "files": {
+        "workspace:apps/web/package.json": "70281fd587240924c67bfc73d5234792f868d177a60f7b6f2a04ac868c0af9c5",
+        "workspace:apps/web/tsconfig.json": "7561e2edc784f0ddb88d7b8b4b946523e88588eb3147e300e26c925b987bef40",
+        "workspace:apps/web/tsconfig.app.json": "cb3eed5c5a38069036c18a2b94e4028d3f3b929b66a7e781e39fa7a680f21ba2",
+        "workspace:apps/web/tsconfig.node.json": "90a22c920cbc14624fb4658b58f15c875abf3234224f3933f211849c3ada3242",
+        "workspace:apps/web/vite.config.ts": "746c7846d3a1d43830b34022ce6721c8edfaeed03b03844c6372b66cb527887a",
+        "workspace:apps/web/components.json": "8609bc954c0c736166d4309969ff234fa98a8f786fcc57c8c65446dbb7513d3a",
+        "workspace:apps/worker/package.json": "4b8d8dd43ef31880640cbea67718672a1fa1e6ac272cb5f101691d25c47b2d7d",
+        "workspace:apps/worker/tsconfig.json": "14aeb973f3048928ef795a763b94b96f2d8e56a788130cc6c05ff0a52a67939b",
+        "workspace:apps/worker/vitest.config.ts": "e1d89363d2145384f2e4b697b758a9a573596efa3d94919f9b8d563aae55be38",
+        "workspace:packages/domain/package.json": "19eed3d90f18bb1a7ef18ad71254a0cfb719373b04967c113fb1a402510b2110",
+        "workspace:packages/domain/tsconfig.json": "d55956cc0c98d096eae153716ce76a57961384dfaa7ee0a126be81a4b9ab9871",
+        "workspace:packages/domain/vitest.config.ts": "e1d89363d2145384f2e4b697b758a9a573596efa3d94919f9b8d563aae55be38",
+        "workspace:packages/github/package.json": "ff6e0ad562604ccb10b33cfd9112f9dbf641a082ef8ce9ff38b679f604d167fc",
+        "workspace:packages/github/tsconfig.json": "d55956cc0c98d096eae153716ce76a57961384dfaa7ee0a126be81a4b9ab9871",
+        "workspace:packages/github/vitest.config.ts": "e1d89363d2145384f2e4b697b758a9a573596efa3d94919f9b8d563aae55be38",
+        "workspace:packages/acceptance/package.json": "5e8ee68dc8e631350bde4d3a8dc298776ce124c1c163d3afff135c462fb5028d",
+        "workspace:packages/acceptance/tsconfig.json": "5f6d191e5b4ddd96c0cd82cf8f20b43e89d079d09412c563dc6418b754d26104",
+        "workspace:packages/acceptance/vitest.config.ts": "e1d89363d2145384f2e4b697b758a9a573596efa3d94919f9b8d563aae55be38",
+        "workspace:packages/acceptance/vitest.integration.config.ts": "882ff575beee1ae2c97f64e4e992140f0b63ef837a934a9a79447cfd72bbc441",
+        "workspace:packages/convex/package.json": "97e8e002ac32089036b61f62b7fb383dcbbfd234f5d29bee301ef3fc008d5448",
+        "workspace:packages/convex/tsconfig.json": "11033e14fb3e0effdb4a4bf03fe66ae5148da3980afc1d34d097206257ec6695",
+        "workspace:packages/convex/vitest.config.ts": "aac8d7fdc10597084c5935084f3d80bfeccd92aa4322fbfe86a7026e3ce5f35d",
+        "workspace:packages/ui/package.json": "559ef7f3edd7c2ebd0b4959b7369be9907b1ec3eac714ebc3fc6d38b481a3622",
+        "workspace:packages/ui/tsconfig.json": "dd002f9ed3f2ff4d75652f17f58388ca9601bbe09b66fbe0a94239f3d0049b6d",
+        "workspace:packages/ui/tsconfig.lint.json": "4f3f4afc31a324a0e73003c76e388f310b7414d07db557fa235c9842bfb48d6a",
+        "workspace:packages/ui/components.json": "aee7ef4129cf3749fc7935f3fd1bffd687e2fb14e6af7e524115723a097ac9c5"
+      }
+    }
+  }
+}

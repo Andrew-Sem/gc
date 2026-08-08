@@ -56,6 +56,7 @@ export function decide(
     type: "AdmissionApproved",
     tenant: command.tenant,
     repo: command.repo,
+    tenantSettings: command.tenantSettings,
     at: command.now,
   })
 }

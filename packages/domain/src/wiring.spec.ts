@@ -5,8 +5,8 @@ import { codexOptions } from "./wiring"
 
 test("расписание кронов: час на производство, шесть часов на свип", () => {
   expect(EXPECTED_CRONS).toEqual([
-    { name: "production", intervalMs: HOUR_MS, target: "tick:production" },
-    { name: "sweep", intervalMs: 6 * HOUR_MS, target: "tick:sweep" },
+    { name: "production", intervalMs: HOUR_MS, target: "wakeUp:production" },
+    { name: "sweep", intervalMs: 6 * HOUR_MS, target: "wakeUp:sweep" },
   ])
 })
 
@@ -15,6 +15,16 @@ test("роут приёма вебхуков объявлен", () => {
     path: "/github/webhook",
     method: "POST",
   })
+})
+
+test("worker protocol и health routes объявлены", () => {
+  expect(EXPECTED_ROUTES).toEqual(
+    expect.arrayContaining([
+      { path: "/worker/protocol", method: "POST" },
+      { path: "/health/live", method: "GET" },
+      { path: "/health/ready", method: "GET" },
+    ])
+  )
 })
 
 const settings: CodexSettings = {

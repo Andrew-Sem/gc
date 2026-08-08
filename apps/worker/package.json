@@ -1,0 +1,32 @@
+{
+  "name": "@workspace/worker",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --outfile=dist/main.js",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "^0.146.0",
+    "@workspace/convex": "workspace:*",
+    "@workspace/domain": "workspace:*",
+    "@workspace/github": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./git-handoff": "./src/git-handoff.ts",
+    "./loop": "./src/loop.ts",
+    "./program": "./src/program.ts",
+    "./runtime": "./src/runtime.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "esbuild": "^0.27.7",
+    "tsx": "^4.20.6",
+    "typescript": "~6",
+    "vitest": "^4.1.10"
+  }
+}

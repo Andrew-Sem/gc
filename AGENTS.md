@@ -7,7 +7,8 @@ Event-driven control plane над жизненным циклом PR: приём
 
 - `specs/use-cases.md` — что система делает, шесть сценариев
 - `specs/glossary.md` — единый язык, синонимов не заводим
-- `specs/facts.md` — одиннадцать фактов и их границы
+- `specs/facts.md` — факты и их границы
+- `specs/runtime.md` — что значит запускаемое и готовое приложение
 - `docs/architecture.md` — из чего собрана и почему именно так
 
 ## Команды
@@ -32,7 +33,9 @@ just lint    # Biome, harness-linter, границы слоёв FSD (steiger)
 `packages/domain/src/contract.ts` и таблицы `*.spec.ts`. Реализацию в этом режиме не пишем.
 
 **Режим 2 — реализация.** Отдельная чистая сессия. Задача одна: сделать зелёными уже
-написанные таблицы.
+написанные таблицы, включая vertical acceptance. Реализация может создавать production-код
+в `packages/convex`, `apps/worker`, `apps/web` и implementation-файлы harness; нельзя
+подменять production wiring отдельной in-memory реализацией.
 
 В режиме 2 **запрещено менять**:
 
@@ -40,6 +43,8 @@ just lint    # Biome, harness-linter, границы слоёв FSD (steiger)
 - любые `*.spec.ts` и `fixtures.ts`
 - `packages/domain/src/framework/`
 - всё в `specs/`, конфиги, `freeze-manifest.json`
+
+Точный implementation surface текущего one-shot перечислен в `PROMPT.md`.
 
 Если таблица кажется неверной — **не правь её**. Остановись и скажи человеку.
 
@@ -67,7 +72,7 @@ packages/domain/src/
 Семантика решений:
 
 - дублирующая или неприменимая команда — это `{ ok: true, events: [] }`, а не ошибка;
-- отклонённая команда — `{ ok: false, error: … }`; `decide` не бросает исключений;
+- `decide` не отклоняет команды и не бросает исключений;
 - порядок событий нормативен — таблицы сравнивают списки целиком.
 
 `admission` реализован как эталон wiring'а. Смотри на него, когда непонятно, как принято

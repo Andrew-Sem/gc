@@ -16,6 +16,10 @@ types:
 # Петля обратной связи для реализующего агента: типы, затем спеки
 check: types spec
 
+# Медленные hermetic integration: реальные subprocess и git repositories.
+integration:
+    pnpm --filter @workspace/acceptance test:integration
+
 # Полный линт: стиль, харнесс-политика, границы слоёв FSD
 lint: lint-biome lint-harness lint-fsd
 
@@ -32,6 +36,21 @@ lint-fsd:
 lint-fix:
     pnpm exec biome check --write .
     pnpm exec harnessfix .
+
+# Официальный production-like стек.
+up:
+    docker compose up --build -d
+
+status:
+    pnpm exec tsx packages/acceptance/src/status-check.ts
+
+down:
+    docker compose down
+
+# Destructive smoke запускается только против выделенного disposable repository.
+smoke-release mode:
+    @test "{{mode}}" = "api_key" -o "{{mode}}" = "subscription"
+    pnpm --filter @workspace/acceptance smoke-release {{mode}}
 
 # Добавить компонент shadcn/ui. Уезжает в packages/ui, а не в приложение.
 # Пример: just ui-add button dialog
