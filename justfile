@@ -1,69 +1,34 @@
 default:
     @just --list
 
-# Дев-сервер админки
-dev:
-    pnpm dev
+# Петля обратной связи: сначала vet, потом тесты
+check: lint test
 
-# Исполняемые спеки домена
+# Все тесты
+test:
+    go test ./...
+
+# Только доменные таблицы. Держим в пределах секунды.
 spec:
-    pnpm test
+    go test ./internal/domain/...
 
-# Типы по всем пакетам
-types:
-    pnpm typecheck
+# Форматирование и статические проверки
+lint:
+    gofmt -l .
+    go vet ./...
 
-# Петля обратной связи для реализующего агента: типы, затем спеки
-check: types spec
+# Форматирование по месту
+fmt:
+    gofmt -w .
 
-# Медленные hermetic integration: реальные subprocess и git repositories.
-integration:
-    pnpm --filter @workspace/acceptance test:integration
+# Собрать бинарник
+build:
+    go build -o gc ./cmd/gc
 
-# Полный линт: стиль, харнесс-политика, границы слоёв FSD
-lint: lint-biome lint-harness lint-fsd
+# Запустить локально
+run:
+    go run ./cmd/gc
 
-lint-biome:
-    pnpm exec biome check .
-
-lint-harness:
-    pnpm exec harnesslint .
-
-lint-fsd:
-    pnpm exec steiger apps/web/src
-
-# Безопасные автофиксы Biome и харнесс-политики. Границы FSD правятся руками.
-lint-fix:
-    pnpm exec biome check --write .
-    pnpm exec harnessfix .
-
-# Официальный production-like стек.
-up:
-    docker compose up --build -d
-
-status:
-    pnpm exec tsx packages/acceptance/src/status-check.ts
-
-down:
-    docker compose down
-
-# Destructive smoke запускается только против выделенного disposable repository.
-smoke-release mode:
-    @test "{{mode}}" = "api_key" -o "{{mode}}" = "subscription"
-    pnpm --filter @workspace/acceptance smoke-release {{mode}}
-
-# Добавить компонент shadcn/ui. Уезжает в packages/ui, а не в приложение.
-# Пример: just ui-add button dialog
-ui-add +components:
-    pnpm dlx shadcn@latest add {{components}} -c apps/web
-
-# Включить заморозку: запретить правку спек и контрактов в этой сессии.
-# Выполняется человеком перед запуском реализующей сессии по PROMPT.md.
-freeze-on:
-    cp .claude/freeze-deny.json .claude/settings.local.json
-    @echo "Заморозка включена. Спеки, контракты и манифесты защищены от правки."
-
-# Выключить заморозку: вернуться в режим авторинга спек.
-freeze-off:
-    rm -f .claude/settings.local.json
-    @echo "Заморозка выключена. Режим авторинга."
+# Реальный smoke: настоящие GitHub и Codex, только disposable repository.
+smoke:
+    go test -tags smoke -count=1 -v ./internal/app/...
