@@ -12,6 +12,13 @@ const valid = {
   CONVEX_DATA_PATH: "/data/convex",
   CODEX_HOME_ROOT: "/data/codex-home",
   WORKSPACE_ROOT: "/workspaces",
+  GITHUB_APP_ID: "7",
+  GITHUB_APP_CLIENT_ID: "Iv1.shared-client-id",
+  GITHUB_APP_CLIENT_SECRET: "shared-client-secret-with-entropy",
+  GITHUB_APP_PRIVATE_KEY:
+    "-----BEGIN PRIVATE KEY-----\\nshared-private-key\\n-----END PRIVATE KEY-----",
+  GITHUB_APP_SLUG: "garbage-collector",
+  GITHUB_APP_WEBHOOK_SECRET: "shared-webhook-secret-with-entropy",
   SMOKE_SUBSCRIPTION_TIMEOUT_SECONDS: "600",
 }
 
@@ -27,6 +34,12 @@ test("runtime env нормализуется и принимает только 
     convexDataPath: valid.CONVEX_DATA_PATH,
     codexHomeRoot: valid.CODEX_HOME_ROOT,
     workspaceRoot: valid.WORKSPACE_ROOT,
+    githubAppId: 7,
+    githubAppClientId: valid.GITHUB_APP_CLIENT_ID,
+    githubAppClientSecret: valid.GITHUB_APP_CLIENT_SECRET,
+    githubAppPrivateKey: valid.GITHUB_APP_PRIVATE_KEY,
+    githubAppSlug: valid.GITHUB_APP_SLUG,
+    githubAppWebhookSecret: valid.GITHUB_APP_WEBHOOK_SECRET,
     smokeSubscriptionTimeoutSeconds: 600,
   })
 })
@@ -43,4 +56,7 @@ test("ошибка env не печатает значения соседних s
   expect(() =>
     parseRuntimeEnv({ ...valid, PUBLIC_WEB_URL: "not-a-url" })
   ).toThrowError(expect.not.stringContaining(valid.SECRET_MASTER_KEY))
+  expect(() =>
+    parseRuntimeEnv({ ...valid, GITHUB_APP_ID: "not-an-integer" })
+  ).toThrow("GITHUB_APP_ID")
 })

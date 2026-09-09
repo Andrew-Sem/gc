@@ -1,56 +1,29 @@
+import { hostname } from "node:os"
+import { createCodexPort } from "./codex-port"
+import { createGitHubPort } from "./github-port"
 import { runWorkerOnce } from "./index"
 import { runProductionWorker } from "./program"
-import { createProductionWorkerRuntime } from "./runtime"
+import {
+  createHttpControlPlaneTransport,
+  createProductionWorkerRuntime,
+} from "./runtime"
+import { createWorkspacePort } from "./workspace-port"
 
 const runtime = createProductionWorkerRuntime(
   {
     now: Date.now,
-    github: {
-      createPullRequest: async () => {
-        throw new Error("production GitHub port is not implemented")
-      },
-      getPullRequest: async () => {
-        throw new Error("production GitHub port is not implemented")
-      },
-      getRequiredChecks: async () => {
-        throw new Error("production GitHub port is not implemented")
-      },
-      listCheckRuns: async () => {
-        throw new Error("production GitHub port is not implemented")
-      },
-      mergePullRequest: async () => {
-        throw new Error("production GitHub port is not implemented")
-      },
-      closePullRequest: async () => {
-        throw new Error("production GitHub port is not implemented")
-      },
-    },
-    workspace: {
-      prepare: async () => {
-        throw new Error("production workspace port is not implemented")
-      },
-      push: async () => {
-        throw new Error("production workspace port is not implemented")
-      },
-    },
-    codex: {
-      run: async () => {
-        throw new Error("production Codex port is not implemented")
-      },
-    },
+    github: createGitHubPort(),
+    workspace: createWorkspacePort(requiredEnvironment("WORKSPACE_ROOT")),
+    codex: createCodexPort(),
   },
-  {
-    request: async () => {
-      throw new Error("production Convex transport is not implemented")
-    },
-  },
-  "production-worker",
-  process.env.WORKER_TOKEN
+  createHttpControlPlaneTransport(requiredEnvironment("WORKER_PROTOCOL_URL")),
+  process.env.WORKER_ID ?? hostname(),
+  requiredEnvironment("WORKER_TOKEN")
 )
 
 let stopping = false
 await runProductionWorker(runtime, {
-  runOnce: runWorkerOnce,
+  runOnce: (workerRuntime) => runWorkerOnce(workerRuntime, () => stopping),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random: Math.random,
   isStopping: () => stopping,
@@ -63,3 +36,9 @@ await runProductionWorker(runtime, {
     process.once("SIGTERM", handler)
   },
 })
+
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]
+  if (!value) throw new Error(`${name} is required`)
+  return value
+}

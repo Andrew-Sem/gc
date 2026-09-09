@@ -7,8 +7,14 @@ export const OTHER_REPO = "acme/other"
 export const HEAD = "abc"
 export const HOUR = 3_600_000
 export const NOW = Date.parse("2026-08-05T06:00:00Z")
-export const WEBHOOK_SECRET = "github-webhook-secret"
-export const OTHER_WEBHOOK_SECRET = "globex-webhook-secret"
+export const SHARED_GITHUB_APP_ID = 7
+export const SHARED_GITHUB_APP_CLIENT_ID = "Iv1.shared-client-id"
+export const SHARED_GITHUB_APP_CLIENT_SECRET = "shared-client-secret"
+export const SHARED_GITHUB_APP_PRIVATE_KEY = "shared-github-private-key"
+export const SHARED_GITHUB_APP_SLUG = "garbage-collector"
+export const SHARED_GITHUB_APP_WEBHOOK_SECRET = "shared-webhook-secret"
+export const OWNER_GITHUB_USER_ID = 100
+export const OTHER_OWNER_GITHUB_USER_ID = 200
 
 export const tenantSettings: TenantSettings = {
   model: "gpt-5.6-luna",

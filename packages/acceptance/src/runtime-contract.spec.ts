@@ -38,13 +38,16 @@ test("env example перечисляет обязательный runtime и rel
     "CONVEX_DATA_PATH",
     "CODEX_HOME_ROOT",
     "WORKSPACE_ROOT",
+    "GITHUB_APP_ID",
+    "GITHUB_APP_CLIENT_ID",
+    "GITHUB_APP_CLIENT_SECRET",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_APP_SLUG",
+    "GITHUB_APP_WEBHOOK_SECRET",
     "SMOKE_SUBSCRIPTION_TIMEOUT_SECONDS",
     "SMOKE_OWNER_EMAIL",
     "SMOKE_OWNER_PASSWORD",
-    "SMOKE_GITHUB_APP_ID",
-    "SMOKE_GITHUB_INSTALLATION_ID",
-    "SMOKE_GITHUB_PRIVATE_KEY",
-    "SMOKE_GITHUB_WEBHOOK_SECRET",
+    "SMOKE_GITHUB_STORAGE_STATE",
     "SMOKE_GITHUB_REPOSITORY",
     "SMOKE_GITHUB_REPOSITORY_ID",
     "SMOKE_DISPOSABLE_MARKER",
@@ -52,6 +55,14 @@ test("env example перечисляет обязательный runtime и rel
     "SMOKE_OPENAI_API_KEY",
   ]) {
     expect(env).toContain(`${name}=`)
+  }
+  for (const removed of [
+    "SMOKE_GITHUB_APP_ID",
+    "SMOKE_GITHUB_INSTALLATION_ID",
+    "SMOKE_GITHUB_PRIVATE_KEY",
+    "SMOKE_GITHUB_WEBHOOK_SECRET",
+  ]) {
+    expect(env).not.toContain(`${removed}=`)
   }
   for (const line of env.split("\n")) {
     const [name, value = ""] = line.split("=", 2)

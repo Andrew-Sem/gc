@@ -10,6 +10,12 @@ export async function runProductionWorker(
   runtime: WorkerRuntime,
   control: WorkerProcessControl
 ): Promise<void> {
-  control.installStopHandlers(() => undefined)
-  await runWorkerLoop(runtime, control)
+  let stopping = false
+  control.installStopHandlers(() => {
+    stopping = true
+  })
+  await runWorkerLoop(runtime, {
+    ...control,
+    isStopping: () => stopping || control.isStopping(),
+  })
 }

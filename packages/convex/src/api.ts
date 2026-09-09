@@ -3,10 +3,6 @@ import { type FunctionReference, makeFunctionReference } from "convex/server"
 export const publicApi = {
   setup: makeFunctionReference<"query">("setup:get"),
   prStatus: makeFunctionReference<"query">("status:listOpenPrs"),
-  connectGitHubApp: makeFunctionReference<"action">("setup:connectGitHubApp"),
-  selectRepositories: makeFunctionReference<"mutation">(
-    "setup:selectRepositories"
-  ),
   connectCodexWithApiKey: makeFunctionReference<"mutation">(
     "setup:connectCodexWithApiKey"
   ),
@@ -45,5 +41,14 @@ export const systemApi = {
   ) as unknown as FunctionReference<"mutation", "internal">,
   submitWorkerReport: makeFunctionReference<"mutation">(
     "worker:submitReport"
+  ) as unknown as FunctionReference<"mutation", "internal">,
+  renewTask: makeFunctionReference<"mutation">(
+    "worker:renewTask"
+  ) as unknown as FunctionReference<"mutation", "internal">,
+  workerCredentials: makeFunctionReference<"query">(
+    "worker:credentials"
+  ) as unknown as FunctionReference<"query", "internal">,
+  updateDeviceLogin: makeFunctionReference<"mutation">(
+    "worker:updateDeviceLogin"
   ) as unknown as FunctionReference<"mutation", "internal">,
 }

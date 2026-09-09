@@ -7,17 +7,13 @@ import type {
 } from "@workspace/domain"
 import type { ProductionWorkerPorts } from "@workspace/worker/runtime"
 
-export type GitHubAppInput = {
-  readonly tenant: string
-  readonly appId: number
-  readonly installationId: number
-  readonly privateKey: string
-  readonly webhookSecret: string
-}
+export type BrowserActor = "owner" | "other_owner" | "intruder" | "anonymous"
 
 export type SetupView = {
   readonly tenant: string
-  readonly availableRepositories: readonly string[]
+  readonly github: {
+    readonly connected: boolean
+  }
   readonly connectedRepositories: readonly string[]
   readonly codex: {
     readonly connected: boolean
@@ -31,6 +27,7 @@ export type SetupView = {
 
 export type RecordedCall = {
   readonly operation: string
+  readonly deliveryId?: string
   readonly tenant?: string
   readonly repo?: string
   readonly pr?: number
@@ -42,14 +39,27 @@ export type RecordedCall = {
   readonly idempotencyKey?: string
   readonly taskId?: string
   readonly leaseToken?: string
+  readonly appId?: number
+  readonly installationId?: number
+  readonly githubUserId?: number
+  readonly oauthCode?: string
+  readonly codeVerifier?: string
+  readonly repositoryPage?: number
+  readonly githubCredentialKind?: "installation_token"
+  readonly githubCredentialExpiresAt?: Timestamp
+  readonly sharedPrivateKeyPresent?: boolean
 }
 
 export type AcceptanceHarness = {
   readonly github: {
-    setInstallationRepositories(
-      tenant: string,
-      repositories: readonly string[]
-    ): void
+    setOAuthCode(code: string, githubUserId: number): void
+    setInstallation(input: {
+      readonly installationId: number
+      readonly appId: number
+      readonly accessibleToGitHubUserIds: readonly number[]
+      readonly repositoryPages: readonly (readonly string[])[]
+    }): void
+    failNextRepositoryDiscoveryAfterPage(page: number): void
     authorizeDeviceCode(tenant: string): void
     setSweepLookup(
       tenant: string,
@@ -82,8 +92,12 @@ export type AcceptanceHarness = {
     waitForAgentStarts(count: number): Promise<void>
     waitForRepositoryContentions(count: number): Promise<void>
     waitForLeaseRenewals(count: number): Promise<void>
+    expireGitHubInstallationToken(): void
     ports(workerId?: string): ProductionWorkerPorts
     retryLastReport(): Promise<void>
+  }
+  readonly browser: {
+    get(actor: BrowserActor, path: string): Promise<Response>
   }
   readonly observed: {
     calls(): readonly RecordedCall[]
@@ -122,8 +136,17 @@ export type ProductionApp = {
     deliveryId: string,
     payload: unknown
   ): Promise<Response>
-  connectGitHubApp(input: GitHubAppInput): Promise<void>
-  selectRepositories(tenant: string, repos: readonly string[]): Promise<void>
+  githubConnect(actor?: BrowserActor): Promise<Response>
+  githubSetupCallback(
+    actor: BrowserActor,
+    state: string,
+    installationId: number
+  ): Promise<Response>
+  githubOAuthCallback(
+    actor: BrowserActor,
+    state: string,
+    code: string
+  ): Promise<Response>
   connectCodexWithApiKey(tenant: string, apiKey: string): Promise<void>
   startCodexDeviceLogin(tenant: string): Promise<void>
   saveTenantSettings(tenant: string, settings: TenantSettings): Promise<void>
@@ -143,11 +166,6 @@ export type ProductionApp = {
   intruderSaveTenantSettings(
     tenant: string,
     settings: TenantSettings
-  ): Promise<unknown>
-  intruderConnectGitHubApp(input: GitHubAppInput): Promise<unknown>
-  intruderSelectRepositories(
-    tenant: string,
-    repos: readonly string[]
   ): Promise<unknown>
   intruderConnectCodexWithApiKey(
     tenant: string,

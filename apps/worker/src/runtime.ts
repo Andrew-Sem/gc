@@ -1,5 +1,11 @@
 import type { DomainCommand } from "@workspace/domain"
-import type { WorkerRuntime, WorkerTask } from "./index"
+import type {
+  DeviceLoginUpdate,
+  WorkerCredentials,
+  WorkerReportResult,
+  WorkerRuntime,
+  WorkerTask,
+} from "./index"
 
 export type ProductionWorkerPorts = Pick<
   WorkerRuntime,
@@ -15,13 +21,39 @@ export type WorkerControlPlaneTransport = {
       | "complete"
       | "release"
       | "report"
+      | "deviceLogin"
     readonly credential: string
     readonly workerId?: string
     readonly leaseMs?: number
     readonly taskId?: string
     readonly leaseToken?: string
     readonly command?: DomainCommand
+    readonly update?: DeviceLoginUpdate
+    readonly signal?: AbortSignal
   }): Promise<unknown>
+}
+
+export function createHttpControlPlaneTransport(
+  protocolUrl: string
+): WorkerControlPlaneTransport {
+  const endpoint = new URL(protocolUrl).toString()
+  return {
+    async request({ credential, signal, ...request }) {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${credential}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(request),
+        signal,
+      })
+      if (!response.ok) {
+        throw new Error(`worker protocol failed: ${response.status}`)
+      }
+      return response.json()
+    },
+  }
 }
 
 /** Compose the real Convex, GitHub, Codex, workspace, and clock ports here. */
@@ -44,21 +76,23 @@ export function createProductionWorkerRuntime(
             workerId,
             leaseMs,
           })) as WorkerTask | null,
-        complete: async (taskId, leaseToken) => {
+        complete: async (taskId, leaseToken, signal) => {
           await _controlPlane.request({
             operation: "complete",
             credential: _credential,
             taskId,
             leaseToken,
+            signal,
           })
         },
-        renew: async (taskId, leaseToken, leaseMs) => {
+        renew: async (taskId, leaseToken, leaseMs, signal) => {
           await _controlPlane.request({
             operation: "renew",
             credential: _credential,
             taskId,
             leaseToken,
             leaseMs,
+            signal,
           })
         },
         release: async (taskId, leaseToken) => {
@@ -71,26 +105,34 @@ export function createProductionWorkerRuntime(
         },
       },
       credentials: {
-        get: async (taskId, leaseToken) =>
+        get: async (taskId, leaseToken, signal) =>
           (await _controlPlane.request({
             operation: "credentials",
             credential: _credential,
             taskId,
             leaseToken,
-          })) as {
-            readonly github: unknown
-            readonly codex: unknown
-            readonly expiresAt: number
-          },
+            signal,
+          })) as WorkerCredentials,
       },
       reports: {
-        submit: async (taskId, leaseToken, command: DomainCommand) => {
-          await _controlPlane.request({
+        submit: async (taskId, leaseToken, command: DomainCommand, signal) => {
+          return (await _controlPlane.request({
             operation: "report",
             credential: _credential,
             taskId,
             leaseToken,
             command,
+            signal,
+          })) as WorkerReportResult
+        },
+        updateDeviceLogin: async (taskId, leaseToken, update, signal) => {
+          await _controlPlane.request({
+            operation: "deviceLogin",
+            credential: _credential,
+            taskId,
+            leaseToken,
+            update,
+            signal,
           })
         },
       },

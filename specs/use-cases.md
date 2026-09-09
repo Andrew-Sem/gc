@@ -29,8 +29,9 @@
 нового темпа начинает новый интервал; само сохранение решения не запускает.
 
 **Admission проверяет:** открытых PR меньше лимита из снимка настроек этого тика. Тот же тик
-несёт снимок tenant settings для будущего запуска агента; уже созданная задача не перечитывает
-из mutable storage модель, reasoning или prompt перед исполнением.
+несёт снимок tenant settings и boundary-настройки OpenAI Base URL для будущего запуска агента;
+уже созданная задача не перечитывает из mutable storage модель, reasoning, prompt или Base URL
+перед исполнением.
 
 Число открытых берётся из **нашего же журнала**: мы эти PR создавали и видим, когда они
 закрываются. У GitHub его не спрашиваем. Побочный эффект приятный: если вебхук о закрытии
@@ -92,15 +93,59 @@ conclusions отказывают; незавершённые statuses и отс�
 
 ## 3. Подключить репозиторий
 
-GitHub App создаётся и ставится на репозитории **руками, на стороне GitHub**. В админку
-вставляются App ID, installation ID, приватный ключ и webhook secret. После этого система
-запрашивает список доступных установке репозиториев, человек отмечает нужные. HTTP route читает
-только минимальный installation envelope, чтобы найти secret, и затем проверяет
-`X-Hub-Signature-256`; dedupe, canonical tenant resolution и domain parser выполняются только
-после успешной проверки.
+На один deployment оператор заранее регистрирует **один общий GitHub App**. Владелец тенанта не
+создаёт App и не вводит App ID, installation ID, private key или webhook secret. В админке есть
+одна same-origin ссылка/route `Подключить GitHub`.
 
-Долгоживущих токенов у GitHub App нет: из App ID и приватного ключа чеканится JWT на 10
-минут, он меняется на installation-токен на час.
+Нормативный flow:
+
+1. Аутентифицированный owner кликает `Подключить GitHub` по route `/github/app/connect`. Backend создаёт короткоживущий
+   одноразовый install state, связанный одновременно с Better Auth subject и tenant, и отвечает
+   `303` на `https://github.com/apps/{slug}/installations/new?state=...`.
+2. На GitHub человек выбирает account или organization и доступ `All repositories` либо
+   `Only select repositories`. Это единственный выбор репозиториев в сценарии.
+3. Setup callback `/github/app/setup/callback` считает `installation_id` недоверенным вводом, требует ту же Better Auth
+   session, валидирует и одноразово расходует неистёкший install state. Затем backend начинает
+   **отдельный явный GitHub App OAuth web flow**: создаёт свежий одноразовый OAuth state и PKCE
+   verifier/challenge и отправляет owner на GitHub. `request_oauth_on_install` у App выключен.
+4. OAuth callback `/github/app/oauth/callback` требует ту же session, проверяет OAuth state и
+   PKCE, один раз меняет `code` на временную user authorization и полностью пагинирует
+   `GET /user/installations`. Указанная установка должна присутствовать в результате.
+5. Backend независимо проверяет `GET /app/installations/{id}` с JWT общего App, сверяет App,
+   требуемые permissions и отсутствие suspension, затем полностью получает выбранные на GitHub
+   repositories без усечения пагинации.
+6. Одной атомарной операцией установка уникально связывается с tenant, выпускается
+   `GitHubAppConnected`, а затем `RepositoryConnected` для **каждого** выбранного на GitHub
+   репозитория. Повтор завершённого callback не создаёт вторых фактов; конфликт с другим tenant
+   отклоняется. После завершения временная user authorization удаляется или отзывается.
+
+OAuth state нельзя использовать для другой session, installation или code. Если code уже был
+успешно обменян, но последующая GitHub pagination или финальная транзакция оборвалась, точный
+retry той же session, state и code продолжает сохранённый этап с зашифрованной временной user
+authorization и не обменивает code второй раз. После завершения тот же retry только повторяет
+успешный redirect и не создаёт фактов.
+
+В приложении нет второго списка checkbox и кнопки «сохранить repositories». Изменение выбора
+делается на GitHub и приходит через installation lifecycle events с последующей reconciliation.
+Удаление или suspension установки останавливает новые GitHub/git операции до успешной
+reconciliation. Removed repository становится неактивным в mutable installation boundary и не
+получает новые task credentials; исторический `RepositoryConnected` из append-only журнала не
+удаляется. Added repository становится активным и получает существующий `RepositoryConnected`,
+если домен ещё не знает это подключение.
+
+Общий App имеет permissions `administration: read`, `checks: read`, `contents: write`,
+`metadata: read`, `pull_requests: write`. `administration: read` нужен для чтения branch
+protection и required checks. App подписан на `pull_request`, `check_run` и installation
+lifecycle/repository-selection events `installation` и `installation_repositories`.
+
+Webhook подписывается одним deployment-scoped webhook secret. HTTP boundary сначала проверяет
+`X-Hub-Signature-256` этим глобальным секретом и лишь затем использует подписанный installation
+ID для tenant resolution, dedupe и domain parser. Глобальные private key, client secret и
+webhook secret никогда не попадают в tenant storage, browser, journal, task или logs.
+
+Worker не получает private key общего App. Защищённый lease-scoped control-plane protocol перед
+GitHub или git фазой чеканит либо обновляет короткоживущий installation token только для task и
+repository; при возможности token дополнительно сужается по repository и permissions.
 
 ## 4. Настроить модель и ключ
 
@@ -114,13 +159,19 @@ Credentials пишутся в `$CODEX_HOME/auth.json`. Файл один на `C
 В журнал попадает только факт подключения, никогда API key, токены или содержимое
 `auth.json` — журнал вечный. `CODEX_HOME` отдельный для каждого тенанта.
 
+OpenAI Base URL — необязательная boundary-настройка тенанта. Непустое значение нормализуется как
+абсолютный HTTP(S) URL без credentials, query и fragment. Пустое значение означает официальный
+endpoint OpenAI. Значение, действовавшее в due-тик, сохраняется в неизменяемом снимке задачи
+`RunAgent` и передаётся Codex; последующее изменение влияет только на будущие задачи. Base URL не
+является доменным фактом и не попадает в журнал.
+
 ## 5. Настроить темп и пороги
 
 Настройки живут на двух уровнях:
 
 | Уровень | Что настраивается |
 |---|---|
-| Тенант | модель и ризонинг, ключ или подписка, промпт агента |
+| Тенант | модель и ризонинг, ключ или подписка, промпт агента, optional OpenAI Base URL |
 | Репозиторий | как часто заводим, максимум открытых, через сколько закрываем |
 
 Изменения действуют **со следующего wake-up или свипа**, задним числом ничего не

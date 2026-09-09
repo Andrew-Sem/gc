@@ -9,7 +9,10 @@ import type { BrowserTransport } from "web/client"
 
 const REPO = "acme/app"
 
-function browserTransport(initiallyAuthenticated = false) {
+function browserTransport(
+  initiallyAuthenticated = false,
+  connectedRepositories: readonly string[] = []
+) {
   let authenticated = initiallyAuthenticated
   const calls: { readonly kind: string; readonly args: unknown }[] = []
   const state: {
@@ -35,7 +38,7 @@ function browserTransport(initiallyAuthenticated = false) {
     },
     query: async (_reference, args) => {
       calls.push({ kind: "query", args })
-      return "repo" in args ? state.lines : setupView()
+      return "repo" in args ? state.lines : setupView(connectedRepositories)
     },
     mutation: async (_reference, args) => {
       calls.push({ kind: "mutation", args: redact(args) })
@@ -45,7 +48,7 @@ function browserTransport(initiallyAuthenticated = false) {
     },
     subscribe: (_reference, args, onValue) => {
       subscribers.add(onValue)
-      onValue("repo" in args ? state.lines : setupView())
+      onValue("repo" in args ? state.lines : setupView(connectedRepositories))
       return () => subscribers.delete(onValue)
     },
   }
@@ -60,11 +63,11 @@ function browserTransport(initiallyAuthenticated = false) {
   }
 }
 
-function setupView() {
+function setupView(connectedRepositories: readonly string[] = []) {
   return {
     tenant: "acme",
-    availableRepositories: [REPO, "acme/other"],
-    connectedRepositories: [],
+    github: { connected: connectedRepositories.length > 0 },
+    connectedRepositories,
     codex: {
       connected: false,
       method: null,
@@ -119,37 +122,28 @@ test("owner регистрируется, возвращается после re
   )
 })
 
-test("owner подключает GitHub App и выбирает repositories через формы", async () => {
+test("owner начинает стандартную установку shared GitHub App одной same-origin ссылкой", async () => {
   const fake = browserTransport(true)
-  const user = userEvent.setup()
   render(<App client={createProductionBrowserClient(fake.transport)} />)
 
-  await user.type(screen.getByLabelText("App ID"), "7")
-  await user.type(screen.getByLabelText("Installation ID"), "42")
-  await user.type(screen.getByLabelText("Private key"), "github-private-key")
-  await user.type(screen.getByLabelText("Webhook secret"), "webhook-secret")
-  await user.click(
-    screen.getByRole("button", { name: "Подключить GitHub App" })
-  )
-
-  expect(await screen.findByText("GitHub App подключён")).toBeTruthy()
-  await user.click(screen.getByRole("checkbox", { name: REPO }))
-  await user.click(
-    screen.getByRole("button", { name: "Сохранить repositories" })
-  )
-  expect(await screen.findByText(`${REPO} подключён`)).toBeTruthy()
-  expect(screen.queryByDisplayValue("github-private-key")).toBeNull()
-  expect(screen.queryByDisplayValue("webhook-secret")).toBeNull()
-  expect(fake.calls).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ kind: "action" }),
-      expect.objectContaining({ kind: "mutation" }),
-    ])
-  )
+  const connect = await screen.findByRole("link", {
+    name: "Подключить GitHub",
+  })
+  expect(connect.getAttribute("href")).toBe("/github/app/connect")
+  expect(screen.queryByLabelText("App ID")).toBeNull()
+  expect(screen.queryByLabelText("Installation ID")).toBeNull()
+  expect(screen.queryByLabelText("Private key")).toBeNull()
+  expect(screen.queryByLabelText("Webhook secret")).toBeNull()
+  expect(screen.queryByRole("checkbox")).toBeNull()
+  expect(
+    screen.queryByRole("button", { name: /Сохранить repositories/i })
+  ).toBeNull()
+  expect(fake.calls.filter((call) => call.kind === "action")).toEqual([])
+  expect(fake.calls.filter((call) => call.kind === "mutation")).toEqual([])
 })
 
 test("owner подключает Codex обоими способами и сохраняет настройки", async () => {
-  const fake = browserTransport(true)
+  const fake = browserTransport(true, [REPO])
   const user = userEvent.setup()
   render(<App client={createProductionBrowserClient(fake.transport)} />)
 
@@ -196,7 +190,7 @@ test("owner подключает Codex обоими способами и сох
 })
 
 test("why-stuck обновляется live после нового наблюдения", async () => {
-  const fake = browserTransport(true)
+  const fake = browserTransport(true, [REPO])
   render(<App client={createProductionBrowserClient(fake.transport)} />)
 
   expect(await screen.findByText("Открытых PR нет")).toBeTruthy()
@@ -227,45 +221,9 @@ test("без session protected UI и subscriptions недоступны", async 
   const fake = browserTransport()
   render(<App client={createProductionBrowserClient(fake.transport)} />)
   expect(await screen.findByRole("button", { name: "Войти" })).toBeTruthy()
-  expect(screen.queryByLabelText("App ID")).toBeNull()
+  expect(screen.queryByRole("link", { name: "Подключить GitHub" })).toBeNull()
   expect(screen.queryByText("Открытых PR нет")).toBeNull()
   expect(fake.calls.filter((call) => call.kind === "query")).toEqual([])
-})
-
-test("формы валидируют ввод, блокируют повторный submit и показывают ошибку с retry", async () => {
-  const fake = browserTransport(true)
-  let rejectGitHub = true
-  let releaseAction: (() => void) | undefined
-  fake.transport.action = async (_reference, args) => {
-    fake.calls.push({ kind: "action", args: redact(args) })
-    await new Promise<void>((resolve) => {
-      releaseAction = resolve
-    })
-    if (rejectGitHub) throw new Error("GitHub rejected credentials")
-  }
-  const user = userEvent.setup()
-  render(<App client={createProductionBrowserClient(fake.transport)} />)
-
-  await user.click(
-    screen.getByRole("button", { name: "Подключить GitHub App" })
-  )
-  expect(await screen.findByText(/обязательное поле/i)).toBeTruthy()
-  expect(fake.calls.filter((call) => call.kind === "action")).toEqual([])
-
-  await user.type(screen.getByLabelText("App ID"), "7")
-  await user.type(screen.getByLabelText("Installation ID"), "42")
-  await user.type(screen.getByLabelText("Private key"), "key")
-  await user.type(screen.getByLabelText("Webhook secret"), "secret")
-  const submit = screen.getByRole("button", { name: "Подключить GitHub App" })
-  await user.click(submit)
-  expect((submit as HTMLButtonElement).disabled).toBe(true)
-  releaseAction?.()
-  expect(await screen.findByText(/GitHub rejected credentials/)).toBeTruthy()
-
-  rejectGitHub = false
-  await user.click(screen.getByRole("button", { name: "Повторить" }))
-  releaseAction?.()
-  expect(await screen.findByText("GitHub App подключён")).toBeTruthy()
 })
 
 test.each([

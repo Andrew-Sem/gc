@@ -22,14 +22,14 @@ given/when/then, реализация пишется под них.
 | `apps/worker` | Отдельный процесс. Исполняет task через production `runWorkerOnce`. | нет, требуется acceptance |
 | `packages/acceptance` | Шесть вертикальных строк через production wiring и fake I/O ports. | контракт и красные таблицы |
 
-Всё, кроме админки в браузере, крутится на одном VPS в двух контейнерах: Convex и воркер.
+Production stack крутится на одном VPS под Docker Compose: web/reverse proxy, self-hosted Convex
+и отдельный worker. GitHub App один на deployment и зарегистрирован оператором заранее.
 
 ```
-GitHub ──вебхуки──▶ Convex ──задача──▶ Воркер ──▶ Codex ──▶ API модели
-                      │  ▲                │
-                   журнал└────результат───┘
-                      │
-                   Админка
+GitHub ──вебхуки──▶ reverse proxy ──▶ Convex ──задача──▶ Воркер ──▶ Codex ──▶ API модели
+                         ▲              │  ▲                │
+                         │           журнал└────результат────┘
+                      Админка
 ```
 
 ## Решения и почему
@@ -53,10 +53,10 @@ GitHub может доставить один и тот же вебхук два
 идентификатор (`X-GitHub-Delivery`). Мы его запоминаем и повторную доставку отбрасываем на
 приёме.
 
-До проверки подписи HTTP route читает только минимальный installation envelope, чтобы найти
-secret установки. Затем он проверяет `X-Hub-Signature-256`; dedupe, canonical tenant
-resolution и domain parser выполняются только после успешной проверки. Невалидная подпись не
-резолвит tenant, не вызывает parser и не пишет журнал.
+Deployment имеет один webhook secret общего GitHub App. HTTP route проверяет
+`X-Hub-Signature-256` этим глобальным secret **до** tenant lookup, dedupe и parser. Только после
+успешной проверки подписанный installation ID резолвится в canonical tenant. Невалидная подпись
+не резолвит tenant, не вызывает parser и не пишет журнал.
 
 Это первая линия. Вторая — форма самого домена: `decide` выпускает `PrStateChanged` только
 если снимок отличается от известного. `updatedAt` не даёт поздней доставке старого состояния
@@ -68,6 +68,39 @@ resolution и domain parser выполняются только после ус�
 HTTP boundary резолвит installation ID в внутренний canonical tenant и передаёт его в
 `ParseContext`. Чистый parser не объявляет installation ID идентификатором тенанта и не
 переписывает уже созданные domain commands после разбора.
+
+### Один GitHub App на deployment
+
+Оператор один раз регистрирует shared GitHub App и задаёт через env `GITHUB_APP_ID`,
+`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`,
+`GITHUB_APP_SLUG` и `GITHUB_APP_WEBHOOK_SECRET`. `request_oauth_on_install` выключен. Permissions:
+`administration: read`, `checks: read`, `contents: write`, `metadata: read`,
+`pull_requests: write`; administration read требуется для branch protection. Events:
+`pull_request`, `check_run`, `installation` и `installation_repositories`.
+
+Tenant onboarding не создаёт App и не принимает credentials. Owner идёт по одной same-origin
+ссылке `Подключить GitHub` на `/github/app/connect`. Control plane создаёт install state, связанный с Better Auth
+subject+tenant, и делает `303` на GitHub installation page. GitHub остаётся единственным местом
+выбора account/organization и all/selected repositories.
+
+Setup callback `/github/app/setup/callback` не доверяет query-параметру `installation_id`. После проверки той же session и
+install state он запускает отдельный GitHub App OAuth flow со свежими one-time state и PKCE.
+OAuth callback `/github/app/oauth/callback` обменивает code, полностью пагинирует `/user/installations`, независимо читает
+`/app/installations/{id}` с App JWT, проверяет permissions/suspension и полностью получает
+repositories. Только после всех доказательств одна транзакция уникально связывает installation
+с tenant и записывает `GitHubAppConnected`, затем `RepositoryConnected` для каждого GitHub-side
+selected repository. Временная user authorization сразу удаляется или отзывается. После
+успешного code exchange flow хранит code hash и зашифрованную временную authorization: точный
+retry той же session/state/code продолжает pagination без второго exchange. Завершённый retry
+идемпотентен; incomplete discovery не оставляет частичную связь.
+
+Global private key, client secret и webhook secret никогда не входят в tenant storage, browser,
+journal, task или logs. `/github/app/` исключён из proxy access log, потому что URL callback
+несёт code/state. Installation lifecycle меняет доступность через reconciliation: repository
+updates синхронизируют mutable eligibility, suspension/deletion блокируют выдачу tokens.
+Append-only `RepositoryConnected` остаётся историей: removed repository исключается из новых
+ticks и credentials пересечением journal projection с текущим installation boundary, без нового
+типа доменного факта.
 
 ### Полнота evidence принадлежит свипу
 
@@ -131,6 +164,12 @@ Task consumer отвечает за lease, retry и semantic idempotency. Пос
 `main` только собирает production ports и повторяет `runWorkerOnce`; acceptance вызывает тот
 же entry point с fake GitHub, Codex, workspace и clock.
 
+Lookup required checks и последующий merge/close являются продолжением **той же durable task**,
+той же lease и стабильных idempotency keys. Терминальный lookup report атомарно сохраняет
+continuation; replay того же report возвращает ту же continuation, а worker завершает task
+сразу после последней фазы. Нельзя создать отдельную незавязанную task между lookup и effect:
+это потеряло бы fencing и допустило двойной merge/close.
+
 ### Настройки и секреты
 
 Tenant создаётся атомарно при успешной email/password registration: Better Auth subject
@@ -147,26 +186,50 @@ record.
 tenant settings своей попытки; outbox task сохраняет их и worker не перечитывает mutable
 настройки перед исполнением.
 
+Optional OpenAI Base URL относится к tenant boundary, а не к доменному журналу. Оно
+нормализуется как абсолютный HTTP(S) URL без credentials/query/fragment; пустое значение
+означает официальный endpoint. Due tick сохраняет действующее значение в immutable `RunAgent`
+task snapshot. Worker получает snapshot через task-scoped credential response и передаёт Codex,
+поэтому более позднее изменение не меняет уже одобренную попытку.
+
+Control plane хранит shared App private key и чеканит installation token just-in-time по active
+task lease. Worker получает только короткоживущий token, scoped к task/repository и по
+возможности permissions; shared private key worker не видит. Lease renewal служит fencing:
+провал renewal abort-ит GitHub, git и Codex I/O и запрещает completion. Worker использует
+bounded backoff с jitter, graceful `SIGTERM`, tenant-scoped `CODEX_HOME`, allowlist env для Codex
+и agent lock. Stable branch и force-with-lease позволяют retry продолжить тот же git handoff.
+
 ## Стек
 
 ### Production topology
 
-Официальный запуск — `compose.yaml`: production web image, self-hosted Convex, отдельный worker
-и TLS/reverse-proxy boundary. Convex data и tenant `CODEX_HOME` лежат в разных persistent
-volumes; временные workspaces не являются credential storage. Все services имеют liveness и
-readiness health checks.
+Официальный запуск — `compose.yaml`: production web/reverse-proxy image, self-hosted Convex,
+отдельный worker и внешний TLS boundary при необходимости. Convex data и tenant `CODEX_HOME`
+лежат в разных persistent volumes; временные workspaces не являются credential storage. Все
+services имеют liveness и readiness health checks. Clean release build обязателен: reuse stale
+image не является проверкой текущего source tree.
 
 Browser использует Better Auth email/password и reactive Convex client. Первый user создаёт
 tenant и становится owner. Setup forms вызывают production actions/mutations, why-stuck
 подписан на live query.
 
+Web, auth, Convex API/HTTP, reactive WebSocket, webhook и GitHub callbacks публикуются через
+один application origin. Reverse proxy сохраняет WebSocket upgrade, raw webhook body и
+forwarded host/proto; `/github/app/` имеет `access_log off`. `PUBLIC_WEB_URL`, public Convex URL,
+`CONVEX_SITE_URL`, Better Auth allowed origin и GitHub callback URLs обязаны описывать один и тот
+же внешний HTTPS boundary. Для ngrok release browser может передать header обхода interstitial
+warning, но не обходить TLS или auth.
+
 Внешний worker общается с control plane только через `/worker/protocol` с bearer credential.
-Internal cron/tick functions снаружи недоступны. Credentials выдаются worker just-in-time и не
-попадают в task payload. Worker loop ждёт на idle, делает bounded backoff, renew lease и
-gracefully drains на `SIGTERM`.
+Internal cron/tick functions снаружи недоступны. Lease-scoped credentials выдаются worker
+just-in-time и не попадают в task payload; global GitHub App private key никогда не выдаётся.
+Worker loop ждёт на idle, делает bounded backoff, renew lease и gracefully drains на `SIGTERM`.
 
 Release gate включает два destructive smoke в designated disposable GitHub repository:
-API-key и subscription Codex. Без обоих успешных smoke приложение не считается готовым.
+API-key и subscription Codex. Реальный browser кликает shared App connect и проходит GitHub
+install плюс отдельный OAuth flow через operator-provided authenticated GitHub browser state или
+явное интерактивное подтверждение. Tenant App credentials и второй repository checkbox smoke не
+использует. Без обоих успешных smoke приложение не считается готовым.
 
 | Слой | Выбор |
 |---|---|

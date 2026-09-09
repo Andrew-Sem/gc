@@ -4,7 +4,7 @@ import { renderWhyStuck } from "../pages/why-stuck"
 
 const emptySetup: SetupPresenterInput = {
   tenant: "",
-  availableRepositories: [],
+  github: { connected: false },
   connectedRepositories: [],
   codex: { connected: false },
 }

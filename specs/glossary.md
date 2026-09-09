@@ -11,7 +11,14 @@
 | **Тик** | Команда, которая приносит домену текущее время и настройки текущей попытки. Домен сам часы и настройки не читает. |
 | **Wake-up** | Срабатывание фиксированного крона. Оно проверяет, наступил ли репозиторный темп, и только тогда посылает тик. |
 | **Свип** | Одна именованная попытка пройти по всем открытым PR. Идёт раз в 6 часов и имеет `sweepId`. |
-| **Тенант** | Одна установка GitHub App. У тенанта может быть несколько репозиториев. |
+| **Тенант** | Изолированное пространство одного owner: подключения, настройки, журналируемые факты и `CODEX_HOME`. Одна installation общего GitHub App уникально связывается не более чем с одним tenant. |
+| **Общий GitHub App** | Один GitHub App, заранее зарегистрированный оператором на весь deployment. Его App credentials глобальны и не принадлежат tenant. |
+| **Installation** | Установка общего GitHub App в выбранный GitHub account или organization с выбранным на GitHub набором repositories. |
+| **Install state** | Короткоживущий одноразовый nonce начала установки, связанный с Better Auth subject и tenant. Не факт и не credential. |
+| **OAuth state** | Отдельный короткоживущий nonce GitHub App OAuth flow, связанный с той же session, tenant, installation, code hash и PKCE verifier. Новую попытку им начать нельзя; точный recovery retry продолжает уже сохранённый этап. |
+| **Installation token** | Короткоживущий GitHub credential, выданный для installation. Control plane чеканит его в рамках active task lease; worker не получает private key общего App. |
+| **OpenAI Base URL** | Необязательная boundary-настройка tenant для endpoint Codex: нормализованный абсолютный HTTP(S) URL без credentials, query и fragment. Пустое значение означает официальный endpoint OpenAI. |
+| **Снимок задачи** | Неизменяемые значения конкретной попытки, сохранённые при создании task. Mutable settings после этого не перечитываются. |
 | **Admission** | Правило, которое разрешает или запрещает заводить новую работу. |
 | **Merge-gate** | Правило, которое разрешает или запрещает мерж. |
 | **Evidence** | Полный снимок required inventory и всех check-run attempts для одного PR, head и свипа. |

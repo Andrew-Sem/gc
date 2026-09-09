@@ -13,41 +13,108 @@ import { convexTest } from "convex-test"
 import { expect, test } from "vitest"
 import { productionScreens } from "web/screens"
 import { createProductionScreenSource } from "web/source"
-import type { AcceptanceCase, ProductionApp } from "./contract"
+import type {
+  AcceptanceCase,
+  AcceptanceHarness,
+  BrowserActor,
+  ProductionApp,
+} from "./contract"
 import {
   checkRunPayload,
   checkRunResponse,
   HEAD,
   HOUR,
   NOW,
+  OTHER_OWNER_GITHUB_USER_ID,
   OTHER_REPO,
   OTHER_TENANT,
-  OTHER_WEBHOOK_SECRET,
+  OWNER_GITHUB_USER_ID,
   pullRequestPayload,
   pullRequestResponse,
   REPO,
   repositorySettings,
+  SHARED_GITHUB_APP_CLIENT_ID,
+  SHARED_GITHUB_APP_CLIENT_SECRET,
+  SHARED_GITHUB_APP_ID,
+  SHARED_GITHUB_APP_PRIVATE_KEY,
+  SHARED_GITHUB_APP_SLUG,
+  SHARED_GITHUB_APP_WEBHOOK_SECRET,
   TENANT,
   tenantSettings,
-  WEBHOOK_SECRET,
 } from "./fixtures"
 import { createAcceptanceHarness } from "./harness"
 
 const MASTER_KEY = "acceptance-master-key"
+
+function redirectLocation(response: Response): URL {
+  expect(response.status).toBe(303)
+  const location = response.headers.get("location")
+  expect(location).toBeTruthy()
+  return new URL(location as string, "https://gc.example.com")
+}
+
+async function connectSharedGitHub(
+  harness: Parameters<AcceptanceCase["run"]>[0],
+  app: Parameters<AcceptanceCase["run"]>[1],
+  input: {
+    readonly tenant?: string
+    readonly actor?: "owner" | "other_owner"
+    readonly installationId?: number
+    readonly githubUserId?: number
+    readonly repositories?: readonly string[]
+  } = {}
+): Promise<void> {
+  const tenant = input.tenant ?? TENANT
+  const actor = input.actor ?? "owner"
+  const installationId = input.installationId ?? 42
+  const githubUserId = input.githubUserId ?? OWNER_GITHUB_USER_ID
+  const repositories = input.repositories ?? [REPO]
+  const code = `oauth-code-${tenant}-${installationId}`
+  harness.github.setOAuthCode(code, githubUserId)
+  harness.github.setInstallation({
+    installationId,
+    appId: SHARED_GITHUB_APP_ID,
+    accessibleToGitHubUserIds: [githubUserId],
+    repositoryPages: [repositories],
+  })
+
+  const install = redirectLocation(await app.githubConnect(actor))
+  expect(install.origin).toBe("https://github.com")
+  expect(install.pathname).toBe(
+    `/apps/${SHARED_GITHUB_APP_SLUG}/installations/new`
+  )
+  const installState = install.searchParams.get("state")
+  expect(installState).toBeTruthy()
+
+  const oauth = redirectLocation(
+    await app.githubSetupCallback(actor, installState as string, installationId)
+  )
+  expect(oauth.origin).toBe("https://github.com")
+  expect(oauth.pathname).toBe("/login/oauth/authorize")
+  expect(oauth.searchParams.get("client_id")).toBe(SHARED_GITHUB_APP_CLIENT_ID)
+  expect(oauth.searchParams.get("code_challenge_method")).toBe("S256")
+  expect(oauth.searchParams.get("code_challenge")).toBeTruthy()
+  const oauthState = oauth.searchParams.get("state")
+  expect(oauthState).toBeTruthy()
+  expect(oauthState).not.toBe(installState)
+
+  const completed = await app.githubOAuthCallback(
+    actor,
+    oauthState as string,
+    code
+  )
+  expect(completed.status).toBe(303)
+  expect((await app.setup(tenant)).connectedRepositories).toEqual(
+    [...repositories].sort()
+  )
+}
 
 async function createOwnedPr(
   harness: Parameters<AcceptanceCase["run"]>[0],
   app: Parameters<AcceptanceCase["run"]>[1],
   worker: Parameters<AcceptanceCase["run"]>[2]
 ): Promise<number> {
-  await app.connectGitHubApp({
-    tenant: TENANT,
-    appId: 7,
-    installationId: 42,
-    privateKey: "github-private-key",
-    webhookSecret: WEBHOOK_SECRET,
-  })
-  await app.selectRepositories(TENANT, [REPO])
+  await connectSharedGitHub(harness, app)
   await app.connectCodexWithApiKey(TENANT, "openai-api-key")
   await app.saveTenantSettings(TENANT, tenantSettings)
   harness.clock.set(NOW)
@@ -119,14 +186,7 @@ const cases: readonly AcceptanceCase[] = [
     name: "завести новую работу: тик проходит весь путь до PR и экрана",
     usesWorker: true,
     async run(harness, app, worker) {
-      await app.connectGitHubApp({
-        tenant: TENANT,
-        appId: 7,
-        installationId: 42,
-        privateKey: "github-private-key",
-        webhookSecret: WEBHOOK_SECRET,
-      })
-      await app.selectRepositories(TENANT, [REPO])
+      await connectSharedGitHub(harness, app)
       await app.connectCodexWithApiKey(TENANT, "openai-api-key")
       await app.saveTenantSettings(TENANT, tenantSettings)
       harness.clock.set(NOW)
@@ -195,6 +255,23 @@ const cases: readonly AcceptanceCase[] = [
           "github.createPullRequest",
         ])
       )
+      const githubCredentials = harness.observed
+        .calls()
+        .filter((call) => call.operation === "worker.githubCredentials")
+      expect(githubCredentials.length).toBeGreaterThan(0)
+      expect(githubCredentials).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            appId: SHARED_GITHUB_APP_ID,
+            installationId: 42,
+            githubCredentialKind: "installation_token",
+            githubCredentialExpiresAt: expect.any(Number),
+            sharedPrivateKeyPresent: false,
+          }),
+        ])
+      )
+      const credentialCount = githubCredentials.length
+      harness.worker.expireGitHubInstallationToken()
       expect(await app.journal()).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ type: "PrCreated" }),
@@ -266,6 +343,12 @@ const cases: readonly AcceptanceCase[] = [
       expect(closeCallsAfterCrash[0]?.idempotencyKey).toBeTruthy()
       harness.clock.set(NOW + 26 * HOUR + TASK_LEASE_MS)
       await worker.drain()
+      expect(
+        harness.observed
+          .calls()
+          .filter((call) => call.operation === "worker.githubCredentials")
+          .length
+      ).toBeGreaterThan(credentialCount)
       expect(await app.completedTasks()).toBeGreaterThan(completedBeforeClose)
       const closeCallsAfterRetry = harness.observed
         .calls()
@@ -467,30 +550,237 @@ const cases: readonly AcceptanceCase[] = [
     },
   },
   {
-    name: "подключить репозиторий: discovery и выбор не раскрывают credentials",
+    name: "подключить репозиторий: shared App install/OAuth безопасно подключает весь GitHub selection",
     usesWorker: false,
     async run(harness, app, _worker) {
-      harness.github.setInstallationRepositories(TENANT, [REPO, OTHER_REPO])
-      await app.connectGitHubApp({
-        tenant: TENANT,
-        appId: 7,
-        installationId: 42,
-        privateKey: "github-private-key",
-        webhookSecret: WEBHOOK_SECRET,
+      const install = redirectLocation(await app.githubConnect("owner"))
+      expect(install.pathname).toBe(
+        `/apps/${SHARED_GITHUB_APP_SLUG}/installations/new`
+      )
+      const installState = install.searchParams.get("state") as string
+      await expect(app.githubConnect("anonymous")).resolves.toMatchObject({
+        status: 401,
       })
-      await app.selectRepositories(TENANT, [REPO])
+      await expect(app.githubConnect("intruder")).resolves.toMatchObject({
+        status: 403,
+      })
+      await expect(
+        app.githubSetupCallback("intruder", installState, 42)
+      ).resolves.toMatchObject({ status: 403 })
+      await expect(
+        app.githubSetupCallback("owner", "spoofed-state", 42)
+      ).resolves.toMatchObject({ status: 400 })
+
+      harness.github.setInstallation({
+        installationId: 42,
+        appId: SHARED_GITHUB_APP_ID,
+        accessibleToGitHubUserIds: [OWNER_GITHUB_USER_ID],
+        repositoryPages: [[REPO], [OTHER_REPO]],
+      })
+      const oauth = redirectLocation(
+        await app.githubSetupCallback("owner", installState, 42)
+      )
+      expect(await app.journal()).toEqual([])
+      expect(await app.installationTenant(42)).toBeNull()
+      await expect(
+        app.githubSetupCallback("owner", installState, 42)
+      ).resolves.toMatchObject({ status: 400 })
+      const oauthState = oauth.searchParams.get("state") as string
+      expect(oauthState).toBeTruthy()
+      expect(oauthState).not.toBe(installState)
+      expect(oauth.searchParams.get("code_challenge_method")).toBe("S256")
+      expect(oauth.searchParams.get("code_challenge")).toBeTruthy()
+      harness.github.setOAuthCode("owner-oauth-code", OWNER_GITHUB_USER_ID)
+      await expect(
+        app.githubOAuthCallback("intruder", oauthState, "owner-oauth-code")
+      ).resolves.toMatchObject({ status: 403 })
+      await expect(
+        app.githubOAuthCallback("owner", "spoofed-state", "owner-oauth-code")
+      ).resolves.toMatchObject({ status: 400 })
+
+      const beforeIncompleteDiscovery = await app.journal()
+      harness.github.failNextRepositoryDiscoveryAfterPage(1)
+      await expect(
+        app.githubOAuthCallback("owner", oauthState, "owner-oauth-code")
+      ).resolves.toMatchObject({ status: 502 })
+      expect(await app.journal()).toEqual(beforeIncompleteDiscovery)
+      expect(await app.installationTenant(42)).toBeNull()
+      await expect(
+        app.githubOAuthCallback("owner", oauthState, "different-oauth-code")
+      ).resolves.toMatchObject({ status: 400 })
+
+      const completed = await app.githubOAuthCallback(
+        "owner",
+        oauthState,
+        "owner-oauth-code"
+      )
+      expect(completed.status).toBe(303)
+      const journalAfterConnect = await app.journal()
+      const connectionEvents = journalAfterConnect.filter(
+        (event) =>
+          event.type === "GitHubAppConnected" ||
+          event.type === "RepositoryConnected"
+      )
+      expect(connectionEvents).toEqual([
+        expect.objectContaining({
+          type: "GitHubAppConnected",
+          tenant: TENANT,
+          appId: SHARED_GITHUB_APP_ID,
+          installationId: 42,
+        }),
+        expect.objectContaining({
+          type: "RepositoryConnected",
+          tenant: TENANT,
+          repo: REPO,
+        }),
+        expect.objectContaining({
+          type: "RepositoryConnected",
+          tenant: TENANT,
+          repo: OTHER_REPO,
+        }),
+      ])
+      expect(
+        harness.observed
+          .calls()
+          .filter((call) => call.operation === "github.exchangeOAuthCode")
+      ).toEqual([
+        expect.objectContaining({
+          oauthCode: "owner-oauth-code",
+          codeVerifier: expect.any(String),
+        }),
+      ])
+      expect(
+        harness.observed
+          .calls()
+          .filter((call) => call.operation === "github.revokeUserAuthorization")
+      ).toEqual([
+        expect.objectContaining({ githubUserId: OWNER_GITHUB_USER_ID }),
+      ])
+      expect(
+        harness.observed
+          .calls()
+          .filter(
+            (call) => call.operation === "github.listInstallationRepositories"
+          )
+      ).toEqual([
+        expect.objectContaining({ installationId: 42, repositoryPage: 1 }),
+        expect.objectContaining({ installationId: 42, repositoryPage: 2 }),
+      ])
+
+      const callbackRetry = await app.githubOAuthCallback(
+        "owner",
+        oauthState,
+        "owner-oauth-code"
+      )
+      expect(callbackRetry.status).toBe(303)
+      expect(await app.journal()).toEqual(journalAfterConnect)
+
+      harness.github.setInstallation({
+        installationId: 84,
+        appId: SHARED_GITHUB_APP_ID,
+        accessibleToGitHubUserIds: [OTHER_OWNER_GITHUB_USER_ID],
+        repositoryPages: [["globex/app"]],
+      })
+      const inaccessibleInstall = redirectLocation(
+        await app.githubConnect("owner")
+      )
+      const inaccessibleSetup = redirectLocation(
+        await app.githubSetupCallback(
+          "owner",
+          inaccessibleInstall.searchParams.get("state") as string,
+          84
+        )
+      )
+      harness.github.setOAuthCode("wrong-user-code", OWNER_GITHUB_USER_ID)
+      await expect(
+        app.githubOAuthCallback(
+          "owner",
+          inaccessibleSetup.searchParams.get("state") as string,
+          "wrong-user-code"
+        )
+      ).resolves.toMatchObject({ status: 403 })
+
+      const otherOwnerInstall = redirectLocation(
+        await app.githubConnect("other_owner")
+      )
+      const otherOwnerOAuth = redirectLocation(
+        await app.githubSetupCallback(
+          "other_owner",
+          otherOwnerInstall.searchParams.get("state") as string,
+          84
+        )
+      )
+      harness.github.setOAuthCode(
+        "other-owner-install-code",
+        OTHER_OWNER_GITHUB_USER_ID
+      )
+      expect(
+        await app.githubOAuthCallback(
+          "other_owner",
+          otherOwnerOAuth.searchParams.get("state") as string,
+          "other-owner-install-code"
+        )
+      ).toMatchObject({ status: 303 })
+      expect(await app.installationTenant(84)).toBe(OTHER_TENANT)
+
+      harness.github.setInstallation({
+        installationId: 99,
+        appId: 999,
+        accessibleToGitHubUserIds: [OWNER_GITHUB_USER_ID],
+        repositoryPages: [["spoofed/app"]],
+      })
+      const wrongAppInstall = redirectLocation(await app.githubConnect("owner"))
+      const wrongAppSetup = redirectLocation(
+        await app.githubSetupCallback(
+          "owner",
+          wrongAppInstall.searchParams.get("state") as string,
+          99
+        )
+      )
+      harness.github.setOAuthCode("wrong-app-code", OWNER_GITHUB_USER_ID)
+      await expect(
+        app.githubOAuthCallback(
+          "owner",
+          wrongAppSetup.searchParams.get("state") as string,
+          "wrong-app-code"
+        )
+      ).resolves.toMatchObject({ status: 403 })
+
+      const duplicateInstall = redirectLocation(
+        await app.githubConnect("other_owner")
+      )
+      harness.github.setInstallation({
+        installationId: 42,
+        appId: SHARED_GITHUB_APP_ID,
+        accessibleToGitHubUserIds: [
+          OWNER_GITHUB_USER_ID,
+          OTHER_OWNER_GITHUB_USER_ID,
+        ],
+        repositoryPages: [[REPO], [OTHER_REPO]],
+      })
+      const duplicateSetup = redirectLocation(
+        await app.githubSetupCallback(
+          "other_owner",
+          duplicateInstall.searchParams.get("state") as string,
+          42
+        )
+      )
+      harness.github.setOAuthCode(
+        "other-owner-code",
+        OTHER_OWNER_GITHUB_USER_ID
+      )
+      await expect(
+        app.githubOAuthCallback(
+          "other_owner",
+          duplicateSetup.searchParams.get("state") as string,
+          "other-owner-code"
+        )
+      ).resolves.toMatchObject({ status: 409 })
+
       await app.connectCodexWithApiKey(TENANT, "openai-api-key")
       await app.saveTenantSettings(TENANT, tenantSettings)
       harness.clock.set(NOW)
       await app.saveRepositorySettings(TENANT, OTHER_REPO, repositorySettings)
-
-      await app.connectGitHubApp({
-        tenant: OTHER_TENANT,
-        appId: 8,
-        installationId: 84,
-        privateKey: "globex-private-key",
-        webhookSecret: OTHER_WEBHOOK_SECRET,
-      })
 
       const journalBeforeForgery = await app.journal()
       const forged = await app.deliverWithInvalidSignature(
@@ -501,37 +791,68 @@ const cases: readonly AcceptanceCase[] = [
       expect(forged.status).toBe(401)
       expect(await app.journal()).toEqual(journalBeforeForgery)
       expect(await app.deliveryRecorded("forged-delivery")).toBe(false)
+      expect(await app.deliveryTenant("forged-delivery")).toBeNull()
+      expect(
+        harness.observed
+          .calls()
+          .filter((call) => call.deliveryId === "forged-delivery")
+          .map((call) => call.operation)
+      ).toEqual(["webhook.verifySignature"])
+      expect(harness.observed.calls()).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            operation: "webhook.resolveTenant",
+            deliveryId: "forged-delivery",
+          }),
+          expect.objectContaining({
+            operation: "webhook.dedupe",
+            deliveryId: "forged-delivery",
+          }),
+          expect.objectContaining({
+            operation: "webhook.parse",
+            deliveryId: "forged-delivery",
+          }),
+        ])
+      )
       expect(await app.installationTenant(42)).toBe(TENANT)
-      expect(await app.installationTenant(84)).toBe(OTHER_TENANT)
-      const globexDelivery = await app.deliver(
+      const validDelivery = await app.deliver(
         "pull_request",
-        "globex-delivery",
+        "shared-secret-delivery",
+        pullRequestPayload()
+      )
+      expect(validDelivery.status).toBeLessThan(300)
+      expect(await app.deliveryTenant("shared-secret-delivery")).toBe(TENANT)
+      expect(
+        harness.observed
+          .calls()
+          .filter((call) => call.deliveryId === "shared-secret-delivery")
+          .map((call) => call.operation)
+          .slice(0, 4)
+      ).toEqual([
+        "webhook.verifySignature",
+        "webhook.resolveTenant",
+        "webhook.dedupe",
+        "webhook.parse",
+      ])
+      const otherTenantDelivery = await app.deliver(
+        "pull_request",
+        "shared-secret-other-tenant",
         {
           ...pullRequestPayload(),
           installation: { id: 84 },
           repository: { full_name: "globex/app" },
         }
       )
-      expect(globexDelivery.status).toBeLessThan(300)
-      expect(await app.deliveryTenant("globex-delivery")).toBe(OTHER_TENANT)
+      expect(otherTenantDelivery.status).toBeLessThan(300)
+      expect(await app.deliveryTenant("shared-secret-other-tenant")).toBe(
+        OTHER_TENANT
+      )
 
       const setup = await app.setup(TENANT)
       await expect(app.unauthenticatedSetup(TENANT)).rejects.toThrow()
       await expect(app.intruderSetup(TENANT)).rejects.toThrow()
       await expect(
         app.intruderSaveTenantSettings(TENANT, tenantSettings)
-      ).rejects.toThrow()
-      await expect(
-        app.intruderConnectGitHubApp({
-          tenant: TENANT,
-          appId: 9,
-          installationId: 99,
-          privateKey: "intruder-key",
-          webhookSecret: "intruder-secret",
-        })
-      ).rejects.toThrow()
-      await expect(
-        app.intruderSelectRepositories(TENANT, [OTHER_REPO])
       ).rejects.toThrow()
       await expect(
         app.intruderConnectCodexWithApiKey(TENANT, "intruder-api-key")
@@ -548,11 +869,15 @@ const cases: readonly AcceptanceCase[] = [
         app.intruderRunProductionTick(TENANT, REPO)
       ).rejects.toThrow()
       await expect(app.intruderRunSweep(TENANT, REPO)).rejects.toThrow()
-      expect(setup.availableRepositories).toEqual([REPO, OTHER_REPO])
-      expect(setup.connectedRepositories).toEqual([REPO])
-      expect(setup.connectedRepositories).not.toContain(OTHER_REPO)
-      expect(JSON.stringify(setup)).not.toContain("github-private-key")
-      expect(JSON.stringify(setup)).not.toContain(WEBHOOK_SECRET)
+      expect(setup.github).toEqual({ connected: true })
+      expect(setup.connectedRepositories).toEqual([REPO, OTHER_REPO])
+      expect(JSON.stringify(setup)).not.toContain(SHARED_GITHUB_APP_PRIVATE_KEY)
+      expect(JSON.stringify(setup)).not.toContain(
+        SHARED_GITHUB_APP_WEBHOOK_SECRET
+      )
+      expect(JSON.stringify(setup)).not.toContain(
+        SHARED_GITHUB_APP_CLIENT_SECRET
+      )
       const setupHtml = await productionScreens.renderFrom(
         createProductionScreenSource(
           {
@@ -564,32 +889,46 @@ const cases: readonly AcceptanceCase[] = [
       expect(setupHtml).toContain(REPO)
       expect(setupHtml).toContain(OTHER_REPO)
       expect(setupHtml).toContain(TENANT)
-      expect(setupHtml).not.toContain("github-private-key")
-      expect(setupHtml).not.toContain(WEBHOOK_SECRET)
+      expect(setupHtml).not.toContain(SHARED_GITHUB_APP_PRIVATE_KEY)
+      expect(setupHtml).not.toContain(SHARED_GITHUB_APP_WEBHOOK_SECRET)
+      expect(setupHtml).not.toContain(SHARED_GITHUB_APP_CLIENT_SECRET)
       expect(JSON.stringify(await app.journal())).not.toContain(
-        "github-private-key"
+        SHARED_GITHUB_APP_PRIVATE_KEY
       )
       const secretStorage = JSON.stringify(await app.secretStorage(TENANT))
-      expect(secretStorage).not.toContain("github-private-key")
-      expect(secretStorage).not.toContain(WEBHOOK_SECRET)
+      expect(secretStorage).not.toContain(SHARED_GITHUB_APP_PRIVATE_KEY)
+      expect(secretStorage).not.toContain(SHARED_GITHUB_APP_WEBHOOK_SECRET)
+      expect(secretStorage).not.toContain(SHARED_GITHUB_APP_CLIENT_SECRET)
       expect(secretStorage).not.toContain("openai-api-key")
+      expect(await app.secretStorage(OTHER_TENANT)).toEqual([])
       const encrypted = (await app.secretStorage(TENANT)) as readonly {
         readonly ciphertext: string
       }[]
       expect(
         encrypted.map((row) => decryptSecret(MASTER_KEY, row.ciphertext))
-      ).toEqual(
-        expect.arrayContaining([
-          "github-private-key",
-          WEBHOOK_SECRET,
-          "openai-api-key",
-        ])
-      )
+      ).toEqual(["openai-api-key"])
       expect(() =>
         decryptSecret("wrong-master-key", encrypted[0]?.ciphertext ?? "")
       ).toThrow()
 
-      await app.productionWakeUp(NOW)
+      const journalBeforeRemoval = await app.journal()
+      const removal = await app.deliver(
+        "installation_repositories",
+        "repository-removed",
+        {
+          action: "removed",
+          installation: { id: 42 },
+          repositories_added: [],
+          repositories_removed: [{ full_name: OTHER_REPO }],
+        }
+      )
+      expect(removal.status).toBeLessThan(300)
+      expect((await app.setup(TENANT)).connectedRepositories).toEqual([REPO])
+      expect(await app.journal()).toEqual(journalBeforeRemoval)
+
+      harness.clock.set(NOW + 2 * HOUR)
+      await app.productionWakeUp(NOW + 2 * HOUR)
+      expect(await app.pendingTasks()).toBe(0)
       expect(harness.observed.calls()).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ operation: "codex.run", repo: OTHER_REPO }),
@@ -646,14 +985,7 @@ const cases: readonly AcceptanceCase[] = [
     name: "настроить темп и пороги: изменения применяются на следующем wake-up",
     usesWorker: true,
     async run(harness, app, worker) {
-      await app.connectGitHubApp({
-        tenant: TENANT,
-        appId: 7,
-        installationId: 42,
-        privateKey: "github-private-key",
-        webhookSecret: WEBHOOK_SECRET,
-      })
-      await app.selectRepositories(TENANT, [REPO])
+      await connectSharedGitHub(harness, app)
       await app.connectCodexWithApiKey(TENANT, "openai-api-key")
       const before = await app.journal()
       const callsBefore = harness.observed.calls().length
@@ -870,20 +1202,13 @@ test.each(cases)("$name", async ({ run, usesWorker }) => {
     })
   }
   function signature(payload: unknown): string {
-    const installationId =
-      typeof payload === "object" &&
-      payload !== null &&
-      "installation" in payload &&
-      typeof payload.installation === "object" &&
-      payload.installation !== null &&
-      "id" in payload.installation
-        ? payload.installation.id
-        : null
-    const secret = installationId === 84 ? OTHER_WEBHOOK_SECRET : WEBHOOK_SECRET
-    return `sha256=${createHmac("sha256", secret)
+    return `sha256=${createHmac("sha256", SHARED_GITHUB_APP_WEBHOOK_SECRET)
       .update(JSON.stringify(payload))
       .digest("hex")}`
   }
+  let harness: AcceptanceHarness
+  const githubRequest = (actor: BrowserActor, path: string) =>
+    harness.browser.get(actor, path)
   const app: ProductionApp = {
     deliver: (event, deliveryId, payload) =>
       backend.fetch("/github/webhook", {
@@ -907,13 +1232,18 @@ test.each(cases)("$name", async ({ run, usesWorker }) => {
         },
         body: JSON.stringify(payload),
       }),
-    connectGitHubApp: (input) =>
-      tenantBackend(input.tenant).action(publicApi.connectGitHubApp, input),
-    selectRepositories: (tenant, repos) =>
-      tenantBackend(tenant).mutation(publicApi.selectRepositories, {
-        tenant,
-        repos,
-      }),
+    githubConnect: (actor = "owner") =>
+      githubRequest(actor, "/github/app/connect"),
+    githubSetupCallback: (actor, state, installationId) =>
+      githubRequest(
+        actor,
+        `/github/app/setup/callback?state=${encodeURIComponent(state)}&installation_id=${installationId}`
+      ),
+    githubOAuthCallback: (actor, state, code) =>
+      githubRequest(
+        actor,
+        `/github/app/oauth/callback?state=${encodeURIComponent(state)}&code=${encodeURIComponent(code)}`
+      ),
     connectCodexWithApiKey: (tenant, apiKey) =>
       tenantBackend(tenant).mutation(publicApi.connectCodexWithApiKey, {
         tenant,
@@ -964,10 +1294,6 @@ test.each(cases)("$name", async ({ run, usesWorker }) => {
         tenant,
         settings,
       }),
-    intruderConnectGitHubApp: (input) =>
-      intruderBackend.action(publicApi.connectGitHubApp, input),
-    intruderSelectRepositories: (tenant, repos) =>
-      intruderBackend.mutation(publicApi.selectRepositories, { tenant, repos }),
     intruderConnectCodexWithApiKey: (tenant, apiKey) =>
       intruderBackend.mutation(publicApi.connectCodexWithApiKey, {
         tenant,
@@ -1051,9 +1377,17 @@ test.each(cases)("$name", async ({ run, usesWorker }) => {
         args
       ),
   }
-  const harness = await createAcceptanceHarness({
+  harness = await createAcceptanceHarness({
     backend,
     masterKey: MASTER_KEY,
+    sharedGitHubApp: {
+      appId: SHARED_GITHUB_APP_ID,
+      clientId: SHARED_GITHUB_APP_CLIENT_ID,
+      clientSecret: SHARED_GITHUB_APP_CLIENT_SECRET,
+      privateKey: SHARED_GITHUB_APP_PRIVATE_KEY,
+      slug: SHARED_GITHUB_APP_SLUG,
+      webhookSecret: SHARED_GITHUB_APP_WEBHOOK_SECRET,
+    },
   })
   for (const operation of [
     "claim",

@@ -31,7 +31,10 @@ function isTheme(value: string | null): value is Theme {
 }
 
 function getSystemTheme(): ResolvedTheme {
-  if (window.matchMedia(COLOR_SCHEME_QUERY).matches) {
+  if (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia(COLOR_SCHEME_QUERY).matches
+  ) {
     return "dark"
   }
 
@@ -123,6 +126,10 @@ export function ThemeProvider({
     applyTheme(theme)
 
     if (theme !== "system") {
+      return undefined
+    }
+
+    if (typeof window.matchMedia !== "function") {
       return undefined
     }
 

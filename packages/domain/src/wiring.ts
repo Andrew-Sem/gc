@@ -6,13 +6,13 @@ import type { CodexOptions, CodexSettings } from "./contract"
  *
  * Реализуется под таблицы wiring.spec.ts.
  */
-export function codexOptions(_settings: CodexSettings): CodexOptions {
+export function codexOptions(settings: CodexSettings): CodexOptions {
   return {
-    model: "",
-    modelReasoningEffort: "low",
-    workingDirectory: "",
-    sandboxMode: "danger-full-access",
-    networkAccessEnabled: true,
-    skipGitRepoCheck: true,
+    model: settings.model,
+    modelReasoningEffort: settings.reasoning,
+    workingDirectory: settings.checkoutPath,
+    sandboxMode: "workspace-write",
+    networkAccessEnabled: false,
+    skipGitRepoCheck: false,
   }
 }

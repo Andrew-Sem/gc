@@ -1,1 +1,5 @@
-export { renderWhyStuck } from "./ui/render-why-stuck"
+export {
+  nextAction,
+  reasonText,
+  renderWhyStuck,
+} from "./ui/render-why-stuck"

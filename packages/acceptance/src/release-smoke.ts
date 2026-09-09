@@ -1,4 +1,7 @@
-import { chromium } from "@playwright/test"
+import { existsSync } from "node:fs"
+import { loadEnvFile } from "node:process"
+import { fileURLToPath } from "node:url"
+import { createPlaywrightReleaseSmokeDriver } from "./release-smoke-driver"
 
 export type SmokeMode = "api_key" | "subscription"
 
@@ -18,7 +21,7 @@ export type ReleaseSmokeDriver = {
   waitForHealth(): Promise<void>
   registerOrSignIn(): Promise<void>
   reloadAndVerifySession(): Promise<void>
-  connectGitHubAndDiscoverRepository(): Promise<void>
+  connectGitHubThroughInstallFlow(): Promise<void>
   connectCodex(mode: SmokeMode): Promise<void>
   runMinimalCodexCall(): Promise<void>
   waitForSystemCreatedPullRequest(): Promise<{ readonly number: number }>
@@ -47,7 +50,7 @@ export async function runReleaseSmoke(
   await driver.waitForHealth()
   await driver.registerOrSignIn()
   await driver.reloadAndVerifySession()
-  await driver.connectGitHubAndDiscoverRepository()
+  await driver.connectGitHubThroughInstallFlow()
   await driver.connectCodex(mode)
   await driver.runMinimalCodexCall()
   await driver.runProductionTick()
@@ -81,10 +84,13 @@ export function parseReleaseSmokeTarget(
     "SMOKE_DISPOSABLE_MARKER",
     "SMOKE_OWNER_EMAIL",
     "SMOKE_OWNER_PASSWORD",
-    "SMOKE_GITHUB_APP_ID",
-    "SMOKE_GITHUB_INSTALLATION_ID",
-    "SMOKE_GITHUB_PRIVATE_KEY",
-    "SMOKE_GITHUB_WEBHOOK_SECRET",
+    "GITHUB_APP_ID",
+    "GITHUB_APP_CLIENT_ID",
+    "GITHUB_APP_CLIENT_SECRET",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_APP_SLUG",
+    "GITHUB_APP_WEBHOOK_SECRET",
+    "SMOKE_GITHUB_STORAGE_STATE",
     "SMOKE_GITHUB_BASE_BRANCH",
   ]
   required.push(
@@ -109,11 +115,11 @@ export function parseReleaseSmokeTarget(
   }
 }
 
-export async function createProductionReleaseSmokeDriver(): Promise<ReleaseSmokeDriver> {
-  void chromium
-  throw new Error(
-    "production Playwright release smoke driver is not implemented"
-  )
+export async function createProductionReleaseSmokeDriver(input: {
+  readonly mode: SmokeMode
+  readonly env: Readonly<Record<string, string>>
+}): Promise<ReleaseSmokeDriver> {
+  return createPlaywrightReleaseSmokeDriver(input)
 }
 
 export async function main(
@@ -121,6 +127,7 @@ export async function main(
   env = process.env,
   factory: ReleaseSmokeDriverFactory = createProductionReleaseSmokeDriver
 ): Promise<void> {
+  if (env === process.env) loadRootEnvironment()
   const parsed = parseReleaseSmokeTarget(argv[0], env)
   const definedEnv = Object.fromEntries(
     Object.entries(env).filter(
@@ -128,7 +135,21 @@ export async function main(
     )
   )
   const driver = await factory({ mode: parsed.mode, env: definedEnv })
-  await runReleaseSmoke(parsed.mode, driver, parsed.target)
+  try {
+    await runReleaseSmoke(parsed.mode, driver, parsed.target)
+  } finally {
+    if ("dispose" in driver && typeof driver.dispose === "function") {
+      await driver.dispose()
+    }
+  }
+}
+
+function loadRootEnvironment(): void {
+  const path = fileURLToPath(new URL("../../../.env", import.meta.url))
+  if (!existsSync(path)) return
+  const exportedEnvironment = { ...process.env }
+  loadEnvFile(path)
+  Object.assign(process.env, exportedEnvironment)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -20,7 +20,7 @@ test.each(["api_key", "subscription"] as const)(
       waitForHealth: step("health"),
       registerOrSignIn: step("auth"),
       reloadAndVerifySession: step("reload-session"),
-      connectGitHubAndDiscoverRepository: step("github"),
+      connectGitHubThroughInstallFlow: step("github-install-oauth"),
       connectCodex: async (receivedMode) => {
         calls.push(`codex:${receivedMode}`)
       },
@@ -61,7 +61,7 @@ test.each(["api_key", "subscription"] as const)(
       "health",
       "auth",
       "reload-session",
-      "github",
+      "github-install-oauth",
       `codex:${mode}`,
       "codex-call",
       "production-tick",
@@ -85,10 +85,13 @@ const releaseEnv = {
   SMOKE_DISPOSABLE_MARKER: "garbage-collector-disposable",
   SMOKE_OWNER_EMAIL: "owner@example.com",
   SMOKE_OWNER_PASSWORD: "password",
-  SMOKE_GITHUB_APP_ID: "7",
-  SMOKE_GITHUB_INSTALLATION_ID: "42",
-  SMOKE_GITHUB_PRIVATE_KEY: "private-key",
-  SMOKE_GITHUB_WEBHOOK_SECRET: "webhook-secret",
+  GITHUB_APP_ID: "7",
+  GITHUB_APP_CLIENT_ID: "Iv1.shared-client-id",
+  GITHUB_APP_CLIENT_SECRET: "shared-client-secret",
+  GITHUB_APP_PRIVATE_KEY: "private-key",
+  GITHUB_APP_SLUG: "garbage-collector",
+  GITHUB_APP_WEBHOOK_SECRET: "shared-webhook-secret",
+  SMOKE_GITHUB_STORAGE_STATE: "/run/secrets/github-storage-state.json",
   SMOKE_GITHUB_BASE_BRANCH: "main",
   SMOKE_OPENAI_API_KEY: "api-key",
   SMOKE_SUBSCRIPTION_TIMEOUT_SECONDS: "600",
@@ -98,11 +101,14 @@ test.each(["api_key", "subscription"] as const)(
   "CLI %s создаёт production driver и вызывает orchestrator",
   async (mode) => {
     let factoryMode: SmokeMode | null = null
-    await main([mode], releaseEnv, async ({ mode: receivedMode }) => {
+    let factoryStorageState: string | null = null
+    await main([mode], releaseEnv, async ({ mode: receivedMode, env }) => {
       factoryMode = receivedMode
+      factoryStorageState = env.SMOKE_GITHUB_STORAGE_STATE ?? null
       return recordingDriver([])
     })
     expect(factoryMode).toBe(mode)
+    expect(factoryStorageState).toBe(releaseEnv.SMOKE_GITHUB_STORAGE_STATE)
   }
 )
 
@@ -119,6 +125,33 @@ test("release env validation происходит до driver creation", async (
     )
   ).rejects.toThrow("SMOKE_GITHUB_REPOSITORY_ID")
   expect(created).toBe(false)
+})
+
+test.each([
+  "GITHUB_APP_ID",
+  "GITHUB_APP_CLIENT_ID",
+  "GITHUB_APP_CLIENT_SECRET",
+  "GITHUB_APP_PRIVATE_KEY",
+  "GITHUB_APP_SLUG",
+  "GITHUB_APP_WEBHOOK_SECRET",
+  "SMOKE_GITHUB_STORAGE_STATE",
+] as const)("release smoke требует shared install-flow env %s", (name) => {
+  expect(() =>
+    parseReleaseSmokeTarget("api_key", { ...releaseEnv, [name]: undefined })
+  ).toThrow(name)
+})
+
+test("release smoke не принимает старые tenant-provided GitHub credentials", () => {
+  const parsed = parseReleaseSmokeTarget("api_key", releaseEnv)
+  expect(parsed.mode).toBe("api_key")
+  for (const removed of [
+    "SMOKE_GITHUB_APP_ID",
+    "SMOKE_GITHUB_INSTALLATION_ID",
+    "SMOKE_GITHUB_PRIVATE_KEY",
+    "SMOKE_GITHUB_WEBHOOK_SECRET",
+  ]) {
+    expect(releaseEnv).not.toHaveProperty(removed)
+  }
 })
 
 test("subscription не требует API key, но требует timeout", () => {
@@ -146,7 +179,7 @@ function recordingDriver(calls: string[]): ReleaseSmokeDriver {
     waitForHealth: step("health"),
     registerOrSignIn: step("auth"),
     reloadAndVerifySession: step("reload-session"),
-    connectGitHubAndDiscoverRepository: step("github"),
+    connectGitHubThroughInstallFlow: step("github-install-oauth"),
     connectCodex: step("codex"),
     runMinimalCodexCall: step("codex-call"),
     waitForSystemCreatedPullRequest: async () => ({ number: 101 }),

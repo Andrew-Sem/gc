@@ -2,35 +2,35 @@
   "schema": "gc.domain-executable-specs-freeze.v1",
   "shared": {
     "status": "domain-approved",
-    "approvedAt": "2026-08-07",
+    "approvedAt": "2026-08-10",
     "files": {
-      "src/contract.ts": "7e9fb2ce386dae2a599e6fb824b6361ad3a6229592e6cc285ea431bfb17b1b2b",
-      "src/fixtures.ts": "66d4055f02d16af2cbfcd8914e37752802b566ff3a5b845d83603bf0369fdad5",
+      "src/contract.ts": "d23a09bc6e5d5dec26c03bc21975abe68228f119d61be377635fdced2cfa5c68",
+      "src/fixtures.ts": "38f27c7a3f96d3e711b0609d6dc4788e9439887ded56821d1280b62e28226c8a",
       "src/freeze.spec.ts": "cf1e37648966b53c57295ff27159cd5d66f099a0a89d30644d3a2f0fdd532841"
     }
   },
   "slices": {
     "production-wiring": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-07",
+      "approvedAt": "2026-08-10",
       "files": {
-        "src/production-wiring.spec.ts": "43e43a5a5a7683746b896cce60a0952786429b49e81f708b1cd2d8446fd0fe93"
+        "src/production-wiring.spec.ts": "a6f92bda209e6024a66a00bae24fd94db35ff40cde1a9e837a31eff524f268e5"
       }
     },
     "browser-application": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-08",
+      "approvedAt": "2026-08-10",
       "files": {
-        "src/browser-app.spec.tsx": "d06923febe886302ac5421a8dabb289850710bda398a9bd642a4225cfe077cea",
+        "src/browser-app.spec.tsx": "18d014fed9236fc0b413173acb460bf4fdcd623b43d7be61bb7e50eb79474f31",
         "src/auth-bootstrap.spec.tsx": "37c12e8cb460158d119fe12880696c2510d3fa0448edceb79317a16bab42ff34"
       }
     },
     "runtime": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-08",
+      "approvedAt": "2026-08-10",
       "files": {
-        "src/runtime-contract.spec.ts": "4bd658a4315ecbf04eff4dad27dd680c70aed1df70337349bae7263ac42ac832",
-        "src/runtime-env.spec.ts": "4057b6a59993ca130fcce00edab98b52ee8ce0840cca84bbaf0b8d6b468e52d9",
+        "src/runtime-contract.spec.ts": "560eb859409808683563139ac38ea7263cf7aedae67223a9d2de404291713463",
+        "src/runtime-env.spec.ts": "5f6fc15c7d83d5f87f0be9e8f489c57618d1ad107c6fababed3acd8a60c8aa5b",
         "src/status-check.spec.ts": "6457815dc273bf98bb57441a9dbbcbff910462b6de5243b58a22558f9d65d00a"
       }
     },
@@ -46,9 +46,9 @@
     },
     "release-smoke": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-08",
+      "approvedAt": "2026-08-10",
       "files": {
-        "src/release-smoke.spec.ts": "2e0b543525e841d10dc6ae96d7ef080f3a16fe1cbc79e8ff7eaff51c4435a520"
+        "src/release-smoke.spec.ts": "0e1f7109e54bb0453c1fab4870c102cda65230a5f0c4dcc0b14f3e66eeb94719"
       }
     },
     "workspace-contract": {
@@ -71,14 +71,15 @@
     },
     "documented-behavior": {
       "status": "domain-approved",
-      "approvedAt": "2026-08-07",
+      "approvedAt": "2026-08-10",
       "files": {
-        "workspace:specs/use-cases.md": "daee16ab2dd1fca7bf2357397447a863a3dd20ea9758351c5c0cc45a3e42f3de",
-        "workspace:specs/facts.md": "020795682ec3080bbe298ff684f398d875dd88ce3bc77f0dd2974bcef2945a48",
-        "workspace:specs/glossary.md": "0f7b8986e15a73dfc3fd87e55690703eea259b2019ea0e9a902aed828fa6828e",
-        "workspace:specs/runtime.md": "2160001fef4deb0e4aede2cb15685f230275f5706e0bb6dbfc380898456f5d7c",
-        "workspace:docs/architecture.md": "dcc191dcc1df4157820f56513b433e00c28a59cde1622777dfd86540a3ee460b",
-        "workspace:docs/executable-specs.md": "7e6419e0329d2064c8a38f11585d0b1a5722420bdc7618792f8db8affb440880"
+        "workspace:specs/use-cases.md": "34f34ae5b346c81b55d0c3ef7e90d6fbf31b6b4249148a147b94abbae3d4e376",
+        "workspace:specs/facts.md": "97b68ea3e1e56972d928b188168081493dc6b91919f9f05964d47612aeeca060",
+        "workspace:specs/glossary.md": "0c402fa854fdc66d5252d988fd6a1f08ce3661d0fe8865097dcd5b667682ad45",
+        "workspace:specs/runtime.md": "c38115a2022ae455c2754d334dc5d1b5586cafe9acf7eae36831075175d8fa51",
+        "workspace:docs/architecture.md": "d41ec2a505032e0e77a77e10f9c97a3a2b12092927d7a4ffb3a570acb7d47cc0",
+        "workspace:docs/executable-specs.md": "164c2bfdd80462b443cf2c052041bb7eb7328b1a333fcf2ebf3e34ba89ed45cb",
+        "workspace:docs/post-spec-gaps.md": "555787ffd9ad1b67cc0ed231b518697f85fc05a943054e7cd56ccff4ee94e370"
       }
     },
     "package-configuration": {
