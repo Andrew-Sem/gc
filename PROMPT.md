@@ -1,15 +1,13 @@
 # Задание реализующему агенту
 
-**Перед запуском этой сессии человек выполняет `just freeze-on`.**
-
 Это режим 2 — реализация. Авторингом спек в этой сессии не занимаемся.
 
 ## Задача
 
-Сделать запускаемое production-приложение, которым можно пользоваться через браузер. Зелёные
-спеки обязательны, но недостаточны. Результат завершён только когда Docker Compose поднимает
-полный стек и два credentialed release smoke (`api_key` и `subscription`) проходят реальный
-путь `browser → GitHub → Convex journal/tasks → worker/Codex → GitHub → live UI`.
+Сделать запускаемое приложение, которым можно пользоваться через браузер. Зелёные спеки
+обязательны, но недостаточны. Результат завершён только когда один бинарник поднимается,
+админка открывается и `just smoke` проходит реальный путь
+`браузер → GitHub → журнал/очередь → Codex → GitHub → живой экран`.
 
 ## Сначала прочитай целиком
 
@@ -19,9 +17,7 @@
 4. `specs/facts.md`
 5. `specs/runtime.md`
 6. `docs/architecture.md`
-7. `docs/executable-specs.md`
-8. Контракты и все `*.spec.ts` в `packages/domain`, `packages/github`,
-   `packages/acceptance`
+7. Словарь домена и все `*_test.go`
 
 Требования берутся только оттуда. Если таблицы противоречат друг другу — остановись и скажи
 человеку. Не меняй таблицу под удобную реализацию.
@@ -30,85 +26,64 @@
 
 | Место | Ответственность |
 |---|---|
-| `packages/domain/src/decider.ts`, `packages/domain/src/index.ts` | Полный `decide/evolve`: settings per tick, report idempotency, out-of-order observations, full sweep evidence; production export того же decider API. |
-| `packages/domain/src/effects.ts` | Чистое отображение фактов, включая `ReconcilePr`. |
-| `packages/domain/src/projections.ts` | Живой why-stuck forecast из полного inventory и новых webhooks. |
-| `packages/domain/src/wiring.ts` | Безопасные Codex options. |
-| `packages/github/src/webhook.ts` | Webhook `0..N`, actions, validation, timestamps. |
-| `packages/github/src/required-checks.ts` | Полный required inventory + все attempts; partial response только failure. |
-| `packages/github/src/reconciliation.ts` | PR first, затем runs текущего head независимо от associations. |
-| `packages/convex/**` | Schema, journal/tasks, auth ownership, encrypted secrets, webhook, protected worker protocol, queries/actions, health и deployment config. |
-| `apps/worker/**` | Typed production ports, real GitHub App client, real git workspaces, Codex API/device auth, leases, backoff/shutdown и `runWorkerOnce`. |
-| `apps/web/src/**` | Полное интерактивное приложение: auth, setup forms, settings и live why-stuck. Сохраняй FSD и используй shadcn/ui. |
-| `packages/acceptance/**` | Production wiring, DOM browser acceptance, real-git integration и credentialed release smoke runner. |
-| `Dockerfile*`, `compose.yaml`, `.env.example`, runtime config | Официальный one-command stack, health checks, volumes и fail-fast env validation. |
+| `internal/domain` | Полные `Decide`/`Evolve`: настройки на тик, идемпотентность отчётов, наблюдения не по порядку, полное evidence свипа, эффекты и модель экрана. |
+| `internal/github` | Разбор вебхуков `0..N`, actions, валидация, времена; полный required inventory со всеми attempts, частичный ответ только failure; reconciliation после `PrCreated`. |
+| `internal/store` | Схема, журнал, очередь с арендой, настройки, транзакция «факты плюс задача». |
+| `internal/web` | Страницы, формы, фрагменты htmx, путь вебхука с проверкой подписи до dedupe и разбора, health. |
+| `internal/agent` | Рабочие копии, реальный `git`, запуск Codex, создание PR, стабильные idempotency keys. |
+| `internal/app` | Планировщик двух wake-up, исполнитель задач, backoff, graceful shutdown, сборка портов. |
+| `cmd/gc` | Валидация env до открытия порта и запуск. |
+| `.env.example`, `justfile`, `Dockerfile` | Запуск одной командой и понятные ошибки конфигурации. |
 
-Создавай implementation-файлы свободно. Не создавай вторую in-memory реализацию journal,
-decision engine, task queue или UI projection: acceptance harness должен вызывать production
-код.
+Создавай файлы реализации свободно. Не заводи вторую реализацию журнала, движка решений,
+очереди или модели экрана: сценарные тесты должны вызывать тот же код, что работает в проде.
 
 ## Что менять запрещено
 
-- `packages/*/src/contract.ts`
-- любые `*.spec.ts` и `fixtures.ts`
-- `packages/domain/src/framework/`
+- словарь домена: типы фактов, команд и эффектов
+- любые `*_test.go` и фикстуры
+- всё в `specs/`, `docs/`, `AGENTS.md`, `PROMPT.md`
 - `freeze-manifest.json`
-- всё в `specs/`, `docs/`, уже существующие конфиги, `AGENTS.md`, `PROMPT.md`
 
-Новые Dockerfiles, `compose.yaml`, `.env.example`, runtime modules и smoke implementation files
-создавать можно. Существующие frozen config/package files менять нельзя: необходимые scripts
-и dependencies уже утверждены авторингом.
-
-Красный `freeze.spec.ts` означает правку запрещённого файла. Верни файл, манифест не правь.
+Красный тест заморозки означает правку запрещённого файла. Верни файл, манифест не правь.
 
 ## Нормативные ограничения
 
-- Неприменимая или дублирующая команда: `{ ok: true, events: [] }`.
-- `decide` не бросает и не отклоняет команды; `DomainError = never`.
+- Неприменимая или дублирующая команда даёт пустой список событий.
+- `Decide` не отклоняет команды, не паникует и не возвращает ошибку.
 - Порядок событий нормативен.
-- Checks evidence текущего свипа терминален: полный snapshot или failure, не оба.
+- Checks evidence текущего свипа терминален: полный снимок или failure, не оба.
 - Старое evidence не разрешает новый свип.
 - `LookupIncomplete` не закрывает PR и блокирует только свой свип.
 - Последняя attempt выбирается доменом по `createdAt`, затем `id`.
 - Passing conclusions: `success`, `neutral`, `skipped`.
 - Required identity: `context + appId`.
 - Delivery ID защищает от дубля; `updatedAt` — от позднего старого состояния.
-- HTTP webhook проверяет `X-Hub-Signature-256` до dedupe и parser.
-- Tenant settings для агента берутся из due-тика и сохраняются в task snapshot.
-- Секреты никогда не попадают в журнал или public DTO.
-- Exactly-once относится к task consumer/outbox, не к `effectsOf`.
-- `main` воркера должен вызывать тот же `runWorkerOnce`, что acceptance.
-- Повтор внешнего вызова после process crash допустим только с тем же стабильным idempotency
-  key либо через effect-specific reconciliation; один task не может породить два
-  семантических результата.
-- `just spec` должен оставаться около пяти секунд; real sleeps запрещены.
-- Better Auth использует email/password; первый user становится owner tenant.
-- Browser acceptance кликает actual `App`; string presenters не заменяют UI.
-- Worker использует authenticated external protocol, а не Convex internal references.
-- Production loop имеет idle wait, bounded backoff, lease renewal и graceful `SIGTERM` drain.
-- Официальный runtime — Docker Compose с persistent volumes и health checks.
+- Подпись вебхука проверяется до dedupe и разбора.
+- Настройки агента берутся из due-тика и сохраняются в снимок задачи.
+- Секреты приходят из окружения и не попадают в журнал, задачи, HTML и логи.
+- Exactly-once относится к исполнителю задач, а не к чистому отображению событий в эффекты.
+- Факты и порождённая ими задача пишутся одной транзакцией.
+- Повтор внешнего вызова после падения допустим только с тем же стабильным idempotency key.
+- `just spec` остаётся в пределах секунды, `just test` — около пяти; реальные засыпания запрещены.
+- Сценарные тесты ходят по настоящему HTTP через `httptest` и читают HTML.
+- Планировщик и исполнитель имеют ожидание на простое, ограниченный backoff и graceful `SIGTERM`.
 
 ## Петля обратной связи
 
 ```bash
 just check
 just lint
-just integration
-just up
-just status
-just smoke-release api_key
-just smoke-release subscription
+just smoke
 ```
 
-Работай до полностью зелёных `just check`, `just lint`, `just integration` и успешных двух real
-smoke. Отсутствие credentials, public HTTPS или disposable repository — blocker, а не
-допустимый остаток.
+Работай до полностью зелёных `just check`, `just lint` и успешного реального smoke. Отсутствие
+credentials, публичного HTTPS или disposable repository — blocker, а не допустимый остаток.
 
 ## Отчёт по завершении
 
 - сколько прогонов потребовалось;
-- какие production seams созданы;
-- где контракт допускал несколько реализаций и какой выбор сделан;
-- URL поднятого приложения и health status;
-- доказательство обоих release smoke, созданные PR и проверенные restart paths;
-- какие значения env требуются оператору без публикации самих секретов.
+- какие швы созданы и где проходят границы интерфейсов;
+- где спеки допускали несколько реализаций и какой выбор сделан;
+- доказательство smoke: созданные PR и проверенные пути рестарта;
+- какие значения env требуются оператору, без публикации самих секретов.
