@@ -8,9 +8,9 @@ check: lint test
 test:
     go test ./...
 
-# Только доменные таблицы. Держим в пределах секунды.
+# Исполняемые спеки из specs/. Держим в пределах секунды.
 spec:
-    go test ./internal/domain/...
+    go test -count=1 -v ./specs/...
 
 # Форматирование и статические проверки
 lint:
