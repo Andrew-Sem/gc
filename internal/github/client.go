@@ -1,4 +1,3 @@
-// Package github — клиент GitHub API с PAT из окружения.
 package github
 
 import (
@@ -10,21 +9,16 @@ import (
 	"strings"
 )
 
-// Client ходит в GitHub API. Токен уходит только в заголовок Authorization; в ошибки, логи и
-// ответы он не попадает, поэтому тело ответа GitHub в ошибку тоже не кладётся.
 type Client struct {
 	baseURL string
 	token   string
 	http    *http.Client
 }
 
-// New создаёт клиент. baseURL — https://api.github.com или адрес подделки в спеках.
 func New(baseURL, token string, httpClient *http.Client) *Client {
 	return &Client{baseURL: strings.TrimSuffix(baseURL, "/"), token: token, http: httpClient}
 }
 
-// RepositoryAccessible отвечает, существует ли репозиторий и видит ли его токен.
-// Закрытый репозиторий без доступа GitHub показывает как несуществующий — это тоже «нет».
 func (c *Client) RepositoryAccessible(ctx context.Context, repo string) (bool, error) {
 	owner, name, ok := strings.Cut(repo, "/")
 	if !ok {

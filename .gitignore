@@ -1,27 +1,21 @@
-# Собранный бинарник и артефакты сборки
 /gc
 /bin
 /dist
 
-# Локальная база и рабочие каталоги агента
 *.db
 *.db-shm
 *.db-wal
 /workspaces
 
-# Логи
 logs
 *.log
 
-# env files (can opt-in for committing if needed)
 .env*
 !.env.example
 
-# Покрытие и профили
 coverage.out
 *.prof
 
-# Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea

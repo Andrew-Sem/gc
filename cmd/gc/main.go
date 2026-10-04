@@ -9,10 +9,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/andrew-semyonov/garbage-collector/internal/app"
-	"github.com/andrew-semyonov/garbage-collector/internal/github"
-	"github.com/andrew-semyonov/garbage-collector/internal/store"
-	"github.com/andrew-semyonov/garbage-collector/internal/web"
+	"github.com/Andrew-Sem/gc/internal/app"
+	"github.com/Andrew-Sem/gc/internal/github"
+	"github.com/Andrew-Sem/gc/internal/store"
+	"github.com/Andrew-Sem/gc/internal/web"
 )
 
 func main() {

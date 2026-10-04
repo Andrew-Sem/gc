@@ -1,4 +1,3 @@
-// Package store — хранение журнала фактов.
 package store
 
 import (
@@ -6,10 +5,9 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/andrew-semyonov/garbage-collector/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/domain"
 )
 
-// Memory — журнал в памяти для запуска приложения, пока нет SQLite. После перезапуска он пуст.
 type Memory struct {
 	mu    sync.Mutex
 	facts []domain.Fact

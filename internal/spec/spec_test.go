@@ -6,11 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/html"
-
-	"github.com/andrew-semyonov/garbage-collector/internal/app"
-	"github.com/andrew-semyonov/garbage-collector/internal/domain"
-	"github.com/andrew-semyonov/garbage-collector/internal/github"
+	"github.com/Andrew-Sem/gc/internal/app"
+	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/github"
 )
 
 func TestParseContract(t *testing.T) {
@@ -135,7 +133,7 @@ func TestExecute(t *testing.T) {
 		name    string
 		sc      *Scenario
 		handler func(app.Deps) http.Handler
-		want    string // пусто — сценарий должен пройти
+		want    string
 	}{
 		{
 			"несуществующий адрес не проходит негативный сценарий",
@@ -237,43 +235,6 @@ func TestFakeGitHubThroughRealClient(t *testing.T) {
 	}
 }
 
-func TestSelector(t *testing.T) {
-	doc, err := html.Parse(strings.NewReader(`
-		<section id="repositories">
-			<ul>
-				<li class="row current" data-repo="acme/one"><form hx-post="/x"><input name="repo" value="acme/one"></form></li>
-				<li class="row" data-repo="acme/two"></li>
-			</ul>
-		</section>`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for source, want := range map[string]int{
-		`li`:                           2,
-		`#repositories li`:             2,
-		`.current`:                     1,
-		`li.row[data-repo="acme/two"]`: 1,
-		`[data-repo]`:                  2,
-		`[data-repo='acme/one'] form[hx-post="/x"] input[name=repo][value="acme/one"]`: 1,
-		`ul li input`:               1,
-		`section form li`:           0,
-		`*[data-repo="acme/three"]`: 0,
-	} {
-		sel, err := compileSelector(source)
-		if err != nil {
-			t.Fatalf("%s: %v", source, err)
-		}
-		if got := len(sel.matchAll(doc)); got != want {
-			t.Errorf("%s: нашлось %d, ждали %d", source, got, want)
-		}
-	}
-	for _, broken := range []string{``, `li[`, `li[data-repo="x`, `li[data-repo="x"`, `#`, `li > a`} {
-		if _, err := compileSelector(broken); err == nil {
-			t.Errorf("%q: ждали ошибку", broken)
-		}
-	}
-}
-
 func TestRequestString(t *testing.T) {
 	if got := Get("/").String(); got != "GET /" {
 		t.Fatalf("%q", got)
@@ -284,7 +245,6 @@ func TestRequestString(t *testing.T) {
 	}
 }
 
-// reply — приложение-заглушка: дописывает факты и отвечает статусом и телом.
 func reply(status int, body string, facts ...domain.Fact) func(app.Deps) http.Handler {
 	return func(deps app.Deps) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -298,7 +258,6 @@ func reply(status int, body string, facts ...domain.Fact) func(app.Deps) http.Ha
 	}
 }
 
-// askGitHub — приложение-заглушка: спрашивает GitHub про репозиторий и отвечает 200.
 func askGitHub(repo string) func(app.Deps) http.Handler {
 	return func(deps app.Deps) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -308,7 +267,6 @@ func askGitHub(repo string) func(app.Deps) http.Handler {
 	}
 }
 
-// logToken — приложение-заглушка, которое по ошибке пишет токен в лог.
 func logToken() func(app.Deps) http.Handler {
 	return func(deps app.Deps) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

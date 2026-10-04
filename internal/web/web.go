@@ -1,4 +1,3 @@
-// Package web — HTTP-админка: страницы, формы и фрагменты htmx.
 package web
 
 import (
@@ -9,8 +8,8 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/andrew-semyonov/garbage-collector/internal/app"
-	"github.com/andrew-semyonov/garbage-collector/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/app"
+	"github.com/Andrew-Sem/gc/internal/domain"
 )
 
 //go:embed templates/*.html
@@ -18,7 +17,6 @@ var templateFiles embed.FS
 
 var templates = template.Must(template.ParseFS(templateFiles, "templates/*.html"))
 
-// New собирает HTTP-обработчик админки.
 func New(a *app.App) http.Handler {
 	h := &handler{app: a}
 	mux := http.NewServeMux()
@@ -32,12 +30,11 @@ type handler struct {
 	app *app.App
 }
 
-// section — данные блока со списком: его отдают и страница, и ответы на формы.
 type section struct {
 	Repositories []string
-	Error        string // код ошибки для data-error
-	Message      string // та же ошибка словами
-	Input        string // что ввёл оператор, чтобы при ошибке не набирать заново
+	Error        string
+	Message      string
+	Input        string
 }
 
 func (h *handler) page(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +82,6 @@ func (h *handler) section(ctx context.Context) (section, error) {
 	return section{Repositories: repos}, err
 }
 
-// connectOutcome переводит результат подключения в статус ответа и сообщение на странице.
 func connectOutcome(err error) (status int, code, message string) {
 	switch {
 	case err == nil:
@@ -104,7 +100,6 @@ func connectOutcome(err error) (status int, code, message string) {
 	}
 }
 
-// render сначала собирает страницу целиком, чтобы ошибка шаблона не оставила полуответ.
 func render(w http.ResponseWriter, status int, name string, data any) {
 	var buf bytes.Buffer
 	if err := templates.ExecuteTemplate(&buf, name, data); err != nil {

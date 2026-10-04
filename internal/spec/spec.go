@@ -1,10 +1,3 @@
-// Package spec — маленький фреймворк исполняемых спек: Given / When / Then поверх журнала
-// фактов и HTTP.
-//
-// Сценарии одной фичи привязаны к её договору — markdown-файлу с нумерованными пунктами.
-// Сценарий собирается декларативно, а запускается целиком после сборки: журнал с фактами из
-// Given → приложение с настоящим клиентом GitHub, который ходит в поддельный GitHub API →
-// один запрос из When → проверки Expect… и сквозная проверка, что PAT нигде не всплыл.
 package spec
 
 import (
@@ -26,31 +19,25 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/andybalholm/cascadia"
 	"golang.org/x/net/html"
 
-	"github.com/andrew-semyonov/garbage-collector/internal/app"
-	"github.com/andrew-semyonov/garbage-collector/internal/domain"
-	"github.com/andrew-semyonov/garbage-collector/internal/github"
-	"github.com/andrew-semyonov/garbage-collector/internal/web"
+	"github.com/Andrew-Sem/gc/internal/app"
+	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/github"
+	"github.com/Andrew-Sem/gc/internal/web"
 )
 
-// canaryToken — PAT, который получает клиент GitHub в каждом сценарии. Если он всплывёт в
-// журнале, ответе или логах, сценарий падает (REPO-4). Формат намеренно не похож на
-// настоящий токен GitHub, чтобы сканеры секретов не принимали его за утечку.
 const canaryToken = "spec-canary-pat-must-never-leak"
 
-// fakeGitHubURL — адрес поддельного GitHub API. Запросы до сети не доходят.
 const fakeGitHubURL = "https://api.github.test"
 
-// Suite — сценарии одной фичи и её договор.
 type Suite struct {
 	t        *testing.T
 	contract contract
 	covered  map[string]bool
 }
 
-// Feature читает договор фичи. Путь считается от файла теста, а не от текущего каталога.
-// После всех сценариев в отчёт попадают пункты договора, которые ещё не покрыты.
 func Feature(t *testing.T, contractFile string) *Suite {
 	t.Helper()
 	_, testFile, _, _ := runtime.Caller(1)
@@ -71,7 +58,6 @@ func Feature(t *testing.T, contractFile string) *Suite {
 	return s
 }
 
-// Scenario описывает сценарий и сразу его запускает.
 func (s *Suite) Scenario(name string, build func(sc *Scenario)) {
 	_, file, line, _ := runtime.Caller(1)
 	where := fmt.Sprintf("%s:%d", filepath.Base(file), line)
@@ -90,40 +76,33 @@ func (s *Suite) Scenario(name string, build func(sc *Scenario)) {
 	})
 }
 
-// appHandler собирает приложение так же, как cmd/gc.
 func appHandler(deps app.Deps) http.Handler {
 	return web.New(app.New(deps))
 }
 
-// Scenario собирает один сценарий до запуска.
 type Scenario struct {
 	given  []domain.Fact
 	github *fakeGitHub
 	steps  []*step
-	setup  []string // ошибки в описании Given; всплывают при проверке сценария
+	setup  []string
 }
 
 func newScenario() *Scenario {
 	return &Scenario{github: &fakeGitHub{answers: map[string]githubAnswer{}}}
 }
 
-// Given кладёт факты в журнал до запроса.
 func (sc *Scenario) Given(facts ...domain.Fact) {
 	sc.given = append(sc.given, facts...)
 }
 
-// GitHubCanAccess: репозиторий существует, и токен его видит.
 func (sc *Scenario) GitHubCanAccess(repos ...string) {
 	sc.answerGitHub(githubAccessible, repos)
 }
 
-// GitHubCannotAccess: репозитория нет или токен его не видит.
 func (sc *Scenario) GitHubCannotAccess(repos ...string) {
 	sc.answerGitHub(githubNotFound, repos)
 }
 
-// GitHubFails: GitHub отвечает ошибкой и, как худший случай, возвращает в теле ошибки
-// заголовок с токеном.
 func (sc *Scenario) GitHubFails(repos ...string) {
 	sc.answerGitHub(githubDown, repos)
 }
@@ -138,29 +117,24 @@ func (sc *Scenario) answerGitHub(answer githubAnswer, repos []string) {
 	}
 }
 
-// When задаёт запрос сценария. Запрос в сценарии ровно один.
 func (sc *Scenario) When(r Request) *step {
 	st := &step{request: r}
 	sc.steps = append(sc.steps, st)
 	return st
 }
 
-// Request — HTTP-запрос, который отправил бы браузер.
 type Request struct {
 	method string
 	path   string
 	fields Fields
 }
 
-// Fields — поля формы.
 type Fields map[string]string
 
-// Get открывает страницу.
 func Get(path string) Request {
 	return Request{method: http.MethodGet, path: path}
 }
 
-// PostForm отправляет форму методом POST, как кнопка на странице.
 func PostForm(path string, fields Fields) Request {
 	return Request{method: http.MethodPost, path: path, fields: fields}
 }
@@ -192,13 +166,12 @@ func (r Request) build(ctx context.Context) *http.Request {
 	return req
 }
 
-// step — ожидания после запроса.
 type step struct {
 	request Request
 	then    string
 	covers  []string
 	checks  []check
-	setup   []string // ошибки в описании ожиданий
+	setup   []string
 }
 
 type checkKind int
@@ -209,24 +182,21 @@ const (
 	checkHTML
 )
 
-// check возвращает описание расхождения или пустую строку, если всё сошлось.
 type check struct {
 	kind checkKind
 	run  func(o *outcome) string
 }
 
-// outcome — что получилось после запроса.
 type outcome struct {
 	status int
 	body   string
-	facts  []domain.Fact // появились в журнале после запроса
+	facts  []domain.Fact
 
 	parsed bool
 	doc    *html.Node
 	docErr error
 }
 
-// document разбирает ответ как HTML один раз на все проверки.
 func (o *outcome) document() (*html.Node, error) {
 	if !o.parsed {
 		o.doc, o.docErr = html.Parse(strings.NewReader(o.body))
@@ -235,19 +205,16 @@ func (o *outcome) document() (*html.Node, error) {
 	return o.doc, o.docErr
 }
 
-// Then — подпись для людей. Сама ничего не проверяет: проверяют вызовы Expect….
 func (st *step) Then(description string) *step {
 	st.then = description
 	return st
 }
 
-// Covers — пункты договора, которые проверяет сценарий.
 func (st *step) Covers(clauses ...string) *step {
 	st.covers = append(st.covers, clauses...)
 	return st
 }
 
-// ExpectStatus — HTTP-статус ответа.
 func (st *step) ExpectStatus(code int) *step {
 	st.checks = append(st.checks, check{kind: checkStatus, run: func(o *outcome) string {
 		if o.status == code {
@@ -259,7 +226,6 @@ func (st *step) ExpectStatus(code int) *step {
 	return st
 }
 
-// ExpectFacts — после запроса в журнале появились ровно эти факты, в этом порядке.
 func (st *step) ExpectFacts(facts ...domain.Fact) *step {
 	if len(facts) == 0 {
 		st.setup = append(st.setup, "ExpectFacts без фактов — для «ничего не записано» есть ExpectNoFacts")
@@ -273,7 +239,6 @@ func (st *step) ExpectFacts(facts ...domain.Fact) *step {
 	return st
 }
 
-// ExpectNoFacts — запрос ничего не записал в журнал.
 func (st *step) ExpectNoFacts() *step {
 	st.checks = append(st.checks, check{kind: checkFacts, run: func(o *outcome) string {
 		if len(o.facts) == 0 {
@@ -284,7 +249,6 @@ func (st *step) ExpectNoFacts() *step {
 	return st
 }
 
-// ExpectHTML — в ответе есть хотя бы один элемент под селектор.
 func (st *step) ExpectHTML(selector string) *step {
 	return st.expectHTML(selector, func(n int) string {
 		if n > 0 {
@@ -294,7 +258,6 @@ func (st *step) ExpectHTML(selector string) *step {
 	})
 }
 
-// ExpectNoHTML — в ответе нет ни одного элемента под селектор.
 func (st *step) ExpectNoHTML(selector string) *step {
 	return st.expectHTML(selector, func(n int) string {
 		if n == 0 {
@@ -304,7 +267,6 @@ func (st *step) ExpectNoHTML(selector string) *step {
 	})
 }
 
-// ExpectHTMLCount — в ответе ровно столько элементов под селектор.
 func (st *step) ExpectHTMLCount(selector string, want int) *step {
 	return st.expectHTML(selector, func(n int) string {
 		if n == want {
@@ -315,19 +277,19 @@ func (st *step) ExpectHTMLCount(selector string, want int) *step {
 }
 
 func (st *step) expectHTML(source string, verdict func(found int) string) *step {
-	sel, err := compileSelector(source)
+	sel, err := cascadia.ParseGroup(source)
 	if err != nil {
 		st.setup = append(st.setup, fmt.Sprintf("селектор %q: %v", source, err))
 	}
 	st.checks = append(st.checks, check{kind: checkHTML, run: func(o *outcome) string {
 		if sel == nil {
-			return "" // ошибка селектора уже в описании сценария
+			return ""
 		}
 		doc, err := o.document()
 		if err != nil {
 			return "ответ не разбирается как HTML: " + err.Error()
 		}
-		return verdict(len(sel.matchAll(doc)))
+		return verdict(len(cascadia.QueryAll(doc, sel)))
 	}})
 	return st
 }
@@ -342,7 +304,6 @@ func (st *step) count(kind checkKind) int {
 	return n
 }
 
-// validate проверяет описание сценария до запуска и возвращает все найденные ошибки.
 func validate(sc *Scenario, c contract) []string {
 	problems := slices.Clone(sc.setup)
 	if len(sc.steps) != 1 {
@@ -370,8 +331,6 @@ func validate(sc *Scenario, c contract) []string {
 	return problems
 }
 
-// execute прогоняет сценарий на свежем мире и возвращает отчёт о расхождениях.
-// Пустая строка — всё сошлось.
 func execute(ctx context.Context, sc *Scenario, newHandler func(app.Deps) http.Handler) string {
 	st := sc.steps[0]
 	j := &journal{}
@@ -414,7 +373,6 @@ func execute(ctx context.Context, sc *Scenario, newHandler func(app.Deps) http.H
 		strings.Join(problems, "\n\n"))
 }
 
-// leaks ищет PAT везде, куда он не должен попадать (REPO-4). Проверка идёт в каждом сценарии.
 func leaks(facts []domain.Fact, response *httptest.ResponseRecorder, logs string) []string {
 	var found []string
 	if strings.Contains(list(facts), canaryToken) {
@@ -434,9 +392,6 @@ func leaks(facts []domain.Fact, response *httptest.ResponseRecorder, logs string
 	return found
 }
 
-// journal — журнал фактов в памяти. Он часть доверенной обвязки: спеки читают факты через
-// него, поэтому реализация приложения его не трогает. Когда появится SQLite, спеки перейдут на
-// настоящее хранилище.
 type journal struct {
 	mu    sync.Mutex
 	facts []domain.Fact
@@ -467,8 +422,6 @@ const (
 	githubDown
 )
 
-// fakeGitHub — GitHub API из сценария. Требует токен и отвечает только про описанные
-// репозитории; остальное попадает в отчёт, а не превращается молча в «недоступен».
 type fakeGitHub struct {
 	mu       sync.Mutex
 	answers  map[string]githubAnswer
@@ -510,7 +463,6 @@ func (f *fakeGitHub) reported() []string {
 	return slices.Clone(f.problems)
 }
 
-// handlerTransport отдаёт запросы клиента прямо в обработчик, без сети.
 type handlerTransport struct {
 	handler http.Handler
 }
@@ -546,7 +498,6 @@ func list(facts []domain.Fact) string {
 	return strings.Join(lines, "\n")
 }
 
-// excerpt — начало тела ответа для отчёта: по нему видно, что ответило приложение.
 func excerpt(body string) string {
 	body = strings.TrimSpace(body)
 	if body == "" {

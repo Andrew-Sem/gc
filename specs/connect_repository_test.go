@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/andrew-semyonov/garbage-collector/internal/domain"
-	"github.com/andrew-semyonov/garbage-collector/internal/spec"
+	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/spec"
 )
 
 const (
