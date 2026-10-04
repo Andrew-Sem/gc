@@ -3,13 +3,19 @@ package web
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/journal"
 )
 
-func New() http.Handler {
+func New(j *journal.Journal) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repositories", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `<!doctype html><title>Репозитории</title><h1>Репозитории</h1>`)
+	})
+	mux.HandleFunc("POST /repositories/{owner}/{name}/disconnect", func(w http.ResponseWriter, r *http.Request) {
+		j.Append(domain.RepositoryDisconnected{FullName: r.PathValue("owner") + "/" + r.PathValue("name")})
 	})
 	return mux
 }

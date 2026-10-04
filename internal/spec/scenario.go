@@ -1,8 +1,17 @@
 package spec
 
+import "github.com/Andrew-Sem/gc/internal/domain"
+
 type Scenario struct {
-	request Request
-	status  int
+	request  Request
+	status   int
+	given    []domain.Fact
+	expected []domain.Fact
+}
+
+func (s *Scenario) Given(facts ...domain.Fact) *Scenario {
+	s.given = facts
+	return s
 }
 
 func (s *Scenario) When(r Request) *Scenario {
@@ -16,5 +25,10 @@ func (s *Scenario) Then(description string) *Scenario {
 
 func (s *Scenario) ExpectStatus(status int) *Scenario {
 	s.status = status
+	return s
+}
+
+func (s *Scenario) ExpectFacts(facts ...domain.Fact) *Scenario {
+	s.expected = facts
 	return s
 }
