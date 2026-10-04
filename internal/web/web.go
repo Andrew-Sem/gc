@@ -15,7 +15,10 @@ func New(j *journal.Journal) http.Handler {
 		fmt.Fprint(w, `<!doctype html><title>Репозитории</title><h1>Репозитории</h1>`)
 	})
 	mux.HandleFunc("POST /repositories/{owner}/{name}/disconnect", func(w http.ResponseWriter, r *http.Request) {
-		j.Append(domain.RepositoryDisconnected{FullName: r.PathValue("owner") + "/" + r.PathValue("name")})
+		fullName := r.PathValue("owner") + "/" + r.PathValue("name")
+		if domain.IsConnected(j.Facts(), fullName) {
+			j.Append(domain.RepositoryDisconnected{FullName: fullName})
+		}
 	})
 	return mux
 }

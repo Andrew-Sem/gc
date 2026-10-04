@@ -14,3 +14,20 @@ type RepositoryDisconnected struct {
 
 func (RepositoryConnected) fact()    {}
 func (RepositoryDisconnected) fact() {}
+
+func IsConnected(facts []Fact, fullName string) bool {
+	connected := false
+	for _, f := range facts {
+		switch f := f.(type) {
+		case RepositoryConnected:
+			if f.FullName == fullName {
+				connected = true
+			}
+		case RepositoryDisconnected:
+			if f.FullName == fullName {
+				connected = false
+			}
+		}
+	}
+	return connected
+}

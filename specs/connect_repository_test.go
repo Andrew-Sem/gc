@@ -15,10 +15,20 @@ func TestConnectRepository(t *testing.T) {
 			ExpectStatus(http.StatusOK)
 	})
 
-	spec.Run(t, "disconnect writes a fact", func(s *spec.Scenario) {
+	spec.Run(t, "disconnect writes a fact when connected", func(s *spec.Scenario) {
 		s.Given(domain.RepositoryConnected{FullName: "acme/api"}).
 			When(spec.Post("/repositories/acme/api/disconnect")).
 			Then("the operator disconnects a connected repository").
 			ExpectFacts(domain.RepositoryDisconnected{FullName: "acme/api"})
+	})
+
+	spec.Run(t, "disconnect again writes nothing", func(s *spec.Scenario) {
+		s.Given(
+			domain.RepositoryConnected{FullName: "acme/api"},
+			domain.RepositoryDisconnected{FullName: "acme/api"},
+		).
+			When(spec.Post("/repositories/acme/api/disconnect")).
+			Then("the operator presses disconnect again on a stale page").
+			ExpectFacts()
 	})
 }
