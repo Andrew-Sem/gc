@@ -9,24 +9,27 @@ import (
 )
 
 func TestConnectRepository(t *testing.T) {
-	spec.Run(t, "page opens", func(s *spec.Scenario) {
+	f := spec.NewFeature(t, "connect-repository.md")
+	f.Run("page opens", func(s *spec.Scenario) {
 		s.When(spec.Get("/repositories")).
 			Then("the operator opens the repositories page").
 			ExpectStatus(http.StatusOK)
 	})
 
-	spec.Run(t, "disconnect writes a fact when connected", func(s *spec.Scenario) {
-		s.Given(domain.RepositoryConnected{FullName: "acme/api"}).
+	f.Run("disconnect writes a fact when connected", func(s *spec.Scenario) {
+		s.Covers("REPO-3.1").
+			Given(domain.RepositoryConnected{FullName: "acme/api"}).
 			When(spec.Post("/repositories/acme/api/disconnect")).
 			Then("the operator disconnects a connected repository").
 			ExpectFacts(domain.RepositoryDisconnected{FullName: "acme/api"})
 	})
 
-	spec.Run(t, "disconnect again writes nothing", func(s *spec.Scenario) {
-		s.Given(
-			domain.RepositoryConnected{FullName: "acme/api"},
-			domain.RepositoryDisconnected{FullName: "acme/api"},
-		).
+	f.Run("disconnect again writes nothing", func(s *spec.Scenario) {
+		s.Covers("REPO-3.2").
+			Given(
+				domain.RepositoryConnected{FullName: "acme/api"},
+				domain.RepositoryDisconnected{FullName: "acme/api"},
+			).
 			When(spec.Post("/repositories/acme/api/disconnect")).
 			Then("the operator presses disconnect again on a stale page").
 			ExpectFacts()

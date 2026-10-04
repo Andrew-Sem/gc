@@ -7,6 +7,12 @@ type Scenario struct {
 	status   int
 	given    []domain.Fact
 	expected []domain.Fact
+	covers   []string
+}
+
+func (s *Scenario) Covers(ids ...string) *Scenario {
+	s.covers = ids
+	return s
 }
 
 func (s *Scenario) Given(facts ...domain.Fact) *Scenario {

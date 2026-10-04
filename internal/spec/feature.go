@@ -9,8 +9,17 @@ import (
 	"github.com/Andrew-Sem/gc/internal/web"
 )
 
-func Run(t *testing.T, name string, describe func(s *Scenario)) {
-	t.Run(name, func(t *testing.T) {
+type Feature struct {
+	t        *testing.T
+	contract string
+}
+
+func NewFeature(t *testing.T, contract string) *Feature {
+	return &Feature{t: t, contract: contract}
+}
+
+func (f *Feature) Run(name string, describe func(s *Scenario)) {
+	f.t.Run(name, func(t *testing.T) {
 		s := &Scenario{}
 		describe(s)
 		j := &journal.Journal{}
