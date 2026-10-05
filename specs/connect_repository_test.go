@@ -27,6 +27,17 @@ func TestConnectRepository(t *testing.T) {
 			ExpectFacts()
 	})
 
+	f.Run("connect an already connected repository", func(s *spec.Scenario) {
+		s.Covers("REPO-1.3").
+			GivenGitHubSees("acme/api").
+			Given(domain.RepositoryConnected{FullName: "acme/api"}).
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("nothing more is recorded and GitHub is not asked").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectGitHubNotAsked()
+	})
+
 	f.Run("disconnect a connected repository", func(s *spec.Scenario) {
 		s.Covers("REPO-3.1").
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).

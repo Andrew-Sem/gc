@@ -193,6 +193,7 @@ func TestProblemString(t *testing.T) {
 			got:      nil,
 		}, "expected facts [domain.RepositoryDisconnected{FullName:acme/api}], got []"},
 		{"call count mismatch", callCountMismatch{method: "When", got: 2}, "expected one When call, got 2"},
+		{"github asked", githubAsked{got: []string{"acme/api"}}, "expected GitHub not to be asked, got [acme/api]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -200,5 +201,26 @@ func TestProblemString(t *testing.T) {
 				t.Errorf("String() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRunFindsGitHubAsked(t *testing.T) {
+	s := &Scenario{}
+	s.When(Post("/repositories")).
+		ExpectStatus(http.StatusOK).
+		ExpectFacts().
+		ExpectGitHubNotAsked()
+
+	asksGitHub := func(_ *journal.Journal, gh web.GitHub) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gh.CanAccess("acme/api")
+			w.WriteHeader(http.StatusOK)
+		})
+	}
+
+	problems := s.run(asksGitHub)
+	want := []problem{githubAsked{got: []string{"acme/api"}}}
+	if !reflect.DeepEqual(problems, want) {
+		t.Errorf("run returned %q, want %q", problems, want)
 	}
 }

@@ -49,6 +49,14 @@ func (p callCountMismatch) String() string {
 	return fmt.Sprintf("expected one %s call, got %d", p.method, p.got)
 }
 
+type githubAsked struct {
+	got []string
+}
+
+func (p githubAsked) String() string {
+	return fmt.Sprintf("expected GitHub not to be asked, got %v", p.got)
+}
+
 func (s *Scenario) shapeProblems() []problem {
 	calls := []struct {
 		method string
@@ -78,7 +86,8 @@ func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) [
 	before := len(j.Facts())
 
 	response := httptest.NewRecorder()
-	newApp(j, &fakeGitHub{sees: s.githubSees}).ServeHTTP(response, s.request.httpRequest())
+	github := &fakeGitHub{sees: s.githubSees}
+	newApp(j, github).ServeHTTP(response, s.request.httpRequest())
 
 	if response.Code != s.status {
 		problems = append(problems, statusMismatch{expected: s.status, got: response.Code})
@@ -87,6 +96,10 @@ func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) [
 	written := j.Facts()[before:]
 	if !slices.Equal(written, s.expected) {
 		problems = append(problems, factsMismatch{expected: s.expected, got: written})
+	}
+
+	if s.githubNotAsked && len(github.asked) > 0 {
+		problems = append(problems, githubAsked{got: github.asked})
 	}
 	return problems
 }
