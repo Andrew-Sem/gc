@@ -27,9 +27,11 @@ func New(j *journal.Journal, gh GitHub) http.Handler {
 	mux.HandleFunc("POST /repositories", func(w http.ResponseWriter, r *http.Request) {
 		fullName := r.FormValue("repo")
 		ok, _ := gh.CanAccess(fullName)
-		if ok {
-			j.Append(domain.RepositoryConnected{FullName: fullName})
+		if !ok {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			return
 		}
+		j.Append(domain.RepositoryConnected{FullName: fullName})
 	})
 	return mux
 }
