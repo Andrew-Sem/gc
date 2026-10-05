@@ -198,6 +198,7 @@ func TestProblemString(t *testing.T) {
 		{"element missing", elementMissing{selector: "form"}, "expected element form, found none"},
 		{"invalid selector", invalidSelector{selector: "form[", err: "boom"}, "invalid selector form[: boom"},
 		{"unreadable page", unreadablePage{err: "boom"}, "cannot read the page: boom"},
+		{"unexpected element", unexpectedElement{selector: "form"}, "expected no element form, found one"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -229,6 +230,12 @@ func TestRunFindsGitHubAsked(t *testing.T) {
 	}
 }
 
+func servesForm(*journal.Journal, web.GitHub) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<form><input name="repo"></form>`)
+	})
+}
+
 func TestRunChecksElements(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -243,11 +250,6 @@ func TestRunChecksElements(t *testing.T) {
 			invalidSelector{selector: `form[`, err: "expected identifier, found EOF instead"},
 		}},
 	}
-	servesForm := func(*journal.Journal, web.GitHub) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprint(w, `<form><input name="repo"></form>`)
-		})
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Scenario{}
@@ -255,6 +257,35 @@ func TestRunChecksElements(t *testing.T) {
 				ExpectStatus(http.StatusOK).
 				ExpectFacts().
 				ExpectElement(tt.selector)
+
+			if problems := s.run(servesForm); !reflect.DeepEqual(problems, tt.want) {
+				t.Errorf("run returned %q, want %q", problems, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunChecksAbsentElements(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector string
+		want     []problem
+	}{
+		{"element absent", `form input[name="owner"]`, nil},
+		{"element present", `form input[name="repo"]`, []problem{
+			unexpectedElement{selector: `form input[name="repo"]`},
+		}},
+		{"invalid selector", `form[`, []problem{
+			invalidSelector{selector: `form[`, err: "expected identifier, found EOF instead"},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario{}
+			s.When(Get("/repositories")).
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectNoElement(tt.selector)
 
 			if problems := s.run(servesForm); !reflect.DeepEqual(problems, tt.want) {
 				t.Errorf("run returned %q, want %q", problems, tt.want)
