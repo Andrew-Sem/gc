@@ -1,5 +1,7 @@
 package domain
 
+import "strings"
+
 type Fact interface {
 	fact()
 }
@@ -30,4 +32,9 @@ func IsConnected(facts []Fact, fullName string) bool {
 		}
 	}
 	return connected
+}
+
+func ValidFullName(fullName string) bool {
+	owner, name, found := strings.Cut(fullName, "/")
+	return found && owner != "" && name != "" && !strings.Contains(name, "/")
 }

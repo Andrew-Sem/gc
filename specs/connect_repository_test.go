@@ -38,6 +38,16 @@ func TestConnectRepository(t *testing.T) {
 			ExpectGitHubNotAsked()
 	})
 
+	f.Run("connect a malformed repository name", func(s *spec.Scenario) {
+		s.Covers("REPO-1.4").
+			GivenGitHubSees("acmeapi").
+			When(spec.Post("/repositories").WithForm("repo", "acmeapi")).
+			Then("the request is rejected and GitHub is not asked").
+			ExpectStatus(http.StatusUnprocessableEntity).
+			ExpectFacts().
+			ExpectGitHubNotAsked()
+	})
+
 	f.Run("disconnect a connected repository", func(s *spec.Scenario) {
 		s.Covers("REPO-3.1").
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).

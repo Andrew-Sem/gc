@@ -33,6 +33,10 @@ func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 	fullName := r.FormValue("repo")
+	if !domain.ValidFullName(fullName) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
 	if domain.IsConnected(s.journal.Facts(), fullName) {
 		return
 	}
