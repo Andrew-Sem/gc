@@ -1,6 +1,10 @@
 package journal
 
-import "github.com/Andrew-Sem/gc/internal/domain"
+import (
+	"slices"
+
+	"github.com/Andrew-Sem/gc/internal/domain"
+)
 
 type Journal struct {
 	facts []domain.Fact
@@ -11,5 +15,5 @@ func (j *Journal) Append(facts ...domain.Fact) {
 }
 
 func (j *Journal) Facts() []domain.Fact {
-	return j.facts
+	return slices.Clone(j.facts)
 }
