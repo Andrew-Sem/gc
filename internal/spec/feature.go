@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"slices"
 	"testing"
+
+	"github.com/Andrew-Sem/gc/internal/web"
 )
 
 type Feature struct {
@@ -49,6 +51,8 @@ func (f *Feature) Run(name string, describe func(s *Scenario)) {
 			}
 		}
 		f.covered = append(f.covered, s.covers...)
-		s.run(t)
+		for _, problem := range s.run(web.New) {
+			t.Errorf("%s", problem)
+		}
 	})
 }
