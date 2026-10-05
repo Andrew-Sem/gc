@@ -15,3 +15,6 @@ is.
 - `Then` says what is true after the action, not the action itself: `the repository is
   disconnected`. The `Expect…` lines below check it. If the request is rejected: `the request is
   rejected and nothing is connected`.
+- Grow the spec framework in `internal/spec` only when a spec needs something it cannot express
+  yet. Write that spec first, then add the smallest framework change, covered by its own test in
+  `internal/spec`.
