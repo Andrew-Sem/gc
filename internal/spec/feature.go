@@ -23,22 +23,30 @@ func NewFeature(t *testing.T, contract string) *Feature {
 	if err != nil {
 		t.Fatalf("cannot read contract: %v", err)
 	}
-	var clauses []string
-	for _, m := range clausePattern.FindAllStringSubmatch(string(text), -1) {
-		clauses = append(clauses, m[1])
-	}
-	f := &Feature{t: t, contract: contract, clauses: clauses}
+	f := &Feature{t: t, contract: contract, clauses: parseClauses(string(text))}
 	t.Cleanup(func() {
-		var uncovered []string
-		for _, id := range f.clauses {
-			if !slices.Contains(f.covered, id) {
-				uncovered = append(uncovered, id)
-			}
-		}
-		t.Logf("uncovered: %v", uncovered)
+		t.Logf("uncovered: %v", uncovered(f.clauses, f.covered))
 		t.Logf("covered: %v", f.covered)
 	})
 	return f
+}
+
+func parseClauses(text string) []string {
+	var clauses []string
+	for _, m := range clausePattern.FindAllStringSubmatch(text, -1) {
+		clauses = append(clauses, m[1])
+	}
+	return clauses
+}
+
+func uncovered(clauses, covered []string) []string {
+	var rest []string
+	for _, id := range clauses {
+		if !slices.Contains(covered, id) {
+			rest = append(rest, id)
+		}
+	}
+	return rest
 }
 
 func (f *Feature) Run(name string, describe func(s *Scenario)) {
