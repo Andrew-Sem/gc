@@ -47,4 +47,17 @@ func TestConnectRepository(t *testing.T) {
 			ExpectStatus(http.StatusOK).
 			ExpectFacts()
 	})
+
+	f.Run("reconnect a disconnected repository", func(s *spec.Scenario) {
+		s.Covers("REPO-3.3").
+			Given(
+				domain.RepositoryConnected{FullName: "acme/api"},
+				domain.RepositoryDisconnected{FullName: "acme/api"},
+			).
+			GivenGitHubSees("acme/api").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("the repository is connected again").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(domain.RepositoryConnected{FullName: "acme/api"})
+	})
 }
