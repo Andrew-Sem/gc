@@ -83,6 +83,20 @@ func TestConnectRepository(t *testing.T) {
 			ExpectNoElement(`#repositories li[data-repository="acme/old"]`)
 	})
 
+	f.Run("repositories page offers to disconnect each repository", func(s *spec.Scenario) {
+		s.Covers("REPO-3").
+			Given(
+				domain.RepositoryConnected{FullName: "acme/api"},
+				domain.RepositoryConnected{FullName: "acme/web"},
+			).
+			When(spec.Get("/repositories")).
+			Then("every listed repository has a disconnect button").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(`#repositories li[data-repository="acme/api"] button[hx-post="/repositories/acme/api/disconnect"]`).
+			ExpectElement(`#repositories li[data-repository="acme/web"] button[hx-post="/repositories/acme/web/disconnect"]`)
+	})
+
 	f.Run("disconnect a connected repository", func(s *spec.Scenario) {
 		s.Covers("REPO-3.1").
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).

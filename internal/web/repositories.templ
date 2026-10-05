@@ -14,7 +14,10 @@ templ repositoriesView(repositories []string) {
 templ repositoryList(repositories []string) {
 	<ul id="repositories">
 		for _, name := range repositories {
-			<li data-repository={ name }>{ name }</li>
+			<li data-repository={ name }>
+				{ name }
+				<button hx-post={ disconnectPath(name) }>Отключить</button>
+			</li>
 		}
 	</ul>
 }

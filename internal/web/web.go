@@ -2,6 +2,8 @@ package web
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/internal/journal"
@@ -59,4 +61,9 @@ func (s *server) disconnectRepository(w http.ResponseWriter, r *http.Request) {
 	if domain.IsConnected(s.journal.Facts(), fullName) {
 		s.journal.Append(domain.RepositoryDisconnected{FullName: fullName})
 	}
+}
+
+func disconnectPath(fullName string) string {
+	owner, name, _ := strings.Cut(fullName, "/")
+	return "/repositories/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/disconnect"
 }
