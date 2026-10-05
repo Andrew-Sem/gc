@@ -1,18 +1,17 @@
 # Garbage Collector
 
-Event-driven control plane над жизненным циклом PR: приём фактов из GitHub, журнал событий,
-слой решений, эффекты. Один бинарник на Go, админка на server-rendered HTML с htmx.
+Event-driven control plane over the PR lifecycle: ingesting facts from GitHub, an event journal,
+a decision layer, effects. A single Go binary with a server-rendered HTML admin built on htmx.
 
-## Код
+## Code
 
-Комментарии — только в самом крайнем случае: когда ни имена, ни спеки не объясняют, почему
-код именно такой.
+Comments only as a last resort: when neither names nor specs explain why the code is the way it
+is.
 
-## Спеки
+## Specs
 
-Подписи пишем по-английски.
-
-- Имя сценария в `Run` — короткая суть случая. Противоположные случаи называем парой, чтобы в
-  выводе они читались рядом: `connect a repository the token can see` / `cannot see`.
-- `Then` — что делает оператор, а не что получилось: `the operator disconnects a connected
-  repository`. Результат говорят `Expect…`. Если действие не удаётся, пишем `tries to`.
+- The scenario name in `Run` is the short gist of the case. Name opposite cases as a pair so they
+  read side by side in the output: `connect a repository the token can see` / `cannot see`.
+- `Then` says what is true after the action, not the action itself: `the repository is
+  disconnected`. The `Expect…` lines below check it. If the request is rejected: `the request is
+  rejected and nothing is connected`.

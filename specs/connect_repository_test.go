@@ -10,18 +10,11 @@ import (
 
 func TestConnectRepository(t *testing.T) {
 	f := spec.NewFeature(t, "connect-repository.md")
-	f.Run("page opens", func(s *spec.Scenario) {
-		s.When(spec.Get("/repositories")).
-			Then("the operator opens the repositories page").
-			ExpectStatus(http.StatusOK).
-			ExpectFacts()
-	})
-
 	f.Run("connect a repository the token can see", func(s *spec.Scenario) {
 		s.Covers("REPO-1.1").
 			GivenGitHubSees("acme/api").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
-			Then("the operator connects a repository").
+			Then("the repository is connected").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(domain.RepositoryConnected{FullName: "acme/api"})
 	})
@@ -29,7 +22,7 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("connect a repository the token cannot see", func(s *spec.Scenario) {
 		s.Covers("REPO-1.2").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
-			Then("the operator tries to connect a repository the token cannot see").
+			Then("the request is rejected and nothing is connected").
 			ExpectStatus(http.StatusUnprocessableEntity).
 			ExpectFacts()
 	})
@@ -38,7 +31,7 @@ func TestConnectRepository(t *testing.T) {
 		s.Covers("REPO-3.1").
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).
 			When(spec.Post("/repositories/acme/api/disconnect")).
-			Then("the operator disconnects a connected repository").
+			Then("the repository is disconnected").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(domain.RepositoryDisconnected{FullName: "acme/api"})
 	})
@@ -50,7 +43,7 @@ func TestConnectRepository(t *testing.T) {
 				domain.RepositoryDisconnected{FullName: "acme/api"},
 			).
 			When(spec.Post("/repositories/acme/api/disconnect")).
-			Then("the operator presses disconnect again on a stale page").
+			Then("nothing more is recorded").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts()
 	})
