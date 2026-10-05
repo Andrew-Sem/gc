@@ -3,24 +3,26 @@ default:
 
 check: lint test
 
-test:
+generate:
+    go tool templ generate
+
+test: generate
     go test ./...
 
-spec:
+spec: generate
     go test -count=1 -v ./specs/...
 
 lint:
     gofmt -l .
     go vet ./...
+    go tool templ fmt -fail .
 
 fmt:
     gofmt -w .
+    go tool templ fmt .
 
-build:
+build: generate
     go build -o gc ./cmd/gc
 
-run:
+run: generate
     go run ./cmd/gc
-
-smoke:
-    go test -tags smoke -count=1 -v ./internal/app/...

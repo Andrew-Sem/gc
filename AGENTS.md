@@ -8,6 +8,8 @@ a decision layer, effects. A single Go binary with a server-rendered HTML admin 
 Comments only as a last resort: when neither names nor specs explain why the code is the way it
 is.
 
+HTML lives in `.templ` files.
+
 ## Specs
 
 - The scenario name in `Run` is the short gist of the case. Name opposite cases as a pair so they

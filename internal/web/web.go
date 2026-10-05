@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
@@ -28,14 +27,9 @@ func New(j *journal.Journal, gh GitHub) http.Handler {
 
 func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, `<!doctype html>
-<title>Репозитории</title>
-<h1>Репозитории</h1>
-<form hx-post="/repositories">
-  <label>Репозиторий <input name="repo" placeholder="owner/name" required></label>
-  <button>Подключить</button>
-</form>
-`)
+	if err := repositoriesView().Render(r.Context(), w); err != nil {
+		http.Error(w, "cannot render the page", http.StatusInternalServerError)
+	}
 }
 
 func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {

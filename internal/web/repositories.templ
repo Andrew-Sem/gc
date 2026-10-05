@@ -1,0 +1,11 @@
+package web
+
+templ repositoriesView() {
+	<!DOCTYPE html>
+	<title>Репозитории</title>
+	<h1>Репозитории</h1>
+	<form hx-post="/repositories">
+		<label>Репозиторий <input name="repo" placeholder="owner/name" required/></label>
+		<button>Подключить</button>
+	</form>
+}
