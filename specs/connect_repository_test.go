@@ -13,7 +13,8 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("page opens", func(s *spec.Scenario) {
 		s.When(spec.Get("/repositories")).
 			Then("the operator opens the repositories page").
-			ExpectStatus(http.StatusOK)
+			ExpectStatus(http.StatusOK).
+			ExpectFacts()
 	})
 
 	f.Run("connect a repository the token can see", func(s *spec.Scenario) {
@@ -21,6 +22,7 @@ func TestConnectRepository(t *testing.T) {
 			GivenGitHubSees("acme/api").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the operator connects a repository").
+			ExpectStatus(http.StatusOK).
 			ExpectFacts(domain.RepositoryConnected{FullName: "acme/api"})
 	})
 
@@ -37,6 +39,7 @@ func TestConnectRepository(t *testing.T) {
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).
 			When(spec.Post("/repositories/acme/api/disconnect")).
 			Then("the operator disconnects a connected repository").
+			ExpectStatus(http.StatusOK).
 			ExpectFacts(domain.RepositoryDisconnected{FullName: "acme/api"})
 	})
 
@@ -48,6 +51,7 @@ func TestConnectRepository(t *testing.T) {
 			).
 			When(spec.Post("/repositories/acme/api/disconnect")).
 			Then("the operator presses disconnect again on a stale page").
+			ExpectStatus(http.StatusOK).
 			ExpectFacts()
 	})
 }

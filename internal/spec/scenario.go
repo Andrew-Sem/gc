@@ -9,6 +9,10 @@ type Scenario struct {
 	expected   []domain.Fact
 	covers     []string
 	githubSees []string
+
+	whenCalls   int
+	statusCalls int
+	factsCalls  int
 }
 
 func (s *Scenario) Covers(ids ...string) *Scenario {
@@ -23,6 +27,7 @@ func (s *Scenario) Given(facts ...domain.Fact) *Scenario {
 
 func (s *Scenario) When(r Request) *Scenario {
 	s.request = r
+	s.whenCalls++
 	return s
 }
 
@@ -32,11 +37,13 @@ func (s *Scenario) Then(description string) *Scenario {
 
 func (s *Scenario) ExpectStatus(status int) *Scenario {
 	s.status = status
+	s.statusCalls++
 	return s
 }
 
 func (s *Scenario) ExpectFacts(facts ...domain.Fact) *Scenario {
 	s.expected = facts
+	s.factsCalls++
 	return s
 }
 

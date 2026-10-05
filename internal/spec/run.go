@@ -40,7 +40,38 @@ func (p factsMismatch) String() string {
 	return fmt.Sprintf("expected facts %s, got %s", factList(p.expected...), factList(p.got...))
 }
 
+type callCountMismatch struct {
+	method string
+	got    int
+}
+
+func (p callCountMismatch) String() string {
+	return fmt.Sprintf("expected one %s call, got %d", p.method, p.got)
+}
+
+func (s *Scenario) shapeProblems() []problem {
+	calls := []struct {
+		method string
+		count  int
+	}{
+		{"When", s.whenCalls},
+		{"ExpectStatus", s.statusCalls},
+		{"ExpectFacts", s.factsCalls},
+	}
+	var problems []problem
+	for _, c := range calls {
+		if c.count != 1 {
+			problems = append(problems, callCountMismatch{method: c.method, got: c.count})
+		}
+	}
+	return problems
+}
+
 func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) []problem {
+	if problems := s.shapeProblems(); len(problems) > 0 {
+		return problems
+	}
+
 	var problems []problem
 	j := &journal.Journal{}
 	j.Append(s.given...)
@@ -49,7 +80,7 @@ func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) [
 	response := httptest.NewRecorder()
 	newApp(j, &fakeGitHub{sees: s.githubSees}).ServeHTTP(response, s.request.httpRequest())
 
-	if s.status != 0 && response.Code != s.status {
+	if response.Code != s.status {
 		problems = append(problems, statusMismatch{expected: s.status, got: response.Code})
 	}
 
