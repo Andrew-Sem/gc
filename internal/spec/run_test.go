@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -194,6 +195,9 @@ func TestProblemString(t *testing.T) {
 		}, "expected facts [domain.RepositoryDisconnected{FullName:acme/api}], got []"},
 		{"call count mismatch", callCountMismatch{method: "When", got: 2}, "expected one When call, got 2"},
 		{"github asked", githubAsked{got: []string{"acme/api"}}, "expected GitHub not to be asked, got [acme/api]"},
+		{"element missing", elementMissing{selector: "form"}, "expected element form, found none"},
+		{"invalid selector", invalidSelector{selector: "form[", err: "boom"}, "invalid selector form[: boom"},
+		{"unreadable page", unreadablePage{err: "boom"}, "cannot read the page: boom"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -222,5 +226,39 @@ func TestRunFindsGitHubAsked(t *testing.T) {
 	want := []problem{githubAsked{got: []string{"acme/api"}}}
 	if !reflect.DeepEqual(problems, want) {
 		t.Errorf("run returned %q, want %q", problems, want)
+	}
+}
+
+func TestRunChecksElements(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector string
+		want     []problem
+	}{
+		{"element found", `form input[name="repo"]`, nil},
+		{"element missing", `form input[name="owner"]`, []problem{
+			elementMissing{selector: `form input[name="owner"]`},
+		}},
+		{"invalid selector", `form[`, []problem{
+			invalidSelector{selector: `form[`, err: "expected identifier, found EOF instead"},
+		}},
+	}
+	servesForm := func(*journal.Journal, web.GitHub) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, `<form><input name="repo"></form>`)
+		})
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario{}
+			s.When(Get("/repositories")).
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectElement(tt.selector)
+
+			if problems := s.run(servesForm); !reflect.DeepEqual(problems, tt.want) {
+				t.Errorf("run returned %q, want %q", problems, tt.want)
+			}
+		})
 	}
 }

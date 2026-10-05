@@ -101,5 +101,9 @@ func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) [
 	if s.githubNotAsked && len(github.asked) > 0 {
 		problems = append(problems, githubAsked{got: github.asked})
 	}
+
+	if len(s.elements) > 0 {
+		problems = append(problems, elementProblems(response.Body.String(), s.elements)...)
+	}
 	return problems
 }

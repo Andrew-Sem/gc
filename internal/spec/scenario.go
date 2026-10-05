@@ -7,6 +7,7 @@ type Scenario struct {
 	status              int
 	given               []domain.Fact
 	expected            []domain.Fact
+	elements            []string
 	covers              []string
 	githubSees          []string
 	githubNotAsked      bool
@@ -61,5 +62,10 @@ func (s *Scenario) ExpectGitHubNotAsked() *Scenario {
 
 func (s *Scenario) GivenGitHubDoesNotAnswer() *Scenario {
 	s.githubDoesNotAnswer = true
+	return s
+}
+
+func (s *Scenario) ExpectElement(selector string) *Scenario {
+	s.elements = append(s.elements, selector)
 	return s
 }
