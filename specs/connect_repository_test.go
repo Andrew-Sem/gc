@@ -16,6 +16,14 @@ func TestConnectRepository(t *testing.T) {
 			ExpectStatus(http.StatusOK)
 	})
 
+	f.Run("connect a repository the token can see", func(s *spec.Scenario) {
+		s.Covers("REPO-1.1").
+			GivenGitHubSees("acme/api").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("the operator connects a repository").
+			ExpectFacts(domain.RepositoryConnected{FullName: "acme/api"})
+	})
+
 	f.Run("disconnect writes a fact when connected", func(s *spec.Scenario) {
 		s.Covers("REPO-3.1").
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).

@@ -8,7 +8,11 @@ import (
 	"github.com/Andrew-Sem/gc/internal/journal"
 )
 
-func New(j *journal.Journal) http.Handler {
+type GitHub interface {
+	CanAccess(fullName string) (bool, error)
+}
+
+func New(j *journal.Journal, gh GitHub) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /repositories", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -18,6 +22,13 @@ func New(j *journal.Journal) http.Handler {
 		fullName := r.PathValue("owner") + "/" + r.PathValue("name")
 		if domain.IsConnected(j.Facts(), fullName) {
 			j.Append(domain.RepositoryDisconnected{FullName: fullName})
+		}
+	})
+	mux.HandleFunc("POST /repositories", func(w http.ResponseWriter, r *http.Request) {
+		fullName := r.FormValue("repo")
+		ok, _ := gh.CanAccess(fullName)
+		if ok {
+			j.Append(domain.RepositoryConnected{FullName: fullName})
 		}
 	})
 	return mux
