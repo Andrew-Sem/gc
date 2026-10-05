@@ -48,6 +48,15 @@ func TestConnectRepository(t *testing.T) {
 			ExpectGitHubNotAsked()
 	})
 
+	f.Run("connect while GitHub does not answer", func(s *spec.Scenario) {
+		s.Covers("REPO-1.5").
+			GivenGitHubDoesNotAnswer().
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("the request fails and nothing is connected").
+			ExpectStatus(http.StatusBadGateway).
+			ExpectFacts()
+	})
+
 	f.Run("disconnect a connected repository", func(s *spec.Scenario) {
 		s.Covers("REPO-3.1").
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).

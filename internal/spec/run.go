@@ -86,7 +86,7 @@ func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) [
 	before := len(j.Facts())
 
 	response := httptest.NewRecorder()
-	github := &fakeGitHub{sees: s.githubSees}
+	github := &fakeGitHub{sees: s.githubSees, doesNotAnswer: s.githubDoesNotAnswer}
 	newApp(j, github).ServeHTTP(response, s.request.httpRequest())
 
 	if response.Code != s.status {

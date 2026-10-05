@@ -40,7 +40,11 @@ func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 	if domain.IsConnected(s.journal.Facts(), fullName) {
 		return
 	}
-	ok, _ := s.github.CanAccess(fullName)
+	ok, err := s.github.CanAccess(fullName)
+	if err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		return
+	}
 	if !ok {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return

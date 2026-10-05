@@ -3,13 +3,14 @@ package spec
 import "github.com/Andrew-Sem/gc/internal/domain"
 
 type Scenario struct {
-	request        Request
-	status         int
-	given          []domain.Fact
-	expected       []domain.Fact
-	covers         []string
-	githubSees     []string
-	githubNotAsked bool
+	request             Request
+	status              int
+	given               []domain.Fact
+	expected            []domain.Fact
+	covers              []string
+	githubSees          []string
+	githubNotAsked      bool
+	githubDoesNotAnswer bool
 
 	whenCalls   int
 	statusCalls int
@@ -55,5 +56,10 @@ func (s *Scenario) GivenGitHubSees(fullNames ...string) *Scenario {
 
 func (s *Scenario) ExpectGitHubNotAsked() *Scenario {
 	s.githubNotAsked = true
+	return s
+}
+
+func (s *Scenario) GivenGitHubDoesNotAnswer() *Scenario {
+	s.githubDoesNotAnswer = true
 	return s
 }
