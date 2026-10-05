@@ -19,7 +19,7 @@ var clausePattern = regexp.MustCompile(`(?m)^([A-Z]+-[0-9.]*[0-9])\. `)
 func NewFeature(t *testing.T, contract string) *Feature {
 	text, err := os.ReadFile(contract)
 	if err != nil {
-		t.Fatalf("не прочитать договор: %v", err)
+		t.Fatalf("cannot read contract: %v", err)
 	}
 	var clauses []string
 	for _, m := range clausePattern.FindAllStringSubmatch(string(text), -1) {
@@ -33,8 +33,8 @@ func NewFeature(t *testing.T, contract string) *Feature {
 				uncovered = append(uncovered, id)
 			}
 		}
-		t.Logf("без спек: %v", uncovered)
-		t.Logf("со спеками: %v", f.covered)
+		t.Logf("uncovered: %v", uncovered)
+		t.Logf("covered: %v", f.covered)
 	})
 	return f
 }
@@ -45,7 +45,7 @@ func (f *Feature) Run(name string, describe func(s *Scenario)) {
 		describe(s)
 		for _, id := range s.covers {
 			if !slices.Contains(f.clauses, id) {
-				t.Errorf("пункта %s нет в договоре %s", id, f.contract)
+				t.Errorf("clause %s is not in contract %s", id, f.contract)
 			}
 		}
 		f.covered = append(f.covered, s.covers...)
