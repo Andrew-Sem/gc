@@ -28,7 +28,14 @@ func New(j *journal.Journal, gh GitHub) http.Handler {
 
 func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, `<!doctype html><title>Репозитории</title><h1>Репозитории</h1>`)
+	fmt.Fprint(w, `<!doctype html>
+<title>Репозитории</title>
+<h1>Репозитории</h1>
+<form hx-post="/repositories">
+  <label>Репозиторий <input name="repo" placeholder="owner/name" required></label>
+  <button>Подключить</button>
+</form>
+`)
 }
 
 func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {

@@ -10,6 +10,15 @@ import (
 
 func TestConnectRepository(t *testing.T) {
 	f := spec.NewFeature(t, "connect-repository.md")
+	f.Run("repositories page shows the connect form", func(s *spec.Scenario) {
+		s.Covers("REPO-1").
+			When(spec.Get("/repositories")).
+			Then("the connect form is shown").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(`form[hx-post="/repositories"] input[name="repo"]`)
+	})
+
 	f.Run("connect a repository the token can see", func(s *spec.Scenario) {
 		s.Covers("REPO-1.1").
 			GivenGitHubSees("acme/api").
