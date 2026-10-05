@@ -1,6 +1,6 @@
 package web
 
-templ repositoriesView() {
+templ repositoriesView(repositories []string) {
 	<!DOCTYPE html>
 	<title>Репозитории</title>
 	<h1>Репозитории</h1>
@@ -8,4 +8,13 @@ templ repositoriesView() {
 		<label>Репозиторий <input name="repo" placeholder="owner/name" required/></label>
 		<button>Подключить</button>
 	</form>
+	@repositoryList(repositories)
+}
+
+templ repositoryList(repositories []string) {
+	<ul id="repositories">
+		for _, name := range repositories {
+			<li data-repository={ name }>{ name }</li>
+		}
+	</ul>
 }

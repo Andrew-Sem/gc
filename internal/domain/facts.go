@@ -1,6 +1,10 @@
 package domain
 
-import "strings"
+import (
+	"maps"
+	"slices"
+	"strings"
+)
 
 type Fact interface {
 	fact()
@@ -37,4 +41,17 @@ func IsConnected(facts []Fact, fullName string) bool {
 func ValidFullName(fullName string) bool {
 	owner, name, found := strings.Cut(fullName, "/")
 	return found && owner != "" && name != "" && !strings.Contains(name, "/")
+}
+
+func ConnectedRepositories(facts []Fact) []string {
+	connected := map[string]bool{}
+	for _, f := range facts {
+		switch f := f.(type) {
+		case RepositoryConnected:
+			connected[f.FullName] = true
+		case RepositoryDisconnected:
+			delete(connected, f.FullName)
+		}
+	}
+	return slices.Sorted(maps.Keys(connected))
 }

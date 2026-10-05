@@ -27,7 +27,8 @@ func New(j *journal.Journal, gh GitHub) http.Handler {
 
 func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := repositoriesView().Render(r.Context(), w); err != nil {
+	repositories := domain.ConnectedRepositories(s.journal.Facts())
+	if err := repositoriesView(repositories).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the page", http.StatusInternalServerError)
 	}
 }

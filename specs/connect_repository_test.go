@@ -66,6 +66,23 @@ func TestConnectRepository(t *testing.T) {
 			ExpectFacts()
 	})
 
+	f.Run("repositories page lists connected repositories", func(s *spec.Scenario) {
+		s.Covers("REPO-2").
+			Given(
+				domain.RepositoryConnected{FullName: "acme/api"},
+				domain.RepositoryConnected{FullName: "acme/web"},
+				domain.RepositoryConnected{FullName: "acme/old"},
+				domain.RepositoryDisconnected{FullName: "acme/old"},
+			).
+			When(spec.Get("/repositories")).
+			Then("connected repositories are listed and disconnected ones are not").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(`#repositories li[data-repository="acme/web"]`).
+			ExpectElement(`#repositories li[data-repository="acme/api"]`).
+			ExpectNoElement(`#repositories li[data-repository="acme/old"]`)
+	})
+
 	f.Run("disconnect a connected repository", func(s *spec.Scenario) {
 		s.Covers("REPO-3.1").
 			Given(domain.RepositoryConnected{FullName: "acme/api"}).
