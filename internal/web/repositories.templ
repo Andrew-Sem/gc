@@ -2,13 +2,29 @@ package web
 
 templ repositoriesView(repositories []string) {
 	<!DOCTYPE html>
-	<title>Репозитории</title>
-	<h1>Репозитории</h1>
-	<form hx-post="/repositories">
-		<label>Репозиторий <input name="repo" placeholder="owner/name" required/></label>
-		<button>Подключить</button>
-	</form>
-	@repositoryList(repositories)
+	<meta name="htmx-config" content={ htmxConfig }/>
+	<script src="/static/htmx.min.js"></script>
+	<title>Repositories</title>
+	<h1>Repositories</h1>
+	@repositoriesPanel(repositories, noProblem)
+}
+
+templ repositoriesPanel(repositories []string, p problem) {
+	<section id="repositories-panel" hx-target="#repositories-panel" hx-swap="outerHTML">
+		<form hx-post="/repositories">
+			<label>Repository <input name="repo" placeholder="owner/name" required/></label>
+			<button>Connect</button>
+		</form>
+		switch p {
+			case noAccess:
+				<p role="alert">No access to this repository</p>
+			case malformedName:
+				<p role="alert">Enter the repository as owner/name</p>
+			case githubSilent:
+				<p role="alert">Could not check access: GitHub did not respond</p>
+		}
+		@repositoryList(repositories)
+	</section>
 }
 
 templ repositoryList(repositories []string) {
@@ -16,7 +32,7 @@ templ repositoryList(repositories []string) {
 		for _, name := range repositories {
 			<li data-repository={ name }>
 				{ name }
-				<button hx-post={ disconnectPath(name) }>Отключить</button>
+				<button hx-post={ disconnectPath(name) }>Disconnect</button>
 			</li>
 		}
 	</ul>

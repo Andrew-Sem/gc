@@ -1,6 +1,8 @@
 package web
 
 import (
+	"bytes"
+	"embed"
 	"net/http"
 	"net/url"
 	"strings"
@@ -9,9 +11,29 @@ import (
 	"github.com/Andrew-Sem/gc/internal/journal"
 )
 
+//go:embed static
+var static embed.FS
+
+const htmxConfig = `{"responseHandling":[
+	{"code":"204","swap":false},
+	{"code":"[23]..","swap":true},
+	{"code":"422","swap":true},
+	{"code":"502","swap":true,"error":true},
+	{"code":"[45]..","swap":false,"error":true}
+]}`
+
 type GitHub interface {
 	CanAccess(fullName string) (bool, error)
 }
+
+type problem int
+
+const (
+	noProblem problem = iota
+	noAccess
+	malformedName
+	githubSilent
+)
 
 type server struct {
 	journal *journal.Journal
@@ -21,6 +43,7 @@ type server struct {
 func New(j *journal.Journal, gh GitHub) http.Handler {
 	s := &server{journal: j, github: gh}
 	mux := http.NewServeMux()
+	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
 	mux.HandleFunc("POST /repositories", s.connectRepository)
 	mux.HandleFunc("POST /repositories/{owner}/{name}/disconnect", s.disconnectRepository)
@@ -38,22 +61,24 @@ func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 	fullName := r.FormValue("repo")
 	if !domain.ValidFullName(fullName) {
-		w.WriteHeader(http.StatusUnprocessableEntity)
+		s.renderPanel(w, r, http.StatusUnprocessableEntity, malformedName)
 		return
 	}
 	if domain.IsConnected(s.journal.Facts(), fullName) {
+		s.renderPanel(w, r, http.StatusOK, noProblem)
 		return
 	}
 	ok, err := s.github.CanAccess(fullName)
 	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
+		s.renderPanel(w, r, http.StatusBadGateway, githubSilent)
 		return
 	}
 	if !ok {
-		w.WriteHeader(http.StatusUnprocessableEntity)
+		s.renderPanel(w, r, http.StatusUnprocessableEntity, noAccess)
 		return
 	}
 	s.journal.Append(domain.RepositoryConnected{FullName: fullName})
+	s.renderPanel(w, r, http.StatusOK, noProblem)
 }
 
 func (s *server) disconnectRepository(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +86,19 @@ func (s *server) disconnectRepository(w http.ResponseWriter, r *http.Request) {
 	if domain.IsConnected(s.journal.Facts(), fullName) {
 		s.journal.Append(domain.RepositoryDisconnected{FullName: fullName})
 	}
+	s.renderPanel(w, r, http.StatusOK, noProblem)
+}
+
+func (s *server) renderPanel(w http.ResponseWriter, r *http.Request, status int, p problem) {
+	repositories := domain.ConnectedRepositories(s.journal.Facts())
+	var panel bytes.Buffer
+	if err := repositoriesPanel(repositories, p).Render(r.Context(), &panel); err != nil {
+		http.Error(w, "cannot render the panel", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	panel.WriteTo(w)
 }
 
 func disconnectPath(fullName string) string {

@@ -1,57 +1,59 @@
-# Подключение репозитория
+# Connect a repository
 
-Договор уточняет сценарий 3 из [PRD](prd.md). Спеки к нему лежат в
-`connect_repository_test.go` и ссылаются на пункты через `Covers`. Какие пункты ещё без спек,
-печатает `just spec`.
+This contract details scenario 3 of the [PRD](prd.md). Its specs live in
+`connect_repository_test.go` and refer to clauses through `Covers`. `just spec` prints the
+clauses that have no spec yet.
 
-## Зачем
+## Why
 
-Оператор указывает, с какими репозиториями работает garbage-collector. Остальная система
-смотрит только на подключённые: заводит по ним PR и принимает по ним вебхуки. Эти правила
-описаны в своих фичах.
+The operator chooses which repositories garbage-collector works with. The rest of the system
+looks only at connected ones: it opens PRs and accepts webhooks for them. Those rules are
+described in their own features.
 
-## Словарь
+## Glossary
 
-**Репозиторий** — строка `owner/name`, как в адресе на GitHub.
+**Repository** — an `owner/name` string, as in its GitHub URL.
 
-**Проверка доступа** — запрос в GitHub с PAT из окружения: репозиторий существует, и токен его
-видит.
+**Access check** — a request to GitHub with the PAT from the environment: the repository exists
+and the token can see it.
 
-**Подключённый репозиторий** — тот, о котором в журнале последним записан
-`RepositoryConnected`, а не `RepositoryDisconnected`.
+**Connected repository** — one whose latest journal fact is `RepositoryConnected`, not
+`RepositoryDisconnected`.
 
-**Страница репозиториев** — `/repositories`: форма подключения и список подключённых. Форма и
-кнопки отправляются через htmx, ответ — обновлённый блок со списком и, если что-то не вышло,
-сообщением об ошибке.
+**Repositories page** — `/repositories`: the connect form and the list of connected
+repositories. The form and buttons submit through htmx; the response is the updated block with
+the list and, if something went wrong, an error message.
 
-## Пункты
+## Clauses
 
-REPO-1. Страница репозиториев показывает форму подключения с одним полем `owner/name`.
+REPO-1. The repositories page shows a connect form with a single `owner/name` field.
 
-REPO-1.1. Если проверка доступа прошла, в журнал пишется `RepositoryConnected` с этим
-`owner/name`, а репозиторий появляется в списке (ответ 200).
+REPO-1.1. If the access check passes, `RepositoryConnected` with this `owner/name` is written to
+the journal, and the repository appears in the list (response 200).
 
-REPO-1.2. Если репозиторий недоступен или не существует, факт не пишется, а страница показывает
-ошибку «нет доступа» (ответ 422).
+REPO-1.2. If the repository is inaccessible or does not exist, no fact is written, and the page
+shows the error "No access to this repository" (response 422).
 
-REPO-1.3. Подключение уже подключённого репозитория фактов не пишет и GitHub не спрашивает (ответ 200).
+REPO-1.3. Connecting an already connected repository writes no facts and does not ask GitHub
+(response 200).
 
-REPO-1.4. Если строка не вида `owner/name`, факт не пишется, GitHub не спрашивается, а страница
-просит ввести имя правильно (ответ 422).
+REPO-1.4. If the string is not of the form `owner/name`, no fact is written, GitHub is not asked,
+and the page shows the error "Enter the repository as owner/name" (response 422).
 
-REPO-1.5. Если GitHub не ответил, факт не пишется, а страница говорит, что доступ проверить не
-удалось (ответ 502).
+REPO-1.5. If GitHub does not respond, no fact is written, and the page shows the error "Could not
+check access: GitHub did not respond" (response 502).
 
-REPO-2. Подключённые репозитории видны на странице списком.
+REPO-2. Connected repositories are shown on the page as a list.
 
-REPO-3. Рядом с каждым репозиторием в списке есть кнопка отключения.
+REPO-3. Each repository in the list has a disconnect button next to it.
 
-REPO-3.1. Отключение пишет `RepositoryDisconnected`, и репозиторий пропадает из списка (ответ 200).
+REPO-3.1. Disconnecting writes `RepositoryDisconnected`, and the repository disappears from the
+list (response 200).
 
-REPO-3.2. Отключение неподключённого репозитория фактов не пишет (ответ 200).
+REPO-3.2. Disconnecting a repository that is not connected writes no facts (response 200).
 
-REPO-3.3. Отключение и повторное подключение не переписывают историю: новые факты дописываются
-после старых.
+REPO-3.3. Disconnecting and reconnecting do not rewrite history: new facts are appended after
+the old ones.
 
-REPO-4. PAT не попадает ни в журнал, ни в HTML, ни в логи — даже если GitHub вернул его в ответе
-об ошибке.
+REPO-4. The PAT never reaches the journal, the HTML, or the logs — even if GitHub returns it in
+an error response.
