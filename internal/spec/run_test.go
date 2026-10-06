@@ -199,6 +199,8 @@ func TestProblemString(t *testing.T) {
 		{"invalid selector", invalidSelector{selector: "form[", err: "boom"}, "invalid selector form[: boom"},
 		{"unreadable page", unreadablePage{err: "boom"}, "cannot read the page: boom"},
 		{"unexpected element", unexpectedElement{selector: "form"}, "expected no element form, found one"},
+		{"text mismatch", textMismatch{selector: "p", expected: "yes", got: "no"}, `expected text "yes" in p, got "no"`},
+		{"ambiguous element", ambiguousElement{selector: "p", got: 2}, "expected one element p, found 2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -288,6 +290,49 @@ func TestRunChecksAbsentElements(t *testing.T) {
 				ExpectNoElement(tt.selector)
 
 			if problems := s.run(servesForm); !reflect.DeepEqual(problems, tt.want) {
+				t.Errorf("run returned %q, want %q", problems, tt.want)
+			}
+		})
+	}
+}
+
+func servesAlert(*journal.Journal, web.GitHub) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `<div role="alert">  No
+			<b>access</b> </div><p>one</p><p>two</p>`)
+	})
+}
+
+func TestRunChecksText(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector string
+		text     string
+		want     []problem
+	}{
+		{"text matches", `[role="alert"]`, "No access", nil},
+		{"text differs", `[role="alert"]`, "No connection", []problem{
+			textMismatch{selector: `[role="alert"]`, expected: "No connection", got: "No access"},
+		}},
+		{"element missing", `#missing`, "No access", []problem{
+			elementMissing{selector: `#missing`},
+		}},
+		{"several elements", `p`, "one", []problem{
+			ambiguousElement{selector: `p`, got: 2},
+		}},
+		{"invalid selector", `form[`, "No access", []problem{
+			invalidSelector{selector: `form[`, err: "expected identifier, found EOF instead"},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario{}
+			s.When(Get("/repositories")).
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectText(tt.selector, tt.text)
+
+			if problems := s.run(servesAlert); !reflect.DeepEqual(problems, tt.want) {
 				t.Errorf("run returned %q, want %q", problems, tt.want)
 			}
 		})

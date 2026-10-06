@@ -2,6 +2,10 @@ package spec
 
 import "github.com/Andrew-Sem/gc/internal/domain"
 
+type textExpectation struct {
+	selector, text string
+}
+
 type Scenario struct {
 	request             Request
 	status              int
@@ -9,6 +13,7 @@ type Scenario struct {
 	expected            []domain.Fact
 	elements            []string
 	noElements          []string
+	texts               []textExpectation
 	covers              []string
 	githubSees          []string
 	githubNotAsked      bool
@@ -73,5 +78,10 @@ func (s *Scenario) ExpectElement(selector string) *Scenario {
 
 func (s *Scenario) ExpectNoElement(selector string) *Scenario {
 	s.noElements = append(s.noElements, selector)
+	return s
+}
+
+func (s *Scenario) ExpectText(selector, text string) *Scenario {
+	s.texts = append(s.texts, textExpectation{selector: selector, text: text})
 	return s
 }
