@@ -1,254 +1,264 @@
 # Garbage Collector — PRD
 
-Event-driven control plane над жизненным циклом PR: приём фактов из GitHub, журнал событий,
-слой решений, эффекты.
+Event-driven control plane over the PR lifecycle: ingesting facts from GitHub, an event journal,
+a decision layer, effects.
 
-Шесть сценариев в двух группах. Два выполняет система сама, четыре — человек в админке.
-Человеческие сценарии выполняются через страницы админки: форма отправляется по HTTP,
-сервер отвечает HTML. Прямой вызов внутренних функций реализацией сценария не считается.
+Six scenarios in two groups. The system runs two on its own; a human runs four in the admin.
+Human scenarios are carried out through admin pages: a form is submitted over HTTP, and the
+server responds with HTML. Calling internal functions directly does not count as implementing a
+scenario.
 
-## Система работает по двум правилам
+## The system works by two rules
 
-1. **Каждый час wake-up** — для репозиториев, чей настроенный темп наступил: если открытых PR
-   меньше лимита, завести один PR.
-2. **Раз в 6 часов** — по каждому открытому PR: можно мержить — мержим; нельзя — пишем
-   причину; старше настроенного возраста закрываем, по умолчанию через 24 часа.
+1. **Hourly wake-up** — for repositories whose configured pace has come due: if there are fewer
+   open PRs than the limit, open one PR.
+2. **Every 6 hours** — for each open PR: if it can be merged, merge it; if not, record the
+   reason; if it is older than the configured age, close it, by default after 24 hours.
 
-**PR мы не чиним.** По умолчанию упавший PR ждёт сутки — за это время человек может успеть
-поправить — и закрывается. Перезапусков CI не делаем: флейкнувший тест иногда съест
-нормальную работу, но через час заведётся новый PR, а перезапуск завёл бы в систему счётчики
-попыток.
+**We do not fix PRs.** By default a failed PR waits a day — enough time for a human to step in
+and fix it — and is then closed. We do not rerun CI: a flaky test will sometimes eat good work,
+but a new PR will be opened within the hour, and reruns would bring attempt counters into the
+system.
 
-<!-- FLAG: дефолт в 24 часа заявлен трижды — здесь как «сутки», в правиле 2 выше и в сценарии 2 рядом с `CloseApproved`. Числа не режу; решить, какое место канон. -->
+<!-- FLAG: the 24-hour default is stated three times — here as "a day", in rule 2 above, and in scenario 2 next to `CloseApproved`. Numbers are not trimmed; decide which place is canonical. -->
 
-Порог объёма — единственный ограничитель производства. Порога возраста в admission нет
-намеренно: он дублировал бы закрытие по возрасту и создавал бы окно простоя между «PR
-достиг суток» и «свип его закрыл».
+The volume threshold is the only limit on production. There is deliberately no age threshold in
+admission: it would duplicate closing by age and create an idle window between "the PR has
+reached a day" and "the sweep has closed it".
 
 ---
 
-## 1. Завести новую работу
+## 1. Start new work
 
-**Триггер:** due-тик после часового wake-up. Темп задаётся целым числом часов. Сохранение
-нового темпа начинает новый интервал; само сохранение решения не запускает.
+**Trigger:** the due tick after the hourly wake-up. The pace is set as a whole number of hours.
+Saving a new pace starts a new interval; saving does not itself trigger a decision.
 
-**Admission проверяет:** открытых PR меньше лимита из снимка настроек этого тика. Тот же тик
-несёт снимок настроек агента и OpenAI Base URL для будущего запуска; уже созданная задача не
-перечитывает модель, reasoning, prompt или Base URL перед исполнением.
+**Admission checks:** there are fewer open PRs than the limit from this tick's settings
+snapshot. The same tick carries a snapshot of the agent settings and the OpenAI Base URL for the
+future run; a task already created does not reread the model, reasoning, prompt, or Base URL
+before running.
 
-Число открытых берётся из **нашего же журнала**: мы эти PR создавали и видим, когда они
-закрываются. У GitHub его не спрашиваем. Побочный эффект приятный: если вебхук о закрытии
-потеряется, счёт окажется завышен — система станет осторожнее, а не наглее.
+The number of open PRs comes from **our own journal**: we created those PRs and we see when they
+are closed. We do not ask GitHub for it. A pleasant side effect: if a close webhook gets lost,
+the count ends up too high — the system becomes more cautious, not more reckless.
 
-**Одобрение места не резервирует.** Слот занимает только реально созданный PR. Между
-одобрением и появлением PR проходит время работы Codex, поэтому следующий тик может одобрить
-ещё раз: тик в 13:00 одобрил, Codex работает 70 минут, тик в 14:00 одобряет снова. Открытых
-станет 13 при пороге 12.
+**Approval does not reserve a slot.** A slot is taken only by an actually created PR. The time
+Codex works passes between approval and the PR appearing, so the next tick may approve again:
+the 13:00 tick approves, Codex works for 70 minutes, the 14:00 tick approves again. There will be
+13 open with a threshold of 12.
 
-Это осознанно: 12 — показатель здоровья, а не жёсткий предел, а резервирование завело бы в
-домен время жизни, которое домен сам закончить не может — упавший процесс держал бы слот вечно.
-Защита от двух одновременных заходов по одному репозиторию живёт в исполнителе задач, не в домене.
+This is deliberate: 12 is a health indicator, not a hard limit, and reservation would bring into
+the domain a lifetime the domain cannot end on its own — a crashed process would hold the slot
+forever. Protection against two concurrent runs on the same repository lives in the task
+executor, not in the domain.
 
-**Если разрешено:** `AdmissionApproved`, исполнитель запускает Codex, тот заводит PR.
-**Если нет:** `AdmissionDeclined` с числами. Отказ пишется всегда — иначе экран не ответит,
-почему час прошёл впустую.
+**If allowed:** `AdmissionApproved`, the executor launches Codex, which opens a PR.
+**If not:** `AdmissionDeclined` with the numbers. A decline is always recorded — otherwise the
+screen cannot answer why an hour went by for nothing.
 
-Если агент упал до создания PR, `AgentRunFinished` записывается с репозиторием и без PR.
+If the agent fails before creating a PR, `AgentRunFinished` is recorded with the repository and
+no PR.
 
-**Что агент ищет:** пока общий промпт, агент сам решает, что почистить. Промпт лежит в
-настройках.
+**What the agent looks for:** for now a general prompt; the agent decides on its own what to
+clean up. The prompt lives in the settings.
 
-## 2. Довести PR до мержа
+## 2. Bring a PR to merge
 
-**Триггер:** тик раз в 6 часов.
+**Trigger:** a tick every 6 hours.
 
-Перед решением исполнитель получает для каждого открытого PR один терминальный результат
-текущего `sweepId`: либо полный evidence snapshot, либо `LookupIncomplete`.
+Before deciding, the executor obtains one terminal result of the current `sweepId` for each open
+PR: either a full evidence snapshot or `LookupIncomplete`.
 
-Перед required-check lookup он заново читает текущий PR. Если GitHub ещё считает
-`mergeable` или head изменился, свежий снимок попадает в журнал, а checks запрашиваются для
-head из этого ответа.
+Before the required-check lookup it rereads the current PR. If GitHub is still computing
+`mergeable` or the head has changed, the fresh snapshot goes into the journal, and checks are
+requested for the head from that response.
 
-**Merge-gate проверяет четыре условия:**
+**The merge gate checks four conditions:**
 
-1. PR открыт и не в драфте
-2. head тот же, на котором зеленел CI
-3. обязательные проверки прошли
-4. GitHub говорит `mergeable`
+1. The PR is open and not a draft
+2. The head is the same one CI went green on
+3. Required checks have passed
+4. GitHub says `mergeable`
 
-**Обязательными считаются проверки из защиты ветки GitHub**, не свой список в конфиге.
-Required identity — `context + appId`. Evidence содержит полный required inventory и все
-check-run attempts текущего head. Для каждой identity нормативна последняя попытка по
-`createdAt`, затем `id`. `success`, `neutral`, `skipped` проходят; остальные completed
-conclusions отказывают; незавершённые statuses и отсутствующая попытка ждут.
+**Required checks are the ones from GitHub branch protection**, not a list of our own in the
+config. Required identity is `context + appId`. Evidence contains the full required inventory
+and all check-run attempts of the current head. For each identity, the latest attempt by
+`createdAt`, then `id`, is normative. `success`, `neutral`, `skipped` pass; other completed
+conclusions fail; incomplete statuses and a missing attempt wait.
 
-Если защита ветки не настроена и обязательных нет, не мержим. Partial pagination никогда не
-считается полным снимком. `LookupIncomplete` блокирует мерж и закрытие только текущего свипа;
-следующий свип получает собственный evidence заново. Старый снимок новый свип не заменяет.
+If branch protection is not configured and there are no required checks, we do not merge.
+Partial pagination is never treated as a full snapshot. `LookupIncomplete` blocks merging and
+closing for the current sweep only; the next sweep obtains its own evidence afresh. A new sweep
+does not replace the old snapshot.
 
-<!-- FLAG: «следующий свип получает собственный evidence заново» и «Старый снимок новый свип не заменяет» говорят почти одно и то же. Сливать не стал: проверить, есть ли во второй фразе отдельный смысл. -->
+<!-- FLAG: "the next sweep obtains its own evidence afresh" and "A new sweep does not replace the old snapshot" say almost the same thing. Not merged: check whether the second sentence carries a separate meaning. -->
 
-**Если всё сошлось:** `MergeApproved`, эффект вызывает GitHub. Успех приедет наблюдением.
-Провал — `MergeFailed`.
-**Если нет:** `MergeDeclined` с причиной.
-**Если PR достиг настроенного `closeAfterHours`:** `CloseApproved`. По умолчанию 24 часа.
+**If everything checks out:** `MergeApproved`, the effect calls GitHub. Success will arrive as an
+observation. Failure — `MergeFailed`.
+**If not:** `MergeDeclined` with the reason.
+**If the PR has reached the configured `closeAfterHours`:** `CloseApproved`. 24 hours by default.
 
-Фактическое закрытие произойдёт между `closeAfterHours` и `closeAfterHours + 6` часами —
-точность ограничена шагом свипа.
+The actual close will happen between `closeAfterHours` and `closeAfterHours + 6` hours — the
+precision is limited by the sweep step.
 
-## 3. Подключить репозиторий
+## 3. Connect a repository
 
-Доступ к GitHub даёт **PAT из окружения**, общий для всего инстанса. Оператор выпускает его сам
-и кладёт в `.env`; в админке токен не вводится, не показывается и не хранится в журнале. Токену
-нужны права на чтение репозитория и защиты ветки, на запись содержимого и на pull requests.
+Access to GitHub is granted by a **PAT from the environment**, shared by the whole instance. The
+operator issues it themselves and puts it into `.env`; the token is not entered in the admin, not
+shown, and not stored in the journal. The token needs permissions to read the repository and
+branch protection, and to write contents and pull requests.
 
-<!-- FLAG: `.env` и `.env.example` из репозитория удалены, а список переменных жил в specs/runtime.md, которого тоже нет. Ссылка на `.env` устарела — решить, куда переносить конфигурацию. -->
+<!-- FLAG: `.env` and `.env.example` have been removed from the repository, and the list of variables lived in specs/runtime.md, which is also gone. The reference to `.env` is stale — decide where configuration moves. -->
 
-Подключение репозитория — одна форма с полем `owner/name` и кнопкой. Backend проверяет
-токеном, что репозиторий существует и доступен, и только после успешной проверки пишет
-`RepositoryConnected`. Недоступный или несуществующий репозиторий факта не создаёт: страница
-показывает ошибку.
+Connecting a repository is a single form with an `owner/name` field and a button. The backend
+uses the token to check that the repository exists and is accessible, and writes
+`RepositoryConnected` only after a successful check. An inaccessible or nonexistent repository
+creates no fact: the page shows an error.
 
-Рядом со списком подключённых есть кнопка отключения: она пишет `RepositoryDisconnected`, и
-новые тики по репозиторию не идут. Прошлые факты остаются в журнале; открытые PR никто не
-трогает и не закрывает.
+Next to the list of connected repositories is a disconnect button: it writes
+`RepositoryDisconnected`, and no new ticks run for the repository. Past facts stay in the
+journal; nobody touches or closes open PRs.
 
-Вебхуки настраиваются на репозитории оператором на один и тот же публичный путь и подписываются
-одним webhook secret инстанса. HTTP boundary сначала проверяет `X-Hub-Signature-256` webhook
-secret'ом инстанса, затем делает dedupe по delivery ID и только потом разбирает payload.
-Событие о репозитории, который не подключён, отбрасывается после проверки подписи.
+The operator configures webhooks on repositories to the same public path, signed with the
+instance's single webhook secret. The HTTP boundary first checks `X-Hub-Signature-256` with the
+instance's webhook secret, then dedupes by delivery ID, and only then parses the payload. An
+event about a repository that is not connected is dropped after the signature check.
 
-Нужны события `pull_request` и `check_run`. Отсутствие вебхука не ломает мерж: свип всё равно
-запрашивает evidence сам, но экран «почему PR висит» станет обновляться только раз в шесть часов.
+The `pull_request` and `check_run` events are needed. A missing webhook does not break merging:
+the sweep still requests evidence itself, but the "why is the PR stuck" screen will refresh only
+once every six hours.
 
-## 4. Настроить модель и ключ
+## 4. Configure the model and key
 
-Ключ OpenAI приходит из окружения, как и токен GitHub: в админке он не вводится и не
-показывается. Codex запускается процессом с ключом в собственном окружении и своим `CODEX_HOME`.
+The OpenAI key comes from the environment, like the GitHub token: it is not entered or shown in
+the admin. Codex runs as a process with the key in its own environment and its own `CODEX_HOME`.
 
-В журнал попадает только факт изменения настроек, никогда ключ или содержимое `auth.json`
-— журнал вечный.
+Only the fact that settings changed goes into the journal, never the key or the contents of
+`auth.json` — the journal is forever.
 
-OpenAI Base URL — необязательная настройка. Непустое значение нормализуется как абсолютный
-HTTP(S) URL без credentials, query и fragment. Пустое значение означает официальный endpoint
-OpenAI. Значение, действовавшее в due-тик, сохраняется в неизменяемом снимке задачи и передаётся
-Codex; последующее изменение влияет только на будущие задачи.
+The OpenAI Base URL is an optional setting. A non-empty value is normalized as an absolute
+HTTP(S) URL without credentials, query, or fragment. An empty value means the official OpenAI
+endpoint. The value in effect at the due tick is saved in the task's immutable snapshot and passed
+to Codex; a later change affects only future tasks.
 
-## 5. Настроить темп и пороги
+## 5. Configure pace and thresholds
 
-Настройки живут на двух уровнях:
+Settings live on two levels:
 
-| Уровень | Что настраивается |
+| Level | What is configured |
 |---|---|
-| Инстанс | модель и ризонинг, промпт агента, optional OpenAI Base URL |
-| Репозиторий | как часто заводим, максимум открытых, через сколько закрываем |
+| Instance | model and reasoning, agent prompt, optional OpenAI Base URL |
+| Repository | how often we open PRs, maximum open, how long until we close |
 
-Изменения действуют **со следующего wake-up или свипа**, задним числом ничего не
-пересчитывается. Каждый доменный тик несёт использованный снимок настроек репозитория.
-Понизил порог с 12 до 5, когда открыто 9 — новые не заводятся, пока не опустится до пяти,
-но уже открытые никто не трогает.
+Changes take effect **from the next wake-up or sweep**; nothing is recalculated retroactively.
+Every domain tick carries the repository settings snapshot it used. Lowered the threshold from 12
+to 5 while 9 are open — no new ones are opened until it drops to five, but nobody touches the
+ones already open.
 
-Ролей нет: у инстанса один владелец.
+There are no roles: the instance has one owner.
 
-## 6. Понять, почему PR висит
+## 6. Understand why a PR is stuck
 
-Ради этого сценария и заводится свой экран. Он показывает цепочку:
+This scenario is the reason for having our own screen. It shows the chain:
 
 ```
-что известно  →  что решили  →  почему именно  →  что дальше
+what is known  →  what was decided  →  why exactly  →  what next
 ```
 
-Вердикт **пересчитывается на лету**: последний полный required inventory для текущего head
-накладывается на более новые webhook-наблюдения check runs. Оборванный новый свип не стирает
-последний полный снимок экрана. «Шесть часов назад было красное» бесполезно, если тест уже
-починили. Цена: показанный вердикт — прогноз, а не факт.
+The verdict is **recomputed on the fly**: the latest full required inventory for the current head
+is overlaid with newer webhook observations of check runs. An interrupted new sweep does not
+erase the screen's latest full snapshot. "It was red six hours ago" is useless if the test has
+already been fixed. The cost: the verdict shown is a forecast, not a fact.
 
-Экран обновляется сам, без перезагрузки страницы руками: список опрашивает сервер и заменяет
-свой фрагмент HTML.
-
----
-
-## Факты
-
-Пятнадцать фактов в четырёх группах. Формальные типы — в пакете домена, он источник правды.
-Здесь смысл и границы.
-
-<!-- FLAG: в шапке «Пятнадцать фактов», а таблицы перечисляют шестнадцать: 4 + 5 + 3 + 4. Число сакрально и не правится автоматически — решить, пропущен ли факт в тексте или лишний в таблице. -->
-
-### Наблюдения от GitHub
-
-| Факт | Когда возникает |
-|---|---|
-| `PrStateChanged` | Увидели более новый снимок PR, отличающийся от известного. Несёт head, целевую ветку, драфт, открыт, mergeable, даты создания и обновления. |
-| `CheckRunStateChanged` | Увидели более новое состояние check run. Несёт сырьё: id, required identity, status, conclusion и времена. Обязательность из webhook не выводится. |
-| `RequiredChecksObserved` | Полностью получили required inventory и все attempts для одного PR, head и `sweepId`. Частичный ответ этим фактом быть не может. |
-| `LookupIncomplete` | Lookup оборвался: rate limit, нет прав, ошибка апстрима или предел пагинации. Checks lookup несёт `sweepId` и блокирует только эту попытку свипа. |
-
-`PrStateChanged` и `CheckRunStateChanged` выпускаются только для наших PR и только если
-наблюдение новее известного. Delivery ID отбрасывает точный дубль на приёме, `updatedAt`
-защищает от поздней доставки старого состояния, сравнение снимков — от содержательного дубля.
-
-Webhook-наблюдения поддерживают живой экран, но не доказывают полноту required checks. Мерж
-разрешается только по `RequiredChecksObserved` текущего свипа.
-
-### Наши решения и результаты работы
-
-| Факт | Когда возникает |
-|---|---|
-| `PrCreated` | Агент завёл PR. Несёт `reportId`, номер, ветку и первый коммит. Запускает reconciliation. |
-| `AgentRunFinished` | Заход агента закончился. Несёт `reportId`, репозиторий, optional PR, исход и расход токенов. Провал до создания PR не выдумывает номер. |
-| `AdmissionApproved` | Admission разрешил заводить новую работу. |
-| `MergeApproved` | Merge-gate текущего `sweepId` разрешил мерж. Это решение, а не свершившийся факт. |
-| `CloseApproved` | Свип решил закрыть PR по возрасту. |
-
-Успешный мерж отдельным фактом не пишется: он приедет наблюдением. Человек закрыл наш PR
-руками — это тоже `PrStateChanged` с `open: false`.
-
-`AdmissionApproved` несёт настройки агента из due-тика. Это снимок конкретной попытки, а не
-ссылка на изменяемые текущие настройки.
-
-### Провалы и отказы
-
-| Факт | Когда возникает |
-|---|---|
-| `MergeFailed` | Эффект конкретного `sweepId` вызвал GitHub, мерж не прошёл. Несёт `reportId`. |
-| `AdmissionDeclined` | Due-тик прошёл, PR не завели. Несёт причину и числа. |
-| `MergeDeclined` | Свип прошёл, PR не смержили. Несёт `sweepId` и причину. |
-
-Провал закрытия отдельным фактом не заводим: закрытие практически не отказывает.
-
-### Подключения и настройки
-
-| Факт | Когда возникает |
-|---|---|
-| `RepositoryConnected` | Оператор добавил `owner/name` в админке, и проверка доступа токеном прошла. |
-| `RepositoryDisconnected` | Оператор убрал репозиторий. Новые тики по нему не идут, прошлые факты остаются. |
-| `SettingsChanged` | Сохранены модель, reasoning, промпт и optional OpenAI Base URL. |
-| `RepositorySettingsChanged` | Сохранены темп производства, максимум открытых и возраст закрытия. |
-
-Каждая report-команда и соответствующий факт несут `reportId`. Повтор одного `type + reportId`
-ничего не порождает. Разные report ID означают разные реальные попытки, даже если payload
-совпал, но не отменяют семантическую неприменимость команды: второй `PrCreated` для уже
-известного PR всё равно ничего не порождает и не запускает reconciliation повторно.
-
-<!-- FLAG: «Секретов в журнале нет» полностью покрывается следующим предложением («не попадают ни в журнал, ни в задачи, ни в интерфейс, ни в логи»). Не вырезал: это может быть намеренный акцент. -->
-
-Секретов в журнале нет. GitHub PAT, ключ OpenAI и webhook secret приходят из окружения,
-принадлежат оператору и не попадают ни в журнал, ни в задачи, ни в интерфейс, ни в логи.
-OpenAI Base URL секретом не является: он попадает в неизменяемый снимок задачи и в `SettingsChanged`.
-
-Повторное подключение уже подключённого репозитория и отключение неподключённого фактов не
-создают. Отключение и повторное подключение того же `owner/name` не переписывают историю: PR,
-заведённые раньше, остаются в журнале и снова учитываются, когда репозиторий подключён.
+The screen refreshes on its own, without reloading the page by hand: the list polls the server
+and replaces its HTML fragment.
 
 ---
 
-## Доставка и восстановление наблюдений
+## Facts
 
-Один `check_run` webhook может относиться к 0..N PR и превращается в столько команд, сколько
-уникальных ассоциаций пришло. Поддерживаются lifecycle actions PR и `created`, `rerequested`,
-`completed` для check run; остальные actions игнорируются.
+Fifteen facts in four groups. The formal types are in the domain package, which is the source of
+truth. Here are meaning and boundaries.
 
-Ранний check webhook может прийти без PR association или до `PrCreated`. Поэтому первый
-принятый `PrCreated` обязательно создаёт эффект `ReconcilePr`: система запрашивает текущий PR
-и все runs его head, не полагаясь на старую association.
+<!-- FLAG: the header says "Fifteen facts", while the tables list sixteen: 4 + 5 + 3 + 4. The number is sacred and is not corrected automatically — decide whether a fact is missing from the text or extra in the table. -->
+
+### Observations from GitHub
+
+| Fact | When it occurs |
+|---|---|
+| `PrStateChanged` | We saw a newer PR snapshot that differs from the known one. Carries head, target branch, draft, open, mergeable, creation and update dates. |
+| `CheckRunStateChanged` | We saw a newer check run state. Carries raw data: id, required identity, status, conclusion, and times. Whether it is required is not derived from the webhook. |
+| `RequiredChecksObserved` | We fully obtained the required inventory and all attempts for one PR, head, and `sweepId`. A partial response cannot be this fact. |
+| `LookupIncomplete` | A lookup broke off: rate limit, no permissions, an upstream error, or the pagination limit. A checks lookup carries `sweepId` and blocks only this sweep attempt. |
+
+`PrStateChanged` and `CheckRunStateChanged` are emitted only for our PRs and only if the
+observation is newer than the known one. The delivery ID drops an exact duplicate at intake,
+`updatedAt` protects against late delivery of an old state, and comparing snapshots protects
+against a duplicate in content.
+
+Webhook observations keep the live screen up to date but do not prove required checks are
+complete. Merging is allowed only on the current sweep's `RequiredChecksObserved`.
+
+### Our decisions and work results
+
+| Fact | When it occurs |
+|---|---|
+| `PrCreated` | The agent opened a PR. Carries `reportId`, number, branch, and first commit. Triggers reconciliation. |
+| `AgentRunFinished` | An agent run ended. Carries `reportId`, repository, optional PR, outcome, and token usage. A failure before the PR was created does not invent a number. |
+| `AdmissionApproved` | Admission allowed starting new work. |
+| `MergeApproved` | The merge gate of the current `sweepId` allowed the merge. This is a decision, not an accomplished fact. |
+| `CloseApproved` | The sweep decided to close the PR by age. |
+
+A successful merge is not written as a separate fact: it will arrive as an observation. A human
+closed our PR by hand — that is also `PrStateChanged` with `open: false`.
+
+`AdmissionApproved` carries the agent settings from the due tick. It is a snapshot of a specific
+attempt, not a reference to the mutable current settings.
+
+### Failures and declines
+
+| Fact | When it occurs |
+|---|---|
+| `MergeFailed` | The effect of a specific `sweepId` called GitHub, and the merge did not go through. Carries `reportId`. |
+| `AdmissionDeclined` | The due tick passed, no PR was opened. Carries the reason and the numbers. |
+| `MergeDeclined` | The sweep passed, the PR was not merged. Carries `sweepId` and the reason. |
+
+We do not add a separate fact for a failed close: closing practically never fails.
+
+### Connections and settings
+
+| Fact | When it occurs |
+|---|---|
+| `RepositoryConnected` | The operator added `owner/name` in the admin, and the token access check passed. |
+| `RepositoryDisconnected` | The operator removed a repository. No new ticks run for it; past facts remain. |
+| `SettingsChanged` | Model, reasoning, prompt, and optional OpenAI Base URL were saved. |
+| `RepositorySettingsChanged` | Production pace, maximum open, and close age were saved. |
+
+Every report command and its corresponding fact carry a `reportId`. Repeating the same
+`type + reportId` produces nothing. Different report IDs mean different real attempts, even if the
+payload matches, but they do not cancel a command's semantic inapplicability: a second
+`PrCreated` for an already known PR still produces nothing and does not trigger reconciliation
+again.
+
+<!-- FLAG: "There are no secrets in the journal" is fully covered by the next sentence ("never reach the journal, tasks, the interface, or logs"). Not cut: it may be a deliberate emphasis. -->
+
+There are no secrets in the journal. The GitHub PAT, the OpenAI key, and the webhook secret come
+from the environment, belong to the operator, and never reach the journal, tasks, the interface,
+or logs. The OpenAI Base URL is not a secret: it goes into the task's immutable snapshot and into
+`SettingsChanged`.
+
+Connecting an already connected repository and disconnecting one that is not connected create no
+facts. Disconnecting and reconnecting the same `owner/name` do not rewrite history: PRs opened
+earlier stay in the journal and count again once the repository is connected.
+
+---
+
+## Delivery and recovery of observations
+
+A single `check_run` webhook can relate to 0..N PRs and turns into as many commands as there are
+unique associations. Lifecycle actions for PRs and `created`, `rerequested`, `completed` for check
+runs are supported; other actions are ignored.
+
+An early check webhook may arrive without a PR association or before `PrCreated`. That is why the
+first accepted `PrCreated` always creates a `ReconcilePr` effect: the system requests the current
+PR and all runs of its head, without relying on the old association.
