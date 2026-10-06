@@ -12,7 +12,7 @@ test: generate
 spec: generate
     go test -count=1 -v ./specs/...
 
-lint:
+lint: generate
     gofmt -l .
     go vet ./...
     go tool templ fmt -fail .
