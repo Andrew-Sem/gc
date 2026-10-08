@@ -4,32 +4,19 @@ import (
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
-type Fact interface {
-	fact()
-}
-
-type RepositoryConnected struct {
-	FullName string
-}
-
-type RepositoryDisconnected struct {
-	FullName string
-}
-
-func (RepositoryConnected) fact()    {}
-func (RepositoryDisconnected) fact() {}
-
-func IsConnected(facts []Fact, fullName string) bool {
+func IsConnected(facts []contract.Fact, fullName string) bool {
 	connected := false
 	for _, f := range facts {
 		switch f := f.(type) {
-		case RepositoryConnected:
+		case contract.RepositoryConnected:
 			if f.FullName == fullName {
 				connected = true
 			}
-		case RepositoryDisconnected:
+		case contract.RepositoryDisconnected:
 			if f.FullName == fullName {
 				connected = false
 			}
@@ -43,13 +30,13 @@ func ValidFullName(fullName string) bool {
 	return found && owner != "" && name != "" && !strings.Contains(name, "/")
 }
 
-func ConnectedRepositories(facts []Fact) []string {
+func ConnectedRepositories(facts []contract.Fact) []string {
 	connected := map[string]bool{}
 	for _, f := range facts {
 		switch f := f.(type) {
-		case RepositoryConnected:
+		case contract.RepositoryConnected:
 			connected[f.FullName] = true
-		case RepositoryDisconnected:
+		case contract.RepositoryDisconnected:
 			delete(connected, f.FullName)
 		}
 	}

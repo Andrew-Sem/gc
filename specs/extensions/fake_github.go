@@ -1,7 +1,8 @@
-package spec
+package extensions
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 )
 
@@ -17,4 +18,12 @@ func (g *fakeGitHub) CanAccess(fullName string) (bool, error) {
 		return false, errors.New("GitHub does not answer")
 	}
 	return slices.Contains(g.sees, fullName), nil
+}
+
+type githubAsked struct {
+	got []string
+}
+
+func (p githubAsked) String() string {
+	return fmt.Sprintf("expected GitHub not to be asked, got %v", p.got)
 }

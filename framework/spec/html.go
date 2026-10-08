@@ -57,7 +57,7 @@ func (p ambiguousElement) String() string {
 	return fmt.Sprintf("expected one element %s, found %d", p.selector, p.got)
 }
 
-func findElement(page *html.Node, selector string) (bool, problem) {
+func findElement(page *html.Node, selector string) (bool, Problem) {
 	sel, err := cascadia.Compile(selector)
 	if err != nil {
 		return false, invalidSelector{selector: selector, err: err.Error()}
@@ -65,7 +65,7 @@ func findElement(page *html.Node, selector string) (bool, problem) {
 	return cascadia.Query(page, sel) != nil, nil
 }
 
-func textProblem(page *html.Node, expected textExpectation) problem {
+func textProblem(page *html.Node, expected textExpectation) Problem {
 	sel, err := cascadia.Compile(expected.selector)
 	if err != nil {
 		return invalidSelector{selector: expected.selector, err: err.Error()}
@@ -94,12 +94,12 @@ func textOf(n *html.Node) string {
 	return b.String()
 }
 
-func elementProblems(body string, present, absent []string, texts []textExpectation) []problem {
+func elementProblems(body string, present, absent []string, texts []textExpectation) []Problem {
 	page, err := html.Parse(strings.NewReader(body))
 	if err != nil {
-		return []problem{unreadablePage{err: err.Error()}}
+		return []Problem{unreadablePage{err: err.Error()}}
 	}
-	var problems []problem
+	var problems []Problem
 	for _, selector := range present {
 		found, p := findElement(page, selector)
 		if p != nil {

@@ -1,15 +1,16 @@
 package spec
 
 import (
+	"net/http"
 	"os"
 	"regexp"
 	"slices"
 	"testing"
 
-	"github.com/Andrew-Sem/gc/internal/web"
+	"github.com/Andrew-Sem/gc/framework/journal"
 )
 
-type Feature struct {
+type Feature[F comparable] struct {
 	t        *testing.T
 	contract string
 	clauses  []string
@@ -18,12 +19,12 @@ type Feature struct {
 
 var clausePattern = regexp.MustCompile(`(?m)^([A-Z]+-[0-9.]*[0-9])\. `)
 
-func NewFeature(t *testing.T, contract string) *Feature {
+func NewFeature[F comparable](t *testing.T, contract string) *Feature[F] {
 	text, err := os.ReadFile(contract)
 	if err != nil {
 		t.Fatalf("cannot read contract: %v", err)
 	}
-	f := &Feature{t: t, contract: contract, clauses: parseClauses(string(text))}
+	f := &Feature[F]{t: t, contract: contract, clauses: parseClauses(string(text))}
 	t.Cleanup(func() {
 		t.Logf("uncovered: %v", uncovered(f.clauses, f.covered))
 		t.Logf("covered: %v", f.covered)
@@ -49,9 +50,9 @@ func uncovered(clauses, covered []string) []string {
 	return rest
 }
 
-func (f *Feature) Run(name string, describe func(s *Scenario)) {
+func (f *Feature[F]) Run(name string, describe func(s *Scenario[F]), newApp func(*journal.Journal[F]) http.Handler) {
 	f.t.Run(name, func(t *testing.T) {
-		s := &Scenario{}
+		s := &Scenario[F]{}
 		describe(s)
 		for _, id := range s.covers {
 			if !slices.Contains(f.clauses, id) {
@@ -59,7 +60,7 @@ func (f *Feature) Run(name string, describe func(s *Scenario)) {
 			}
 		}
 		f.covered = append(f.covered, s.covers...)
-		for _, problem := range s.run(web.New) {
+		for _, problem := range s.Run(newApp) {
 			t.Errorf("%s", problem)
 		}
 	})

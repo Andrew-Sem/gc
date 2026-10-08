@@ -12,11 +12,15 @@ HTML lives in `.templ` files.
 
 ## Specs
 
+- Tests are executable specifications. Create, change, or delete them only with explicit user
+  permission and user review. Keep application behavior checks in `specs`, not `internal`;
+  framework checks belong beside the framework. Implement against approved specs; never change
+  them to fit the implementation.
 - The scenario name in `Run` is the short gist of the case. Name opposite cases as a pair so they
   read side by side in the output: `connect a repository the token can see` / `cannot see`.
 - `Then` says what is true after the action, not the action itself: `the repository is
   disconnected`. The `Expect…` lines below check it. If the request is rejected: `the request is
   rejected and nothing is connected`.
-- Grow the spec framework in `internal/spec` only when a spec needs something it cannot express
+- Grow the spec framework in `framework/spec` only when a spec needs something it cannot express
   yet. Write that spec first, then add the smallest framework change, covered by its own test in
-  `internal/spec`.
+  `framework/spec`.

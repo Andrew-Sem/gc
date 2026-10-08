@@ -7,12 +7,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Andrew-Sem/gc/internal/domain"
-	"github.com/Andrew-Sem/gc/internal/journal"
-	"github.com/Andrew-Sem/gc/internal/web"
+	"github.com/Andrew-Sem/gc/framework/journal"
 )
 
-func factList(facts ...domain.Fact) string {
+func factList[F any](facts ...F) string {
 	var parts []string
 	for _, f := range facts {
 		parts = append(parts, fmt.Sprintf("%T%+v", f, f))
@@ -20,7 +18,7 @@ func factList(facts ...domain.Fact) string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-type problem interface {
+type Problem interface {
 	String() string
 }
 
@@ -32,11 +30,11 @@ func (p statusMismatch) String() string {
 	return fmt.Sprintf("expected status %d, got %d", p.expected, p.got)
 }
 
-type factsMismatch struct {
-	expected, got []domain.Fact
+type factsMismatch[F any] struct {
+	expected, got []F
 }
 
-func (p factsMismatch) String() string {
+func (p factsMismatch[F]) String() string {
 	return fmt.Sprintf("expected facts %s, got %s", factList(p.expected...), factList(p.got...))
 }
 
@@ -49,15 +47,7 @@ func (p callCountMismatch) String() string {
 	return fmt.Sprintf("expected one %s call, got %d", p.method, p.got)
 }
 
-type githubAsked struct {
-	got []string
-}
-
-func (p githubAsked) String() string {
-	return fmt.Sprintf("expected GitHub not to be asked, got %v", p.got)
-}
-
-func (s *Scenario) shapeProblems() []problem {
+func (s *Scenario[F]) shapeProblems() []Problem {
 	calls := []struct {
 		method string
 		count  int
@@ -66,7 +56,7 @@ func (s *Scenario) shapeProblems() []problem {
 		{"ExpectStatus", s.statusCalls},
 		{"ExpectFacts", s.factsCalls},
 	}
-	var problems []problem
+	var problems []Problem
 	for _, c := range calls {
 		if c.count != 1 {
 			problems = append(problems, callCountMismatch{method: c.method, got: c.count})
@@ -75,19 +65,18 @@ func (s *Scenario) shapeProblems() []problem {
 	return problems
 }
 
-func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) []problem {
+func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Problem {
 	if problems := s.shapeProblems(); len(problems) > 0 {
 		return problems
 	}
 
-	var problems []problem
-	j := &journal.Journal{}
+	var problems []Problem
+	j := &journal.Journal[F]{}
 	j.Append(s.given...)
 	before := len(j.Facts())
 
 	response := httptest.NewRecorder()
-	github := &fakeGitHub{sees: s.githubSees, doesNotAnswer: s.githubDoesNotAnswer}
-	newApp(j, github).ServeHTTP(response, s.request.httpRequest())
+	newApp(j).ServeHTTP(response, s.request.httpRequest())
 
 	if response.Code != s.status {
 		problems = append(problems, statusMismatch{expected: s.status, got: response.Code})
@@ -95,11 +84,13 @@ func (s *Scenario) run(newApp func(*journal.Journal, web.GitHub) http.Handler) [
 
 	written := j.Facts()[before:]
 	if !slices.Equal(written, s.expected) {
-		problems = append(problems, factsMismatch{expected: s.expected, got: written})
+		problems = append(problems, factsMismatch[F]{expected: s.expected, got: written})
 	}
 
-	if s.githubNotAsked && len(github.asked) > 0 {
-		problems = append(problems, githubAsked{got: github.asked})
+	for _, check := range s.checks {
+		if p := check(); p != nil {
+			problems = append(problems, p)
+		}
 	}
 
 	if len(s.elements) > 0 || len(s.noElements) > 0 || len(s.texts) > 0 {

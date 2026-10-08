@@ -2,15 +2,17 @@ package specs
 
 import (
 	"net/http"
+	"strconv"
 	"testing"
 
-	"github.com/Andrew-Sem/gc/internal/domain"
-	"github.com/Andrew-Sem/gc/internal/spec"
+	"github.com/Andrew-Sem/gc/framework/spec"
+	"github.com/Andrew-Sem/gc/specs/contract"
+	"github.com/Andrew-Sem/gc/specs/extensions"
 )
 
 func TestConnectRepository(t *testing.T) {
-	f := spec.NewFeature(t, "connect-repository.md")
-	f.Run("repositories page shows the connect form", func(s *spec.Scenario) {
+	f := extensions.NewFeature(t, "connect-repository.md")
+	f.Run("repositories page shows the connect form", func(s *extensions.Scenario) {
 		s.Covers("REPO-1").
 			When(spec.Get("/repositories")).
 			Then("the connect form is shown and wired to htmx").
@@ -22,18 +24,19 @@ func TestConnectRepository(t *testing.T) {
 			ExpectElement(`#repositories-panel[hx-target="#repositories-panel"][hx-swap="outerHTML"] form`)
 	})
 
-	f.Run("connect a repository the token can see", func(s *spec.Scenario) {
+	f.Run("connect a repository the token can see", func(s *extensions.Scenario) {
+		s.GivenGitHubSees("acme/api")
+
 		s.Covers("REPO-1.1").
-			GivenGitHubSees("acme/api").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the repository is connected and listed").
 			ExpectStatus(http.StatusOK).
-			ExpectFacts(domain.RepositoryConnected{FullName: "acme/api"}).
+			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
 			ExpectNoElement(`#repositories-panel [role="alert"]`)
 	})
 
-	f.Run("connect a repository the token cannot see", func(s *spec.Scenario) {
+	f.Run("connect a repository the token cannot see", func(s *extensions.Scenario) {
 		s.Covers("REPO-1.2").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request is rejected and nothing is connected").
@@ -42,32 +45,37 @@ func TestConnectRepository(t *testing.T) {
 			ExpectText(`#repositories-panel [role="alert"]`, "No access to this repository")
 	})
 
-	f.Run("connect an already connected repository", func(s *spec.Scenario) {
+	f.Run("connect an already connected repository", func(s *extensions.Scenario) {
+		s.GivenGitHubSees("acme/api")
+
 		s.Covers("REPO-1.3").
-			GivenGitHubSees("acme/api").
-			Given(domain.RepositoryConnected{FullName: "acme/api"}).
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("nothing more is recorded and GitHub is not asked").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
-			ExpectGitHubNotAsked().
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`)
+
+		s.ExpectGitHubNotAsked()
 	})
 
-	f.Run("connect a malformed repository name", func(s *spec.Scenario) {
-		s.Covers("REPO-1.4").
-			GivenGitHubSees("acmeapi").
-			When(spec.Post("/repositories").WithForm("repo", "acmeapi")).
-			Then("the request is rejected and GitHub is not asked").
-			ExpectStatus(http.StatusUnprocessableEntity).
-			ExpectFacts().
-			ExpectGitHubNotAsked().
-			ExpectText(`#repositories-panel [role="alert"]`, "Enter the repository as owner/name")
-	})
+	for _, name := range []string{"acmeapi", "/api", "acme/", "acme/api/extra", ""} {
+		f.Run("reject malformed repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
+			s.GivenGitHubSees(name)
+			s.Covers("REPO-1.4").
+				When(spec.Post("/repositories").WithForm("repo", name)).
+				Then("the request is rejected and GitHub is not asked").
+				ExpectStatus(http.StatusUnprocessableEntity).
+				ExpectFacts().
+				ExpectText(`#repositories-panel [role="alert"]`, "Enter the repository as owner/name")
+			s.ExpectGitHubNotAsked()
+		})
+	}
 
-	f.Run("connect while GitHub does not answer", func(s *spec.Scenario) {
+	f.Run("connect while GitHub does not answer", func(s *extensions.Scenario) {
+		s.GivenGitHubDoesNotAnswer()
+
 		s.Covers("REPO-1.5").
-			GivenGitHubDoesNotAnswer().
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request fails and nothing is connected").
 			ExpectStatus(http.StatusBadGateway).
@@ -75,13 +83,13 @@ func TestConnectRepository(t *testing.T) {
 			ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub did not respond")
 	})
 
-	f.Run("repositories page lists connected repositories", func(s *spec.Scenario) {
+	f.Run("repositories page lists connected repositories", func(s *extensions.Scenario) {
 		s.Covers("REPO-2").
 			Given(
-				domain.RepositoryConnected{FullName: "acme/api"},
-				domain.RepositoryConnected{FullName: "acme/web"},
-				domain.RepositoryConnected{FullName: "acme/old"},
-				domain.RepositoryDisconnected{FullName: "acme/old"},
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/web"},
+				contract.RepositoryConnected{FullName: "acme/old"},
+				contract.RepositoryDisconnected{FullName: "acme/old"},
 			).
 			When(spec.Get("/repositories")).
 			Then("connected repositories are listed and disconnected ones are not").
@@ -92,11 +100,11 @@ func TestConnectRepository(t *testing.T) {
 			ExpectNoElement(`#repositories li[data-repository="acme/old"]`)
 	})
 
-	f.Run("repositories page offers to disconnect each repository", func(s *spec.Scenario) {
+	f.Run("repositories page offers to disconnect each repository", func(s *extensions.Scenario) {
 		s.Covers("REPO-3").
 			Given(
-				domain.RepositoryConnected{FullName: "acme/api"},
-				domain.RepositoryConnected{FullName: "acme/web"},
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/web"},
 			).
 			When(spec.Get("/repositories")).
 			Then("every listed repository has a disconnect button").
@@ -106,25 +114,25 @@ func TestConnectRepository(t *testing.T) {
 			ExpectElement(`#repositories li[data-repository="acme/web"] button[hx-post="/repositories/acme/web/disconnect"]`)
 	})
 
-	f.Run("disconnect a connected repository", func(s *spec.Scenario) {
+	f.Run("disconnect a connected repository", func(s *extensions.Scenario) {
 		s.Covers("REPO-3.1").
 			Given(
-				domain.RepositoryConnected{FullName: "acme/api"},
-				domain.RepositoryConnected{FullName: "acme/web"},
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/web"},
 			).
 			When(spec.Post("/repositories/acme/api/disconnect")).
 			Then("the repository is disconnected and only the other one is listed").
 			ExpectStatus(http.StatusOK).
-			ExpectFacts(domain.RepositoryDisconnected{FullName: "acme/api"}).
+			ExpectFacts(contract.RepositoryDisconnected{FullName: "acme/api"}).
 			ExpectNoElement(`#repositories-panel li[data-repository="acme/api"]`).
 			ExpectElement(`#repositories-panel li[data-repository="acme/web"]`)
 	})
 
-	f.Run("disconnect an already disconnected repository", func(s *spec.Scenario) {
+	f.Run("disconnect an already disconnected repository", func(s *extensions.Scenario) {
 		s.Covers("REPO-3.2").
 			Given(
-				domain.RepositoryConnected{FullName: "acme/api"},
-				domain.RepositoryDisconnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryDisconnected{FullName: "acme/api"},
 			).
 			When(spec.Post("/repositories/acme/api/disconnect")).
 			Then("nothing more is recorded").
@@ -134,17 +142,18 @@ func TestConnectRepository(t *testing.T) {
 			ExpectNoElement(`#repositories-panel li[data-repository="acme/api"]`)
 	})
 
-	f.Run("reconnect a disconnected repository", func(s *spec.Scenario) {
+	f.Run("reconnect a disconnected repository", func(s *extensions.Scenario) {
+		s.GivenGitHubSees("acme/api")
+
 		s.Covers("REPO-3.3").
 			Given(
-				domain.RepositoryConnected{FullName: "acme/api"},
-				domain.RepositoryDisconnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryDisconnected{FullName: "acme/api"},
 			).
-			GivenGitHubSees("acme/api").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the repository is connected again and listed").
 			ExpectStatus(http.StatusOK).
-			ExpectFacts(domain.RepositoryConnected{FullName: "acme/api"}).
+			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`)
 	})
 }

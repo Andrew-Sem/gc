@@ -1,6 +1,6 @@
 # Specification-driven rebuild experiment
 
-Status: implementation plan; no application or specification changes authorized by this document alone.
+Status: Stage A implemented for user review. The user authorized the structural refactor and mechanical specification migration; later feature requirements and experiments remain separate stages.
 
 ## Change contract
 
@@ -19,14 +19,14 @@ Scope: the existing repositories feature, generic specification infrastructure, 
 Prepare a reviewable file/dependency map and API sketch before editing executable specifications:
 
 - Keep generic scenario execution, HTTP requests, HTML assertions, clause tracking, and an in-memory fact journal in reusable framework packages. They must not import project event types, GitHub, or application packages.
-- Move project event definitions from `internal/domain/facts.go` into a project contract package. Keep folds and validation in replaceable application code.
-- Place GitHub ports and project dependency types in the project contract; place GitHub scenario setup, fake behavior, and project-specific assertions in project specification support. Move the GitHub-specific portions of `internal/spec/scenario.go`, `github.go`, and `run.go` there.
+- Move project event definitions from `internal/domain/facts.go` into a `specs/contract` package. Keep folds and validation in replaceable application code.
+- Place GitHub ports and project dependency types in the project contract; place GitHub scenario setup, fake behavior, and project-specific assertions in `specs/extensions`. Move the GitHub-specific portions of `internal/spec/scenario.go`, `github.go`, and `run.go` there.
 - Replace the hard-coded `web.New` call in `internal/spec/feature.go` with a factory supplied by the project. Project support connects the framework to an application entry point with a fixed signature. The factory implementation belongs to replaceable application code; its signature belongs to the retained contract.
 - Preserve exact ordered comparison of newly appended facts, explicit empty expectations, isolated scenarios, immutable given history, and rejection of malformed scenarios. Define fact equality/copy semantics explicitly rather than assuming all future project facts are comparable Go values.
-- Keep the framework inside this repository initially. No new published module or broad plugin architecture.
-- Give retained third-party assets such as htmx an explicit location in the experiment manifest, outside deleted implementation paths.
+- Keep the framework in `framework/spec` and `framework/journal` inside this repository initially. No new published module or broad plugin architecture.
+- Keep htmx in `internal/web/static` as an implementation dependency. It is deleted with the application and downloaded by the implementation agent; do not introduce a retained assets package.
 
-Output: dependency map, proposed signatures, and a bounded list of test/specification edits for explicit permission and user review. Once approved, implement the extraction without changing feature behavior and run existing checks.
+Output: the agreed layout and `extensions.NewFeature`/`extensions.Scenario` API were approved. The implementation diff preserves feature assertions and migrates the existing framework checks to local fixtures. User review of the resulting diff is still required. Existing application checks have also been moved into retained HTTP specifications following the user request for a complete migration. Their existing behavior is documented for user review.
 
 ### Stage B — complete and approve the feature contract
 
@@ -44,7 +44,7 @@ Build and launch the actual executable. Independently inspect the implementation
 
 ### Stage D — prepare a repeatable workspace
 
-Create an explicit allowlist manifest of retained files and writable implementation paths. Include approved specifications and support, event/port definitions, generic framework and its checks, fixed dependency/build inputs, htmx, and a minimal `cmd/gc` starter. Contract declaration files must contain no preserved business logic. Document generation commands and allowed generated files separately from protected inputs.
+Create an explicit allowlist manifest of retained files and writable implementation paths. Include approved specifications and support, event/port definitions, generic framework and its checks, fixed dependency/build inputs and a minimal `cmd/gc` starter. Contract declaration files must contain no preserved business logic. Document generation commands and allowed generated files separately from protected inputs.
 
 Create a standalone scratch directory with no Git history or previous implementation. Run each attempt with a fresh agent context and the same starter snapshot. Do not attach the prior conversation containing implementation details. Use a fixed prompt forbidding edits to protected inputs and access to prior implementations. Protect retained material with before/after content hashes and check changes outside the writable manifest.
 
@@ -107,4 +107,9 @@ This section describes proposed evidence, not permission to author tests. New or
 ## Deviation log
 
 - User resolved the persistence scope after the initial plan: use in-memory storage for the first experiment and defer SQLite/restart verification.
-
+- User placed the project vocabulary under `specs/contract` and named project support `specs/extensions`.
+- User chose to leave htmx in the replaceable application; rebuild agents may download it.
+- Stage A preserves current comparable value-fact equality and shallow slice copying rather than introducing a generalized serialization or deep-copy system. See `docs/architecture.md`.
+- User chose embedding the generic scenario instead of forwarding its methods; project-specific setup and expectations are separate statements around the common fluent chain.
+- User requested complete migration: validation cases now exercise HTTP; htmx checks consume public HTTP responses from `specs`, and `internal` contains no test files.
+- User approved removing `specs/htmx_test.go` and the technical contract added for it: retain feature HTML assertions and verify actual browser behavior during acceptance instead of testing htmx configuration details.

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
-	"github.com/Andrew-Sem/gc/internal/journal"
+	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
 //go:embed static
@@ -22,10 +22,6 @@ const htmxConfig = `{"responseHandling":[
 	{"code":"[45]..","swap":false,"error":true}
 ]}`
 
-type GitHub interface {
-	CanAccess(fullName string) (bool, error)
-}
-
 type problem int
 
 const (
@@ -36,12 +32,12 @@ const (
 )
 
 type server struct {
-	journal *journal.Journal
-	github  GitHub
+	journal contract.Journal
+	github  contract.GitHub
 }
 
-func New(j *journal.Journal, gh GitHub) http.Handler {
-	s := &server{journal: j, github: gh}
+func New(deps contract.Dependencies) http.Handler {
+	s := &server{journal: deps.Journal, github: deps.GitHub}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
@@ -77,14 +73,14 @@ func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 		s.renderPanel(w, r, http.StatusUnprocessableEntity, noAccess)
 		return
 	}
-	s.journal.Append(domain.RepositoryConnected{FullName: fullName})
+	s.journal.Append(contract.RepositoryConnected{FullName: fullName})
 	s.renderPanel(w, r, http.StatusOK, noProblem)
 }
 
 func (s *server) disconnectRepository(w http.ResponseWriter, r *http.Request) {
 	fullName := r.PathValue("owner") + "/" + r.PathValue("name")
 	if domain.IsConnected(s.journal.Facts(), fullName) {
-		s.journal.Append(domain.RepositoryDisconnected{FullName: fullName})
+		s.journal.Append(contract.RepositoryDisconnected{FullName: fullName})
 	}
 	s.renderPanel(w, r, http.StatusOK, noProblem)
 }

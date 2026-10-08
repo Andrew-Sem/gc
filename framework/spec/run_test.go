@@ -6,66 +6,64 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Andrew-Sem/gc/internal/domain"
-	"github.com/Andrew-Sem/gc/internal/journal"
-	"github.com/Andrew-Sem/gc/internal/web"
+	"github.com/Andrew-Sem/gc/framework/journal"
 )
 
 func TestRunFindsNothingInMatchingScenario(t *testing.T) {
-	disconnected := domain.RepositoryDisconnected{FullName: "acme/api"}
+	disconnected := removed{Name: "acme/api"}
 
-	s := &Scenario{}
+	s := &Scenario[fact]{}
 	s.When(Post("/repositories/acme/api/disconnect")).
 		ExpectStatus(http.StatusOK).
 		ExpectFacts(disconnected)
 
-	writesExpectedFact := func(j *journal.Journal, _ web.GitHub) http.Handler {
+	writesExpectedFact := func(j *journal.Journal[fact]) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			j.Append(disconnected)
 			w.WriteHeader(http.StatusOK)
 		})
 	}
 
-	if problems := s.run(writesExpectedFact); len(problems) != 0 {
+	if problems := s.Run(writesExpectedFact); len(problems) != 0 {
 		t.Errorf("run returned %q, want no problems", problems)
 	}
 }
 
 func TestRunFindsMissingRoute(t *testing.T) {
-	s := &Scenario{}
+	s := &Scenario[fact]{}
 	s.When(Post("/repositories/acme/api/disconnect")).
 		ExpectStatus(http.StatusOK).
 		ExpectFacts()
 
-	noRoutes := func(*journal.Journal, web.GitHub) http.Handler {
+	noRoutes := func(*journal.Journal[fact]) http.Handler {
 		return http.NewServeMux()
 	}
 
-	problems := s.run(noRoutes)
-	want := []problem{statusMismatch{expected: http.StatusOK, got: http.StatusNotFound}}
+	problems := s.Run(noRoutes)
+	want := []Problem{statusMismatch{expected: http.StatusOK, got: http.StatusNotFound}}
 	if !reflect.DeepEqual(problems, want) {
 		t.Errorf("run returned %q, want %q", problems, want)
 	}
 }
 
 func TestRunFindsWrongFacts(t *testing.T) {
-	connected := domain.RepositoryConnected{FullName: "acme/api"}
-	disconnected := domain.RepositoryDisconnected{FullName: "acme/api"}
+	connected := added{Name: "acme/api"}
+	disconnected := removed{Name: "acme/api"}
 
-	s := &Scenario{}
+	s := &Scenario[fact]{}
 	s.When(Post("/repositories/acme/api/disconnect")).
 		ExpectStatus(http.StatusOK).
 		ExpectFacts(disconnected)
 
-	writesWrongFact := func(j *journal.Journal, _ web.GitHub) http.Handler {
+	writesWrongFact := func(j *journal.Journal[fact]) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			j.Append(connected)
 			w.WriteHeader(http.StatusOK)
 		})
 	}
 
-	problems := s.run(writesWrongFact)
-	want := []problem{factsMismatch{expected: []domain.Fact{disconnected}, got: []domain.Fact{connected}}}
+	problems := s.Run(writesWrongFact)
+	want := []Problem{factsMismatch[fact]{expected: []fact{disconnected}, got: []fact{connected}}}
 	if !reflect.DeepEqual(problems, want) {
 		t.Errorf("run returned %q, want %q", problems, want)
 	}
@@ -74,17 +72,17 @@ func TestRunFindsWrongFacts(t *testing.T) {
 func TestFactList(t *testing.T) {
 	tests := []struct {
 		name  string
-		facts []domain.Fact
+		facts []fact
 		want  string
 	}{
 		{"no facts", nil, "[]"},
-		{"one fact", []domain.Fact{
-			domain.RepositoryConnected{FullName: "acme/api"},
-		}, "[domain.RepositoryConnected{FullName:acme/api}]"},
-		{"two facts", []domain.Fact{
-			domain.RepositoryConnected{FullName: "acme/api"},
-			domain.RepositoryDisconnected{FullName: "acme/api"},
-		}, "[domain.RepositoryConnected{FullName:acme/api}, domain.RepositoryDisconnected{FullName:acme/api}]"},
+		{"one fact", []fact{
+			added{Name: "acme/api"},
+		}, "[spec.added{Name:acme/api}]"},
+		{"two facts", []fact{
+			added{Name: "acme/api"},
+			removed{Name: "acme/api"},
+		}, "[spec.added{Name:acme/api}, spec.removed{Name:acme/api}]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -96,25 +94,25 @@ func TestFactList(t *testing.T) {
 }
 
 func TestRunReportsStatusThenFacts(t *testing.T) {
-	connected := domain.RepositoryConnected{FullName: "acme/api"}
-	disconnected := domain.RepositoryDisconnected{FullName: "acme/api"}
+	connected := added{Name: "acme/api"}
+	disconnected := removed{Name: "acme/api"}
 
-	s := &Scenario{}
+	s := &Scenario[fact]{}
 	s.When(Post("/repositories/acme/api/disconnect")).
 		ExpectStatus(http.StatusOK).
 		ExpectFacts(disconnected)
 
-	failsAndWritesWrongFact := func(j *journal.Journal, _ web.GitHub) http.Handler {
+	failsAndWritesWrongFact := func(j *journal.Journal[fact]) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			j.Append(connected)
 			w.WriteHeader(http.StatusInternalServerError)
 		})
 	}
 
-	problems := s.run(failsAndWritesWrongFact)
-	want := []problem{
+	problems := s.Run(failsAndWritesWrongFact)
+	want := []Problem{
 		statusMismatch{expected: http.StatusOK, got: http.StatusInternalServerError},
-		factsMismatch{expected: []domain.Fact{disconnected}, got: []domain.Fact{connected}},
+		factsMismatch[fact]{expected: []fact{disconnected}, got: []fact{connected}},
 	}
 	if !reflect.DeepEqual(problems, want) {
 		t.Errorf("run returned %q, want %q", problems, want)
@@ -122,18 +120,18 @@ func TestRunReportsStatusThenFacts(t *testing.T) {
 }
 
 func TestRunAcceptsExplicitlyEmptyFacts(t *testing.T) {
-	s := &Scenario{}
+	s := &Scenario[fact]{}
 	s.When(Get("/repositories")).
 		ExpectStatus(http.StatusOK).
 		ExpectFacts()
 
-	writesNothing := func(*journal.Journal, web.GitHub) http.Handler {
+	writesNothing := func(*journal.Journal[fact]) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
 	}
 
-	if problems := s.run(writesNothing); len(problems) != 0 {
+	if problems := s.Run(writesNothing); len(problems) != 0 {
 		t.Errorf("run returned %q, want no problems", problems)
 	}
 }
@@ -141,25 +139,25 @@ func TestRunAcceptsExplicitlyEmptyFacts(t *testing.T) {
 func TestRunRejectsMalformedScenario(t *testing.T) {
 	tests := []struct {
 		name     string
-		describe func(s *Scenario)
-		want     []problem
+		describe func(s *Scenario[fact])
+		want     []Problem
 	}{
-		{"no When", func(s *Scenario) {
+		{"no When", func(s *Scenario[fact]) {
 			s.ExpectStatus(http.StatusOK).ExpectFacts()
-		}, []problem{callCountMismatch{method: "When", got: 0}}},
-		{"two Whens", func(s *Scenario) {
+		}, []Problem{callCountMismatch{method: "When", got: 0}}},
+		{"two Whens", func(s *Scenario[fact]) {
 			s.When(Get("/repositories")).
 				When(Get("/repositories")).
 				ExpectStatus(http.StatusOK).
 				ExpectFacts()
-		}, []problem{callCountMismatch{method: "When", got: 2}}},
-		{"no ExpectStatus", func(s *Scenario) {
+		}, []Problem{callCountMismatch{method: "When", got: 2}}},
+		{"no ExpectStatus", func(s *Scenario[fact]) {
 			s.When(Get("/repositories")).ExpectFacts()
-		}, []problem{callCountMismatch{method: "ExpectStatus", got: 0}}},
-		{"no ExpectFacts", func(s *Scenario) {
+		}, []Problem{callCountMismatch{method: "ExpectStatus", got: 0}}},
+		{"no ExpectFacts", func(s *Scenario[fact]) {
 			s.When(Get("/repositories")).ExpectStatus(http.StatusOK)
-		}, []problem{callCountMismatch{method: "ExpectFacts", got: 0}}},
-		{"nothing at all", func(s *Scenario) {}, []problem{
+		}, []Problem{callCountMismatch{method: "ExpectFacts", got: 0}}},
+		{"nothing at all", func(s *Scenario[fact]) {}, []Problem{
 			callCountMismatch{method: "When", got: 0},
 			callCountMismatch{method: "ExpectStatus", got: 0},
 			callCountMismatch{method: "ExpectFacts", got: 0},
@@ -167,15 +165,15 @@ func TestRunRejectsMalformedScenario(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Scenario{}
+			s := &Scenario[fact]{}
 			tt.describe(s)
 
-			mustNotStart := func(*journal.Journal, web.GitHub) http.Handler {
+			mustNotStart := func(*journal.Journal[fact]) http.Handler {
 				t.Error("run started the app for a malformed scenario")
 				return http.NewServeMux()
 			}
 
-			if problems := s.run(mustNotStart); !reflect.DeepEqual(problems, tt.want) {
+			if problems := s.Run(mustNotStart); !reflect.DeepEqual(problems, tt.want) {
 				t.Errorf("run returned %q, want %q", problems, tt.want)
 			}
 		})
@@ -185,16 +183,15 @@ func TestRunRejectsMalformedScenario(t *testing.T) {
 func TestProblemString(t *testing.T) {
 	tests := []struct {
 		name    string
-		problem problem
+		problem Problem
 		want    string
 	}{
 		{"status mismatch", statusMismatch{expected: 200, got: 404}, "expected status 200, got 404"},
-		{"facts mismatch", factsMismatch{
-			expected: []domain.Fact{domain.RepositoryDisconnected{FullName: "acme/api"}},
+		{"facts mismatch", factsMismatch[fact]{
+			expected: []fact{removed{Name: "acme/api"}},
 			got:      nil,
-		}, "expected facts [domain.RepositoryDisconnected{FullName:acme/api}], got []"},
+		}, "expected facts [spec.removed{Name:acme/api}], got []"},
 		{"call count mismatch", callCountMismatch{method: "When", got: 2}, "expected one When call, got 2"},
-		{"github asked", githubAsked{got: []string{"acme/api"}}, "expected GitHub not to be asked, got [acme/api]"},
 		{"element missing", elementMissing{selector: "form"}, "expected element form, found none"},
 		{"invalid selector", invalidSelector{selector: "form[", err: "boom"}, "invalid selector form[: boom"},
 		{"unreadable page", unreadablePage{err: "boom"}, "cannot read the page: boom"},
@@ -211,28 +208,7 @@ func TestProblemString(t *testing.T) {
 	}
 }
 
-func TestRunFindsGitHubAsked(t *testing.T) {
-	s := &Scenario{}
-	s.When(Post("/repositories")).
-		ExpectStatus(http.StatusOK).
-		ExpectFacts().
-		ExpectGitHubNotAsked()
-
-	asksGitHub := func(_ *journal.Journal, gh web.GitHub) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			gh.CanAccess("acme/api")
-			w.WriteHeader(http.StatusOK)
-		})
-	}
-
-	problems := s.run(asksGitHub)
-	want := []problem{githubAsked{got: []string{"acme/api"}}}
-	if !reflect.DeepEqual(problems, want) {
-		t.Errorf("run returned %q, want %q", problems, want)
-	}
-}
-
-func servesForm(*journal.Journal, web.GitHub) http.Handler {
+func servesForm(*journal.Journal[fact]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `<form><input name="repo"></form>`)
 	})
@@ -242,25 +218,25 @@ func TestRunChecksElements(t *testing.T) {
 	tests := []struct {
 		name     string
 		selector string
-		want     []problem
+		want     []Problem
 	}{
 		{"element found", `form input[name="repo"]`, nil},
-		{"element missing", `form input[name="owner"]`, []problem{
+		{"element missing", `form input[name="owner"]`, []Problem{
 			elementMissing{selector: `form input[name="owner"]`},
 		}},
-		{"invalid selector", `form[`, []problem{
+		{"invalid selector", `form[`, []Problem{
 			invalidSelector{selector: `form[`, err: "expected identifier, found EOF instead"},
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Scenario{}
+			s := &Scenario[fact]{}
 			s.When(Get("/repositories")).
 				ExpectStatus(http.StatusOK).
 				ExpectFacts().
 				ExpectElement(tt.selector)
 
-			if problems := s.run(servesForm); !reflect.DeepEqual(problems, tt.want) {
+			if problems := s.Run(servesForm); !reflect.DeepEqual(problems, tt.want) {
 				t.Errorf("run returned %q, want %q", problems, tt.want)
 			}
 		})
@@ -271,32 +247,32 @@ func TestRunChecksAbsentElements(t *testing.T) {
 	tests := []struct {
 		name     string
 		selector string
-		want     []problem
+		want     []Problem
 	}{
 		{"element absent", `form input[name="owner"]`, nil},
-		{"element present", `form input[name="repo"]`, []problem{
+		{"element present", `form input[name="repo"]`, []Problem{
 			unexpectedElement{selector: `form input[name="repo"]`},
 		}},
-		{"invalid selector", `form[`, []problem{
+		{"invalid selector", `form[`, []Problem{
 			invalidSelector{selector: `form[`, err: "expected identifier, found EOF instead"},
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Scenario{}
+			s := &Scenario[fact]{}
 			s.When(Get("/repositories")).
 				ExpectStatus(http.StatusOK).
 				ExpectFacts().
 				ExpectNoElement(tt.selector)
 
-			if problems := s.run(servesForm); !reflect.DeepEqual(problems, tt.want) {
+			if problems := s.Run(servesForm); !reflect.DeepEqual(problems, tt.want) {
 				t.Errorf("run returned %q, want %q", problems, tt.want)
 			}
 		})
 	}
 }
 
-func servesAlert(*journal.Journal, web.GitHub) http.Handler {
+func servesAlert(*journal.Journal[fact]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `<div role="alert">  No
 			<b>access</b> </div><p>one</p><p>two</p>`)
@@ -308,33 +284,40 @@ func TestRunChecksText(t *testing.T) {
 		name     string
 		selector string
 		text     string
-		want     []problem
+		want     []Problem
 	}{
 		{"text matches", `[role="alert"]`, "No access", nil},
-		{"text differs", `[role="alert"]`, "No connection", []problem{
+		{"text differs", `[role="alert"]`, "No connection", []Problem{
 			textMismatch{selector: `[role="alert"]`, expected: "No connection", got: "No access"},
 		}},
-		{"element missing", `#missing`, "No access", []problem{
+		{"element missing", `#missing`, "No access", []Problem{
 			elementMissing{selector: `#missing`},
 		}},
-		{"several elements", `p`, "one", []problem{
+		{"several elements", `p`, "one", []Problem{
 			ambiguousElement{selector: `p`, got: 2},
 		}},
-		{"invalid selector", `form[`, "No access", []problem{
+		{"invalid selector", `form[`, "No access", []Problem{
 			invalidSelector{selector: `form[`, err: "expected identifier, found EOF instead"},
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Scenario{}
+			s := &Scenario[fact]{}
 			s.When(Get("/repositories")).
 				ExpectStatus(http.StatusOK).
 				ExpectFacts().
 				ExpectText(tt.selector, tt.text)
 
-			if problems := s.run(servesAlert); !reflect.DeepEqual(problems, tt.want) {
+			if problems := s.Run(servesAlert); !reflect.DeepEqual(problems, tt.want) {
 				t.Errorf("run returned %q, want %q", problems, tt.want)
 			}
 		})
 	}
 }
+
+type fact interface{ fact() }
+type added struct{ Name string }
+type removed struct{ Name string }
+
+func (added) fact()   {}
+func (removed) fact() {}

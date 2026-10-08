@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/Andrew-Sem/gc/framework/journal"
 )
 
 func TestParseClauses(t *testing.T) {
@@ -92,27 +94,34 @@ func TestFeatureHelper(t *testing.T) {
 	if helper == "" {
 		t.Skip("runs only as a subprocess of TestFeatureReportsThroughGoTest")
 	}
-	pageOpens := func(s *Scenario) *Scenario {
+	newApp := func(*journal.Journal[string]) http.Handler {
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /repositories", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+		return mux
+	}
+	pageOpens := func(s *Scenario[string]) *Scenario[string] {
 		return s.When(Get("/repositories")).
 			ExpectStatus(http.StatusOK).
 			ExpectFacts()
 	}
 	switch helper {
 	case "report":
-		f := NewFeature(t, "testdata/contract.md")
-		f.Run("page opens", func(s *Scenario) { pageOpens(s).Covers("DEMO-1") })
+		f := NewFeature[string](t, "testdata/contract.md")
+		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-1") }, newApp)
 	case "failing scenario":
-		f := NewFeature(t, "testdata/contract.md")
-		f.Run("missing page", func(s *Scenario) {
+		f := NewFeature[string](t, "testdata/contract.md")
+		f.Run("missing page", func(s *Scenario[string]) {
 			s.When(Get("/nowhere")).
 				ExpectStatus(http.StatusOK).
 				ExpectFacts()
-		})
+		}, newApp)
 	case "unknown clause":
-		f := NewFeature(t, "testdata/contract.md")
-		f.Run("page opens", func(s *Scenario) { pageOpens(s).Covers("DEMO-9") })
+		f := NewFeature[string](t, "testdata/contract.md")
+		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-9") }, newApp)
 	case "missing contract":
-		NewFeature(t, "testdata/missing.md")
+		NewFeature[string](t, "testdata/missing.md")
 		t.Log("still running")
 	}
 }

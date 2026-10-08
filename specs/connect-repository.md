@@ -38,7 +38,9 @@ REPO-1.3. Connecting an already connected repository writes no facts and does no
 (response 200).
 
 REPO-1.4. If the string is not of the form `owner/name`, no fact is written, GitHub is not asked,
-and the page shows the error "Enter the repository as owner/name" (response 422).
+and the page shows the error "Enter the repository as owner/name" (response 422). Both parts
+must be nonempty, separated by exactly one slash. Invalid examples: `acmeapi`, `/api`,
+`acme/`, `acme/api/extra`, and the empty string.
 
 REPO-1.5. If GitHub does not respond, no fact is written, and the page shows the error "Could not
 check access: GitHub did not respond" (response 502).
