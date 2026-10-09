@@ -29,6 +29,29 @@ func TestRunFindsNothingInMatchingScenario(t *testing.T) {
 	}
 }
 
+type customProblem string
+
+func (p customProblem) String() string { return string(p) }
+
+func TestRunReportsFailedExpectations(t *testing.T) {
+	s := &Scenario[fact]{}
+	s.When(Get("/repositories")).
+		ExpectStatus(http.StatusOK).
+		ExpectFacts().
+		Expect(func() Problem { return nil }).
+		Expect(func() Problem { return customProblem("the check failed") })
+
+	ok := func(*journal.Journal[fact]) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	}
+
+	problems := s.Run(ok)
+	want := []Problem{customProblem("the check failed")}
+	if !reflect.DeepEqual(problems, want) {
+		t.Errorf("run returned %q, want %q", problems, want)
+	}
+}
+
 func TestRunFindsMissingRoute(t *testing.T) {
 	s := &Scenario[fact]{}
 	s.When(Post("/repositories/acme/api/disconnect")).

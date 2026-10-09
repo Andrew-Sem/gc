@@ -127,6 +127,6 @@ This section describes proposed evidence, not permission to author tests. New or
 - User placed the project vocabulary under `specs/contract` and named project support `specs/extensions`.
 - User chose to leave htmx in the replaceable application; rebuild agents may download it.
 - Stage A preserves current comparable value-fact equality and shallow slice copying rather than introducing a generalized serialization or deep-copy system. See `docs/architecture.md`.
-- User chose embedding the generic scenario instead of forwarding its methods; project-specific setup and expectations are separate statements around the common fluent chain.
+- User chose embedding the generic scenario instead of forwarding its methods. Project setup starts the fluent chain, and project checks join it as values passed to `Expect` (2026-10-09), so a scenario reads as one chain.
 - User requested complete migration: validation cases now exercise HTTP; htmx checks consume public HTTP responses from `specs`, and `internal` contains no test files.
 - User approved removing `specs/htmx_test.go` and the technical contract added for it: retain feature HTML assertions and verify actual browser behavior during acceptance instead of testing htmx configuration details.

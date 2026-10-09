@@ -24,10 +24,11 @@ For this project, the factory is `web.New(contract.Dependencies) http.Handler`, 
 
 Each scenario gets a fresh journal and fake GitHub. `Given` seeds the journal, `When` sends a
 request directly to the handler, and `ExpectFacts` compares the complete ordered appended
-suffix. `ExpectFacts()` explicitly requires an empty suffix. Project-specific checks use
-`ExpectCheck`; common HTTP and HTML checks stay in the framework. The project scenario embeds the generic scenario, so common methods are reused directly.
-Project-specific setup and expectations are separate statements: common fluent methods return
-the generic scenario, which does not expose GitHub methods.
+suffix. `ExpectFacts()` explicitly requires an empty suffix. Project-specific checks are
+values passed to `Expect`, such as `Expect(s.GitHubNotAsked())`; common HTTP and HTML checks
+stay in the framework. The project scenario embeds the generic scenario, so common methods are
+reused directly. Common fluent methods return the generic scenario, so a scenario chain starts
+with project setup such as `GivenGitHubSees` and ends with project checks passed to `Expect`.
 
 Fact comparison keeps the existing Go equality semantics. Current project facts are immutable,
 comparable value structs. The journal copies its slice on read, not an arbitrary nested object

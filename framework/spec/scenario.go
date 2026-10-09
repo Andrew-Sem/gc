@@ -67,7 +67,7 @@ func (s *Scenario[F]) ExpectText(selector, text string) *Scenario[F] {
 	return s
 }
 
-func (s *Scenario[F]) ExpectCheck(check func() Problem) *Scenario[F] {
+func (s *Scenario[F]) Expect(check func() Problem) *Scenario[F] {
 	s.checks = append(s.checks, check)
 	return s
 }

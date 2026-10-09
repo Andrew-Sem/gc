@@ -13,8 +13,8 @@ func TestRunFindsGitHubAsked(t *testing.T) {
 	s := newScenario(&spec.Scenario[contract.Fact]{})
 	s.When(spec.Post("/repositories")).
 		ExpectStatus(http.StatusOK).
-		ExpectFacts()
-	s.ExpectGitHubNotAsked()
+		ExpectFacts().
+		Expect(s.GitHubNotAsked())
 
 	asksGitHub := func(deps contract.Dependencies) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +27,24 @@ func TestRunFindsGitHubAsked(t *testing.T) {
 	want := []spec.Problem{githubAsked{got: []string{"acme/api"}}}
 	if !reflect.DeepEqual(problems, want) {
 		t.Errorf("run returned %q, want %q", problems, want)
+	}
+}
+
+func TestRunAcceptsGitHubNotAsked(t *testing.T) {
+	s := newScenario(&spec.Scenario[contract.Fact]{})
+	s.When(spec.Post("/repositories")).
+		ExpectStatus(http.StatusOK).
+		ExpectFacts().
+		Expect(s.GitHubNotAsked())
+
+	ignoresGitHub := func(contract.Dependencies) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+	}
+
+	if problems := s.Run(s.app(ignoresGitHub)); len(problems) != 0 {
+		t.Errorf("run returned %q, want no problems", problems)
 	}
 }
 
