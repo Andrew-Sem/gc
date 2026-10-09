@@ -1,8 +1,6 @@
 package domain
 
 import (
-	"maps"
-	"slices"
 	"strings"
 
 	"github.com/Andrew-Sem/gc/specs/contract"
@@ -27,18 +25,22 @@ func IsConnected(facts []contract.Fact, fullName string) bool {
 
 func ValidFullName(fullName string) bool {
 	owner, name, found := strings.Cut(fullName, "/")
-	return found && owner != "" && name != "" && !strings.Contains(name, "/")
+	return found && owner != "" && name != "" && !strings.Contains(name, "/") && !strings.Contains(fullName, " ")
 }
 
 func ConnectedRepositories(facts []contract.Fact) []string {
-	connected := map[string]bool{}
-	for _, f := range facts {
-		switch f := f.(type) {
+	seen := map[string]bool{}
+	var repositories []string
+	for i := len(facts) - 1; i >= 0; i-- {
+		switch f := facts[i].(type) {
 		case contract.RepositoryConnected:
-			connected[f.FullName] = true
+			if !seen[f.FullName] {
+				repositories = append(repositories, f.FullName)
+			}
+			seen[f.FullName] = true
 		case contract.RepositoryDisconnected:
-			delete(connected, f.FullName)
+			seen[f.FullName] = true
 		}
 	}
-	return slices.Sorted(maps.Keys(connected))
+	return repositories
 }

@@ -55,7 +55,7 @@ func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
-	fullName := r.FormValue("repo")
+	fullName := strings.ToLower(strings.Trim(r.FormValue("repo"), " "))
 	if !domain.ValidFullName(fullName) {
 		s.renderPanel(w, r, http.StatusUnprocessableEntity, malformedName)
 		return

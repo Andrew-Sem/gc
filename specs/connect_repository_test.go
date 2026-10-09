@@ -59,7 +59,36 @@ func TestConnectRepository(t *testing.T) {
 		s.ExpectGitHubNotAsked()
 	})
 
-	for _, name := range []string{"acmeapi", "/api", "acme/", "acme/api/extra", ""} {
+	for _, name := range []string{"Acme/API", " acme/api ", " Acme/API "} {
+		f.Run("connect a normalized repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
+			s.GivenGitHubSees("acme/api")
+
+			s.Covers("REPO-1.1", "REPO-1.6").
+				When(spec.Post("/repositories").WithForm("repo", name)).
+				Then("the normalized repository name is recorded and displayed").
+				ExpectStatus(http.StatusOK).
+				ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
+				ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
+				ExpectNoElement(`#repositories-panel [role="alert"]`)
+		})
+	}
+
+	for _, name := range []string{"Acme/API", " acme/api ", " Acme/API "} {
+		f.Run("connect an already connected normalized repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
+			s.Covers("REPO-1.3", "REPO-1.6").
+				Given(contract.RepositoryConnected{FullName: "acme/api"}).
+				When(spec.Post("/repositories").WithForm("repo", name)).
+				Then("nothing more is recorded and GitHub is not asked").
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
+				ExpectNoElement(`#repositories-panel [role="alert"]`)
+
+			s.ExpectGitHubNotAsked()
+		})
+	}
+
+	for _, name := range []string{"acmeapi", "/api", "acme/", "acme/api/extra", "", "ac me/api", "acme/ap i", "acme /api", "acme/ api", "   "} {
 		f.Run("reject malformed repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
 			s.GivenGitHubSees(name)
 			s.Covers("REPO-1.4").
@@ -99,6 +128,78 @@ func TestConnectRepository(t *testing.T) {
 			ExpectElement(`#repositories li[data-repository="acme/api"]`).
 			ExpectNoElement(`#repositories li[data-repository="acme/old"]`)
 	})
+
+	f.Run("repositories page lists newest connections first", func(s *extensions.Scenario) {
+		s.Covers("REPO-2.1").
+			Given(
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/worker"},
+				contract.RepositoryConnected{FullName: "acme/web"},
+			).
+			When(spec.Get("/repositories")).
+			Then("repositories are listed as web, worker, api").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
+			ExpectElement(`#repositories > li:nth-child(2)[data-repository="acme/worker"]`).
+			ExpectElement(`#repositories > li:nth-child(3):last-child[data-repository="acme/api"]`)
+	})
+
+	f.Run("connect a repository at the top of the list", func(s *extensions.Scenario) {
+		s.GivenGitHubSees("acme/web")
+
+		s.Covers("REPO-1.1", "REPO-2.1").
+			Given(
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/worker"},
+			).
+			When(spec.Post("/repositories").WithForm("repo", "acme/web")).
+			Then("web is connected above worker and api").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RepositoryConnected{FullName: "acme/web"}).
+			ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
+			ExpectElement(`#repositories > li:nth-child(2)[data-repository="acme/worker"]`).
+			ExpectElement(`#repositories > li:nth-child(3):last-child[data-repository="acme/api"]`)
+	})
+
+	f.Run("reconnect a repository at the top of the list", func(s *extensions.Scenario) {
+		s.GivenGitHubSees("acme/web")
+
+		s.Covers("REPO-2.2", "REPO-3.3").
+			Given(
+				contract.RepositoryConnected{FullName: "acme/web"},
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/worker"},
+				contract.RepositoryDisconnected{FullName: "acme/web"},
+			).
+			When(spec.Post("/repositories").WithForm("repo", "acme/web")).
+			Then("web is reconnected above worker and api without a duplicate row").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RepositoryConnected{FullName: "acme/web"}).
+			ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
+			ExpectElement(`#repositories > li:nth-child(2)[data-repository="acme/worker"]`).
+			ExpectElement(`#repositories > li:nth-child(3):last-child[data-repository="acme/api"]`)
+	})
+
+	for _, name := range []string{"acme/api", " Acme/API "} {
+		f.Run("connect an already connected repository without reordering "+strconv.Quote(name), func(s *extensions.Scenario) {
+			s.Covers("REPO-1.3", "REPO-2.3").
+				Given(
+					contract.RepositoryConnected{FullName: "acme/api"},
+					contract.RepositoryConnected{FullName: "acme/worker"},
+					contract.RepositoryConnected{FullName: "acme/web"},
+				).
+				When(spec.Post("/repositories").WithForm("repo", name)).
+				Then("repositories remain listed as web, worker, api and no fact is recorded").
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
+				ExpectElement(`#repositories > li:nth-child(2)[data-repository="acme/worker"]`).
+				ExpectElement(`#repositories > li:nth-child(3):last-child[data-repository="acme/api"]`)
+
+			s.ExpectGitHubNotAsked()
+		})
+	}
 
 	f.Run("repositories page offers to disconnect each repository", func(s *extensions.Scenario) {
 		s.Covers("REPO-3").

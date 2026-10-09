@@ -39,13 +39,29 @@ REPO-1.3. Connecting an already connected repository writes no facts and does no
 
 REPO-1.4. If the string is not of the form `owner/name`, no fact is written, GitHub is not asked,
 and the page shows the error "Enter the repository as owner/name" (response 422). Both parts
-must be nonempty, separated by exactly one slash. Invalid examples: `acmeapi`, `/api`,
-`acme/`, `acme/api/extra`, and the empty string.
+must be nonempty, separated by exactly one slash, with no spaces inside either part or next
+to the slash. Invalid examples: `acmeapi`, `/api`, `acme/`, `acme/api/extra`, `ac me/api`,
+`acme/ap i`, `acme /api`, `acme/ api`, and the empty string.
 
 REPO-1.5. If GitHub does not respond, no fact is written, and the page shows the error "Could not
 check access: GitHub did not respond" (response 502).
 
+REPO-1.6. Before validating a submitted repository name, checking whether it is already
+connected, or asking GitHub, remove surrounding spaces and lowercase the name. For example,
+` Acme/API ` becomes `acme/api`. Use this normalized name in the access check, journal fact,
+and displayed repository name. Submitting another casing or surrounding spaces for an
+already connected repository follows REPO-1.3.
+
 REPO-2. Connected repositories are shown on the page as a list.
+
+REPO-2.1. The page and updated list responses show the most recently connected repository
+first, following the order of connection facts in the journal rather than alphabetical order.
+
+REPO-2.2. Disconnecting and reconnecting a repository moves it to the top of the list. The
+remaining repositories keep their relative order.
+
+REPO-2.3. Connecting an already connected repository leaves the list order unchanged,
+including when the submitted name differs only in casing or surrounding spaces.
 
 REPO-3. Each repository in the list has a disconnect button next to it.
 
