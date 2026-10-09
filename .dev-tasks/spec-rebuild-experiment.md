@@ -36,6 +36,23 @@ Use current code as evidence of implicit choices, not as the authority for requi
 
 After direct permission, draft the missing executable specifications and any required framework checks. The user reviews them before an implementation agent receives a frozen baseline. Review clause coverage semantically; `Covers` alone does not prove a clause is fully checked.
 
+#### Approved behavior decisions (2026-10-08)
+
+- Repository input is lowercased and stripped of surrounding spaces before validation, duplicate detection, and access checks. Internal spaces are rejected. This part has approved executable specifications and is implemented.
+- A rejected GitHub token produces a distinct operator-facing error directing the operator to check `GITHUB_TOKEN`. Do not connect the repository or append a fact. Never display the token or the raw GitHub error response.
+- GitHub unavailability or a server error produces an access-check failure asking the operator to try later. Do not retry automatically or append a fact.
+- Wait at most five seconds for GitHub; timeout has the same failure behavior, with no automatic retry or connection fact.
+- List repositories by most recent connection first. Disconnecting and reconnecting moves the repository to the top. Repeating a connection that is already active leaves its position unchanged.
+- Without `GITHUB_TOKEN`, startup fails with a clear error that does not disclose a token.
+- The listen address defaults to `localhost:8080` and is configurable through `GC_ADDR`. An invalid address or occupied port causes startup to fail with a clear error.
+- Use the standard GitHub API by default, with `GITHUB_API_URL` overriding the endpoint for a local HTTP fixture.
+
+Name normalization and list ordering now have user-reviewed executable specifications and are implemented. All 31 repository scenarios pass; lint and build pass. The remaining decisions still need contract wording and executable-specification drafts, explicit permission to write those tests, and user review. Exact English error wording, application response statuses for the new failure cases, and any remaining GitHub protocol mappings are not yet approved.
+
+A draft of GitHub interaction and token-protection specifications was written without user
+review and deleted at the user's request on 2026-10-09. GitHub specifications will be written
+again step by step with user review. REPO-1.5 keeps its earlier wording until then.
+
 ### Stage C — finish and accept the reference feature
 
 Implement the approved specifications, including a real GitHub HTTP adapter replacing `cmd/gc`'s `noGitHub`. Use the project fake for application scenarios and a local HTTP server for adapter specifications. The fixture checks outbound requests and supplies controlled responses; it is part of the visible specification support.
