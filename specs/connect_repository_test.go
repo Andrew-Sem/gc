@@ -13,7 +13,7 @@ import (
 func TestConnectRepository(t *testing.T) {
 	f := extensions.NewFeature(t, "connect-repository.md")
 	f.Run("repositories page shows the connect form", func(s *extensions.Scenario) {
-		s.Covers("REPO-1").
+		s.Covers("REPO-1.1.1").
 			When(spec.Get("/repositories")).
 			Then("the connect form is shown and wired to htmx").
 			ExpectStatus(http.StatusOK).
@@ -27,7 +27,7 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("connect a repository the token can see", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api")
 
-		s.Covers("REPO-1.1").
+		s.Covers("REPO-1.2.1", "REPO-1.2.2").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the repository is connected and listed").
 			ExpectStatus(http.StatusOK).
@@ -37,7 +37,7 @@ func TestConnectRepository(t *testing.T) {
 	})
 
 	f.Run("connect a repository the token cannot see", func(s *extensions.Scenario) {
-		s.Covers("REPO-1.2").
+		s.Covers("REPO-1.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request is rejected and nothing is connected").
 			ExpectStatus(http.StatusUnprocessableEntity).
@@ -48,7 +48,7 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("connect an already connected repository", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api")
 
-		s.Covers("REPO-1.3").
+		s.Covers("REPO-1.4.1", "REPO-1.4.2").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("nothing more is recorded and GitHub is not asked").
@@ -63,7 +63,7 @@ func TestConnectRepository(t *testing.T) {
 		f.Run("connect a normalized repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
 			s.GivenGitHubSees("acme/api")
 
-			s.Covers("REPO-1.1", "REPO-1.6").
+			s.Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-1.7.1", "REPO-1.7.2").
 				When(spec.Post("/repositories").WithForm("repo", name)).
 				Then("the normalized repository name is recorded and displayed").
 				ExpectStatus(http.StatusOK).
@@ -75,7 +75,7 @@ func TestConnectRepository(t *testing.T) {
 
 	for _, name := range []string{"Acme/API", " acme/api ", " Acme/API "} {
 		f.Run("connect an already connected normalized repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
-			s.Covers("REPO-1.3", "REPO-1.6").
+			s.Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-1.7.3").
 				Given(contract.RepositoryConnected{FullName: "acme/api"}).
 				When(spec.Post("/repositories").WithForm("repo", name)).
 				Then("nothing more is recorded and GitHub is not asked").
@@ -91,7 +91,7 @@ func TestConnectRepository(t *testing.T) {
 	for _, name := range []string{"acmeapi", "/api", "acme/", "acme/api/extra", "", "ac me/api", "acme/ap i", "acme /api", "acme/ api", "   "} {
 		f.Run("reject malformed repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
 			s.GivenGitHubSees(name)
-			s.Covers("REPO-1.4").
+			s.Covers("REPO-1.5.1", "REPO-1.5.2").
 				When(spec.Post("/repositories").WithForm("repo", name)).
 				Then("the request is rejected and GitHub is not asked").
 				ExpectStatus(http.StatusUnprocessableEntity).
@@ -104,7 +104,7 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("connect while GitHub does not answer", func(s *extensions.Scenario) {
 		s.GivenGitHubDoesNotAnswer()
 
-		s.Covers("REPO-1.5").
+		s.Covers("REPO-1.6.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request fails and nothing is connected").
 			ExpectStatus(http.StatusBadGateway).
@@ -113,7 +113,7 @@ func TestConnectRepository(t *testing.T) {
 	})
 
 	f.Run("repositories page lists connected repositories", func(s *extensions.Scenario) {
-		s.Covers("REPO-2").
+		s.Covers("REPO-2.1.1", "REPO-2.1.2").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/web"},
@@ -130,7 +130,7 @@ func TestConnectRepository(t *testing.T) {
 	})
 
 	f.Run("repositories page lists newest connections first", func(s *extensions.Scenario) {
-		s.Covers("REPO-2.1").
+		s.Covers("REPO-2.2.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/worker"},
@@ -148,7 +148,7 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("connect a repository at the top of the list", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/web")
 
-		s.Covers("REPO-1.1", "REPO-2.1").
+		s.Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-2.2.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/worker"},
@@ -165,7 +165,7 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("reconnect a repository at the top of the list", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/web")
 
-		s.Covers("REPO-2.2", "REPO-3.3").
+		s.Covers("REPO-2.2.2", "REPO-3.4.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/web"},
 				contract.RepositoryConnected{FullName: "acme/api"},
@@ -183,7 +183,7 @@ func TestConnectRepository(t *testing.T) {
 
 	for _, name := range []string{"acme/api", " Acme/API "} {
 		f.Run("connect an already connected repository without reordering "+strconv.Quote(name), func(s *extensions.Scenario) {
-			s.Covers("REPO-1.3", "REPO-2.3").
+			s.Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-2.2.3").
 				Given(
 					contract.RepositoryConnected{FullName: "acme/api"},
 					contract.RepositoryConnected{FullName: "acme/worker"},
@@ -202,7 +202,7 @@ func TestConnectRepository(t *testing.T) {
 	}
 
 	f.Run("repositories page offers to disconnect each repository", func(s *extensions.Scenario) {
-		s.Covers("REPO-3").
+		s.Covers("REPO-3.1.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/web"},
@@ -216,7 +216,7 @@ func TestConnectRepository(t *testing.T) {
 	})
 
 	f.Run("disconnect a connected repository", func(s *extensions.Scenario) {
-		s.Covers("REPO-3.1").
+		s.Covers("REPO-3.2.1", "REPO-3.2.2").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/web"},
@@ -230,7 +230,7 @@ func TestConnectRepository(t *testing.T) {
 	})
 
 	f.Run("disconnect an already disconnected repository", func(s *extensions.Scenario) {
-		s.Covers("REPO-3.2").
+		s.Covers("REPO-3.3.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryDisconnected{FullName: "acme/api"},
@@ -246,7 +246,7 @@ func TestConnectRepository(t *testing.T) {
 	f.Run("reconnect a disconnected repository", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api")
 
-		s.Covers("REPO-3.3").
+		s.Covers("REPO-3.4.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryDisconnected{FullName: "acme/api"},

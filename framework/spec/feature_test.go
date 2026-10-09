@@ -14,21 +14,59 @@ import (
 
 func TestParseClauses(t *testing.T) {
 	tests := []struct {
-		name string
-		text string
-		want []string
+		name         string
+		text         string
+		want         clauses
+		wantProblems []string
 	}{
-		{"clauses at line start", "REPO-1. Page.\n\nREPO-1.1. Connect.\n", []string{"REPO-1", "REPO-1.1"}},
-		{"deep numbering", "REPO-1.2.3. Deep.\n", []string{"REPO-1.2.3"}},
-		{"mention inside a line", "See REPO-1. for details.\n", nil},
-		{"no dot after the id", "REPO-1 has no dot.\n", nil},
+		{"headings group three-level clauses",
+			"## A-1. Area\n\n### A-1.1. Requirement\n\nA-1.1.1. Promise.\n\nA-1.1.2. Another.\n",
+			clauses{groups: []group{{"A-1", "Area"}, {"A-1.1", "Requirement"}}, leaves: []string{"A-1.1.1", "A-1.1.2"}}, nil},
+		{"mention inside a line", "## A-1. Area\n### A-1.1. R\nA-1.1.1. P.\nSee A-1.1.2. for details.\n",
+			clauses{groups: []group{{"A-1", "Area"}, {"A-1.1", "R"}}, leaves: []string{"A-1.1.1"}}, nil},
+		{"no dot after the id", "A-1.1.1 has no dot.\n", clauses{}, nil},
+		{"clause outside its heading", "## A-1. Area\n### A-1.1. R\nA-1.2.1. P.\n",
+			clauses{groups: []group{{"A-1", "Area"}, {"A-1.1", "R"}}, leaves: []string{"A-1.2.1"}},
+			[]string{"A-1.2.1 is not under heading A-1.2", "A-1.1 has no clauses"}},
+		{"requirement outside its area", "## A-1. Area\n### A-2.1. R\nA-2.1.1. P.\n",
+			clauses{groups: []group{{"A-1", "Area"}, {"A-2.1", "R"}}, leaves: []string{"A-2.1.1"}},
+			[]string{"A-2.1 is not under heading A-2", "A-1 has no clauses"}},
+		{"clause with two levels", "## A-1. Area\n### A-1.1. R\nA-1.1.1. P.\nA-1.2. Old style.\n",
+			clauses{groups: []group{{"A-1", "Area"}, {"A-1.1", "R"}}, leaves: []string{"A-1.1.1"}},
+			[]string{"A-1.2 must be a heading with one or two levels or a clause with three levels"}},
+		{"heading with three levels", "## A-1. Area\n### A-1.1. R\nA-1.1.1. P.\n#### A-1.1.2. Deep\n",
+			clauses{groups: []group{{"A-1", "Area"}, {"A-1.1", "R"}}, leaves: []string{"A-1.1.1"}},
+			[]string{"A-1.1.2 must be a heading with one or two levels or a clause with three levels"}},
+		{"duplicate id", "## A-1. Area\n### A-1.1. R\nA-1.1.1. P.\nA-1.1.1. Again.\n",
+			clauses{groups: []group{{"A-1", "Area"}, {"A-1.1", "R"}}, leaves: []string{"A-1.1.1"}},
+			[]string{"A-1.1.1 appears twice"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := parseClauses(tt.text); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseClauses() = %q, want %q", got, tt.want)
+			got, problems := parseClauses(tt.text)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("parseClauses() = %+v, want %+v", got, tt.want)
+			}
+			if !reflect.DeepEqual(problems, tt.wantProblems) {
+				t.Errorf("parseClauses() problems = %q, want %q", problems, tt.wantProblems)
 			}
 		})
+	}
+}
+
+func TestGroupReport(t *testing.T) {
+	c := clauses{
+		groups: []group{{"A-1", "Area"}, {"A-1.1", "Done"}, {"A-1.2", "Half"}, {"A-1.3", "Missing"}},
+		leaves: []string{"A-1.1.1", "A-1.2.1", "A-1.2.2", "A-1.3.1"},
+	}
+	want := []string{
+		"A-1 Area: partial, 2 of 4",
+		"A-1.1 Done: complete, 1 of 1",
+		"A-1.2 Half: partial, 1 of 2",
+		"A-1.3 Missing: none, 0 of 1",
+	}
+	if got := groupReport(c, []string{"A-1.1.1", "A-1.2.1", "A-1.2.1"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("groupReport() = %q, want %q", got, want)
 	}
 }
 
@@ -59,9 +97,11 @@ func TestFeatureReportsThroughGoTest(t *testing.T) {
 		wantOutput []string
 		notOutput  string
 	}{
-		{"report", true, []string{"uncovered: [DEMO-2]", "covered: [DEMO-1]"}, ""},
+		{"report", true, []string{"DEMO-1 Pages: partial, 1 of 2", "DEMO-1.1 Repositories page: partial, 1 of 2", "uncovered: [DEMO-1.1.2]"}, ""},
 		{"failing scenario", false, []string{"expected status 200, got 404"}, ""},
-		{"unknown clause", false, []string{"clause DEMO-9 is not in contract testdata/contract.md"}, ""},
+		{"unknown clause", false, []string{"clause DEMO-9.1.1 is not in contract testdata/contract.md"}, ""},
+		{"heading covered", false, []string{"DEMO-1.1 is a heading in contract testdata/contract.md; cover its clauses instead"}, ""},
+		{"malformed contract", false, []string{"contract testdata/malformed.md: DEMO-1.1 has no clauses"}, ""},
 		{"missing contract", false, []string{"cannot read contract"}, "still running"},
 	}
 	for _, tt := range tests {
@@ -109,7 +149,7 @@ func TestFeatureHelper(t *testing.T) {
 	switch helper {
 	case "report":
 		f := NewFeature[string](t, "testdata/contract.md")
-		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-1") }, newApp)
+		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-1.1.1") }, newApp)
 	case "failing scenario":
 		f := NewFeature[string](t, "testdata/contract.md")
 		f.Run("missing page", func(s *Scenario[string]) {
@@ -119,7 +159,12 @@ func TestFeatureHelper(t *testing.T) {
 		}, newApp)
 	case "unknown clause":
 		f := NewFeature[string](t, "testdata/contract.md")
-		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-9") }, newApp)
+		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-9.1.1") }, newApp)
+	case "heading covered":
+		f := NewFeature[string](t, "testdata/contract.md")
+		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-1.1") }, newApp)
+	case "malformed contract":
+		NewFeature[string](t, "testdata/malformed.md")
 	case "missing contract":
 		NewFeature[string](t, "testdata/missing.md")
 		t.Log("still running")
