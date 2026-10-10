@@ -10,19 +10,23 @@ restart persistence are planned separately.
 |---|---|
 | `framework/journal` | Generic append-only journal in memory; knows no project event types. |
 | `framework/spec` | Generic Given/When/Then scenarios, clause reporting, HTTP and HTML assertions, and exact ordered new-fact checks. |
-| `specs/contract` | Project event definitions and the Journal/GitHub dependency interfaces shared by specifications and application. |
-| `specs/extensions` | Project scenario methods, fake GitHub, and the adapter that supplies the application factory to the framework. |
+| `specs/contract` | Project event definitions, the Journal interface, and GitHub settings (API URL and token) shared by specifications and application. |
+| `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, and the adapter that supplies the application factory to the framework. |
 | `specs` | Feature contracts and executable scenarios. |
 | `internal/domain` | Repository-name validation and folds over project facts. |
 | `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
-| `cmd/gc` | Reads the address, wires the in-memory journal and GitHub placeholder, starts the server. |
+| `internal/github` | GitHub API client for the repository access check. |
+| `cmd/gc` | Reads the address and GitHub settings, wires the in-memory journal, starts the server. |
 
 The framework imports neither the project contract nor application packages, including in its
 own checks. Each project chooses its fact type and supplies a factory to `Feature.Run`.
 For this project, the factory is `web.New(contract.Dependencies) http.Handler`, connected in
 `specs/extensions/app.go`. Only that integration file imports the application.
 
-Each scenario gets a fresh journal and fake GitHub. `Given` seeds the journal, `When` sends a
+Each scenario gets a fresh journal and its own fake GitHub HTTP server. The application talks
+to it through its real GitHub client, so specs check the client too; the fake answers like
+GitHub: 200 for a visible repository, 404 for an invisible one or a request without a token,
+401 for a wrong token. `Given` seeds the journal, `When` sends a
 request directly to the handler, and `ExpectFacts` compares the complete ordered appended
 suffix. `ExpectFacts()` explicitly requires an empty suffix. Project-specific checks are
 values passed to `Expect`, such as `Expect(s.GitHubNotAsked())`; common HTTP and HTML checks
@@ -53,7 +57,7 @@ Planned, not built yet:
 | Package | Responsibility |
 |---|---|
 | `internal/domain` | `Decide` and `Evolve` on top of the fact vocabulary. |
-| `internal/github` | GitHub format: parsing webhooks into commands, parsing API responses. |
+| `internal/github` | Parsing webhooks into commands. |
 | `internal/store` | Journal, task queue, and settings in SQLite; replaces the in-memory journal. |
 | `internal/agent` | Running Codex, working copies, `git`, creating PRs. |
 | `internal/app` | Wiring: scheduler, task executor, ports, start and stop; `cmd/gc` assembles it. |

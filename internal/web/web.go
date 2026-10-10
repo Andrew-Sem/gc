@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/github"
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
@@ -33,11 +34,11 @@ const (
 
 type server struct {
 	journal contract.Journal
-	github  contract.GitHub
+	github  *github.Client
 }
 
 func New(deps contract.Dependencies) http.Handler {
-	s := &server{journal: deps.Journal, github: deps.GitHub}
+	s := &server{journal: deps.Journal, github: github.New(deps.GitHub)}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", http.FileServerFS(static))
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
@@ -64,7 +65,7 @@ func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 		s.renderPanel(w, r, http.StatusOK, noProblem)
 		return
 	}
-	ok, err := s.github.CanAccess(fullName)
+	ok, err := s.github.CanAccess(r.Context(), fullName)
 	if err != nil {
 		s.renderPanel(w, r, http.StatusBadGateway, githubSilent)
 		return

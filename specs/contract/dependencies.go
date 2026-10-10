@@ -5,8 +5,9 @@ type Journal interface {
 	Facts() []Fact
 }
 
-type GitHub interface {
-	CanAccess(fullName string) (bool, error)
+type GitHub struct {
+	APIURL string
+	Token  string
 }
 
 type Dependencies struct {

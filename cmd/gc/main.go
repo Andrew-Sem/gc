@@ -2,7 +2,6 @@ package main
 
 import (
 	"cmp"
-	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -12,14 +11,15 @@ import (
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
-type noGitHub struct{}
-
-func (noGitHub) CanAccess(string) (bool, error) {
-	return false, errors.New("GitHub access check is not implemented yet")
-}
-
 func main() {
 	addr := cmp.Or(os.Getenv("GC_ADDR"), "localhost:8080")
+	deps := contract.Dependencies{
+		Journal: &journal.Journal[contract.Fact]{},
+		GitHub: contract.GitHub{
+			APIURL: cmp.Or(os.Getenv("GITHUB_API_URL"), "https://api.github.com"),
+			Token:  os.Getenv("GITHUB_TOKEN"),
+		},
+	}
 	log.Printf("admin: http://%s/repositories", addr)
-	log.Fatal(http.ListenAndServe(addr, web.New(contract.Dependencies{Journal: &journal.Journal[contract.Fact]{}, GitHub: noGitHub{}})))
+	log.Fatal(http.ListenAndServe(addr, web.New(deps)))
 }
