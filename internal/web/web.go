@@ -32,6 +32,8 @@ const (
 	malformedName
 	githubSilent
 	tokenRejected
+	githubFailed
+	rateLimited
 )
 
 type server struct {
@@ -68,11 +70,17 @@ func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, err := s.github.CanAccess(r.Context(), fullName)
-	if errors.Is(err, github.ErrTokenRejected) {
+	switch {
+	case errors.Is(err, github.ErrTokenRejected):
 		s.renderPanel(w, r, http.StatusBadGateway, tokenRejected)
 		return
-	}
-	if err != nil {
+	case errors.Is(err, github.ErrRateLimited):
+		s.renderPanel(w, r, http.StatusBadGateway, rateLimited)
+		return
+	case errors.Is(err, github.ErrFailed):
+		s.renderPanel(w, r, http.StatusBadGateway, githubFailed)
+		return
+	case err != nil:
 		s.renderPanel(w, r, http.StatusBadGateway, githubSilent)
 		return
 	}

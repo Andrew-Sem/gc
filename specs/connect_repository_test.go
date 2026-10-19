@@ -36,7 +36,17 @@ func TestConnectRepository(t *testing.T) {
 	})
 
 	f.Run("connect a repository the token cannot see", func(s *extensions.Scenario) {
-		s.Covers("REPO-1.3.1").
+		s.Covers("REPO-1.3.1", "REPO-1.3.2").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("the request is rejected and nothing is connected").
+			ExpectStatus(http.StatusUnprocessableEntity).
+			ExpectFacts().
+			ExpectText(`#repositories-panel [role="alert"]`, "No access to this repository")
+	})
+
+	f.Run("connect a repository GitHub forbids", func(s *extensions.Scenario) {
+		s.GivenGitHubAnswers(http.StatusForbidden, "X-RateLimit-Remaining", "4999").
+			Covers("REPO-1.3.1", "REPO-1.3.2").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request is rejected and nothing is connected").
 			ExpectStatus(http.StatusUnprocessableEntity).
@@ -115,6 +125,43 @@ func TestConnectRepository(t *testing.T) {
 			ExpectFacts().
 			ExpectText(`#repositories-panel [role="alert"]`, "GitHub rejected the token. Check GITHUB_TOKEN.")
 	})
+
+	for _, status := range []int{
+		http.StatusBadRequest,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+	} {
+		f.Run("connect while GitHub fails with "+strconv.Itoa(status), func(s *extensions.Scenario) {
+			s.GivenGitHubAnswers(status).
+				Covers("REPO-1.9.1").
+				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+				Then("the request fails and nothing is connected").
+				ExpectStatus(http.StatusBadGateway).
+				ExpectFacts().
+				ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub failed. Try again later.")
+		})
+	}
+
+	for _, limit := range []struct {
+		name   string
+		status int
+		header []string
+	}{
+		{"429", http.StatusTooManyRequests, nil},
+		{"403 with no requests remaining", http.StatusForbidden, []string{"X-RateLimit-Remaining", "0"}},
+		{"403 with retry-after", http.StatusForbidden, []string{"Retry-After", "60"}},
+	} {
+		f.Run("connect while GitHub limits requests with "+limit.name, func(s *extensions.Scenario) {
+			s.GivenGitHubAnswers(limit.status, limit.header...).
+				Covers("REPO-1.10.1", "REPO-1.10.2").
+				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+				Then("the request fails and nothing is connected").
+				ExpectStatus(http.StatusBadGateway).
+				ExpectFacts().
+				ExpectText(`#repositories-panel [role="alert"]`, "GitHub rate limit reached. Try again later.")
+		})
+	}
 
 	f.Run("repositories page lists connected repositories", func(s *extensions.Scenario) {
 		s.Covers("REPO-2.1.1", "REPO-2.1.2").

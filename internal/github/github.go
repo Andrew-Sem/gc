@@ -12,7 +12,11 @@ import (
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
-var ErrTokenRejected = errors.New("GitHub rejected the token")
+var (
+	ErrTokenRejected = errors.New("GitHub rejected the token")
+	ErrRateLimited   = errors.New("GitHub rate limit reached")
+	ErrFailed        = errors.New("GitHub failed")
+)
 
 type Client struct {
 	apiURL string
@@ -42,13 +46,25 @@ func (c *Client) CanAccess(ctx context.Context, fullName string) (bool, error) {
 		return false, err
 	}
 	defer resp.Body.Close()
-	switch resp.StatusCode {
-	case http.StatusOK:
+	switch {
+	case resp.StatusCode == http.StatusOK:
 		return true, nil
-	case http.StatusNotFound:
-		return false, nil
-	case http.StatusUnauthorized:
+	case resp.StatusCode == http.StatusUnauthorized:
 		return false, ErrTokenRejected
+	case rateLimited(resp):
+		return false, ErrRateLimited
+	case resp.StatusCode == http.StatusNotFound, resp.StatusCode == http.StatusForbidden:
+		return false, nil
 	}
-	return false, fmt.Errorf("GitHub answered %d", resp.StatusCode)
+	return false, fmt.Errorf("%w: answered %d", ErrFailed, resp.StatusCode)
+}
+
+func rateLimited(resp *http.Response) bool {
+	switch resp.StatusCode {
+	case http.StatusTooManyRequests:
+		return true
+	case http.StatusForbidden:
+		return resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != ""
+	}
+	return false
 }

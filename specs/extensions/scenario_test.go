@@ -63,6 +63,7 @@ func TestFakeGitHubAnswersLikeGitHub(t *testing.T) {
 		{"no token", "/repos/acme/api", "", nil, http.StatusNotFound},
 		{"wrong token", "/repos/acme/api", "Bearer wrong", nil, http.StatusUnauthorized},
 		{"rejected token", "/repos/acme/api", "Bearer " + fakeGitHubToken, func(g *fakeGitHub) { g.rejectsToken = true }, http.StatusUnauthorized},
+		{"canned answer", "/repos/acme/api", "Bearer " + fakeGitHubToken, func(g *fakeGitHub) { g.answer = &cannedAnswer{status: http.StatusServiceUnavailable} }, http.StatusServiceUnavailable},
 		{"another endpoint", "/user/repos", "Bearer " + fakeGitHubToken, nil, http.StatusNotFound},
 		{"no answer", "/repos/acme/api", "Bearer " + fakeGitHubToken, func(g *fakeGitHub) { g.doesNotAnswer = true }, 0},
 	}

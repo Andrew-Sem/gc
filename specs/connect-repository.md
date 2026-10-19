@@ -42,6 +42,9 @@ REPO-1.2.2. If the access check passes, the response shows the repository in the
 REPO-1.3.1. If the repository is inaccessible or does not exist, no fact is written, and the
 page shows the error "No access to this repository" (response 422).
 
+REPO-1.3.2. GitHub reports a repository as inaccessible when it answers 404, or 403 that is not
+a rate limit (REPO-1.10.2).
+
 #### REPO-1.4. The repository is already connected
 
 REPO-1.4.1. Connecting an already connected repository writes no facts (response 200).
@@ -79,6 +82,20 @@ repository follows REPO-1.4.
 
 REPO-1.8.1. If GitHub rejects the token, no fact is written, and the page shows the error
 "GitHub rejected the token. Check GITHUB_TOKEN." (response 502).
+
+#### REPO-1.9. GitHub fails
+
+REPO-1.9.1. If GitHub answers with any other error, for example 400, 500, 502, or 503, no fact
+is written, and the page shows the error "Could not check access: GitHub failed. Try again
+later." (response 502).
+
+#### REPO-1.10. GitHub limits requests
+
+REPO-1.10.1. If GitHub limits requests, no fact is written, and the page shows the error
+"GitHub rate limit reached. Try again later." (response 502).
+
+REPO-1.10.2. GitHub limits requests when it answers 429, or 403 with the header
+`x-ratelimit-remaining: 0` or with a `retry-after` header.
 
 ### REPO-2. Repository list
 

@@ -18,6 +18,12 @@ type fakeGitHub struct {
 	asked         []string
 	doesNotAnswer bool
 	rejectsToken  bool
+	answer        *cannedAnswer
+}
+
+type cannedAnswer struct {
+	status int
+	header []string
 }
 
 func newFakeGitHub() *fakeGitHub {
@@ -30,13 +36,21 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	fullName := strings.TrimPrefix(r.URL.Path, "/repos/")
 	g.mu.Lock()
 	g.asked = append(g.asked, fullName)
-	sees, doesNotAnswer, rejectsToken := slices.Contains(g.sees, fullName), g.doesNotAnswer, g.rejectsToken
+	sees, doesNotAnswer, rejectsToken, answer := slices.Contains(g.sees, fullName), g.doesNotAnswer, g.rejectsToken, g.answer
 	g.mu.Unlock()
 
 	if doesNotAnswer {
 		panic(http.ErrAbortHandler)
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if answer != nil {
+		for i := 0; i+1 < len(answer.header); i += 2 {
+			w.Header().Set(answer.header[i], answer.header[i+1])
+		}
+		w.WriteHeader(answer.status)
+		fmt.Fprintf(w, `{"message":%q}`, http.StatusText(answer.status))
+		return
+	}
 	switch auth := r.Header.Get("Authorization"); {
 	case auth == "":
 		w.WriteHeader(http.StatusNotFound)
