@@ -34,3 +34,12 @@ func (r Request) httpRequest() *http.Request {
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	return request
 }
+
+func (r Request) HTTPRequest(baseURL string) (*http.Request, error) {
+	request, err := http.NewRequest(r.method, baseURL+r.path, strings.NewReader(r.form.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return request, nil
+}

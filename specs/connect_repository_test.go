@@ -336,5 +336,15 @@ func TestConnectRepository(t *testing.T) {
 				ExpectFacts().
 				ExpectBodyWithout(s.GitHubToken())
 		})
+
+		f.RunLaunch("keep the token out of the output when GitHub echoes it with "+strconv.Itoa(answer.github), func(s *extensions.Launch) {
+			s.GivenGitHubEchoesToken().
+				GivenGitHubAnswers(answer.github).
+				Covers("REPO-4.1.3").
+				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+				Then("the token does not reach the output").
+				ExpectStatus(answer.page).
+				ExpectOutputWithout(s.GitHubToken())
+		})
 	}
 }

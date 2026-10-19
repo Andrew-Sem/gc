@@ -133,11 +133,30 @@ func uncovered(clauses, covered []string) []string {
 	return rest
 }
 
+type Custom interface {
+	Covered() []string
+	Run() []Problem
+}
+
 func (f *Feature[F]) Run(name string, describe func(s *Scenario[F]), newApp func(*journal.Journal[F]) http.Handler) {
-	f.t.Run(name, func(t *testing.T) {
+	f.run(name, func() ([]string, func() []Problem) {
 		s := &Scenario[F]{}
 		describe(s)
-		for _, id := range s.covers {
+		return s.covers, func() []Problem { return s.Run(newApp) }
+	})
+}
+
+func (f *Feature[F]) RunCustom(name string, describe func() Custom) {
+	f.run(name, func() ([]string, func() []Problem) {
+		c := describe()
+		return c.Covered(), c.Run
+	})
+}
+
+func (f *Feature[F]) run(name string, describe func() ([]string, func() []Problem)) {
+	f.t.Run(name, func(t *testing.T) {
+		covers, run := describe()
+		for _, id := range covers {
 			switch {
 			case slices.Contains(f.clauses.leaves, id):
 			case slices.ContainsFunc(f.clauses.groups, func(g group) bool { return g.id == id }):
@@ -146,8 +165,8 @@ func (f *Feature[F]) Run(name string, describe func(s *Scenario[F]), newApp func
 				t.Errorf("clause %s is not in contract %s", id, f.contract)
 			}
 		}
-		f.covered = append(f.covered, s.covers...)
-		for _, problem := range s.Run(newApp) {
+		f.covered = append(f.covered, covers...)
+		for _, problem := range run() {
 			t.Errorf("%s", problem)
 		}
 	})

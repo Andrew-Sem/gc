@@ -2,7 +2,9 @@ package main
 
 import (
 	"cmp"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 
@@ -12,14 +14,27 @@ import (
 )
 
 func main() {
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		fail("GITHUB_TOKEN is not set")
+	}
 	addr := cmp.Or(os.Getenv("GC_ADDR"), "localhost:8080")
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		fail(fmt.Sprintf("cannot listen on %s: %v", addr, err))
+	}
 	deps := contract.Dependencies{
 		Journal: &journal.Journal[contract.Fact]{},
 		GitHub: contract.GitHub{
 			APIURL: cmp.Or(os.Getenv("GITHUB_API_URL"), "https://api.github.com"),
-			Token:  os.Getenv("GITHUB_TOKEN"),
+			Token:  token,
 		},
 	}
 	log.Printf("admin: http://%s/repositories", addr)
-	log.Fatal(http.ListenAndServe(addr, web.New(deps)))
+	log.Fatal(http.Serve(listener, web.New(deps)))
+}
+
+func fail(message string) {
+	fmt.Fprintln(os.Stderr, message)
+	os.Exit(1)
 }

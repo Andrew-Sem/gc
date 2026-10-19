@@ -40,6 +40,12 @@ func newFakeGitHub() *fakeGitHub {
 	return g
 }
 
+func (g *fakeGitHub) given(change func(*fakeGitHub)) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	change(g)
+}
+
 func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	fullName := strings.TrimPrefix(r.URL.Path, "/repos/")
 	g.mu.Lock()

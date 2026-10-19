@@ -11,11 +11,13 @@ import (
 )
 
 type Feature struct {
-	core *spec.Feature[contract.Fact]
+	t      *testing.T
+	core   *spec.Feature[contract.Fact]
+	binary string
 }
 
 func NewFeature(t *testing.T, path string) *Feature {
-	return &Feature{core: spec.NewFeature[contract.Fact](t, path)}
+	return &Feature{t: t, core: spec.NewFeature[contract.Fact](t, path)}
 }
 
 func (f *Feature) Run(name string, describe func(*Scenario)) {

@@ -103,6 +103,8 @@ func TestFeatureReportsThroughGoTest(t *testing.T) {
 		{"heading covered", false, []string{"DEMO-1.1 is a heading in contract testdata/contract.md; cover its clauses instead"}, ""},
 		{"malformed contract", false, []string{"contract testdata/malformed.md: DEMO-1.1 has no clauses"}, ""},
 		{"missing contract", false, []string{"cannot read contract"}, "still running"},
+		{"custom scenario", true, []string{"DEMO-1.1 Repositories page: partial, 1 of 2", "uncovered: [DEMO-1.1.1]"}, ""},
+		{"failing custom scenario", false, []string{"the custom check failed", "clause DEMO-9.1.1 is not in contract testdata/contract.md"}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.helper, func(t *testing.T) {
@@ -165,8 +167,24 @@ func TestFeatureHelper(t *testing.T) {
 		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-1.1") }, newApp)
 	case "malformed contract":
 		NewFeature[string](t, "testdata/malformed.md")
+	case "custom scenario":
+		f := NewFeature[string](t, "testdata/contract.md")
+		f.RunCustom("custom", func() Custom { return custom{covers: []string{"DEMO-1.1.2"}} })
+	case "failing custom scenario":
+		f := NewFeature[string](t, "testdata/contract.md")
+		f.RunCustom("custom", func() Custom {
+			return custom{covers: []string{"DEMO-9.1.1"}, problems: []Problem{customProblem("the custom check failed")}}
+		})
 	case "missing contract":
 		NewFeature[string](t, "testdata/missing.md")
 		t.Log("still running")
 	}
 }
+
+type custom struct {
+	covers   []string
+	problems []Problem
+}
+
+func (c custom) Covered() []string { return c.covers }
+func (c custom) Run() []Problem    { return c.problems }

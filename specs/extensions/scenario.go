@@ -17,44 +17,32 @@ func newScenario(core *spec.Scenario[contract.Fact]) *Scenario {
 }
 
 func (s *Scenario) GivenGitHubSees(fullNames ...string) *Scenario {
-	s.github.mu.Lock()
-	defer s.github.mu.Unlock()
-	s.github.sees = fullNames
+	s.github.given(func(g *fakeGitHub) { g.sees = fullNames })
 	return s
 }
 
 func (s *Scenario) GivenGitHubDoesNotAnswer() *Scenario {
-	s.github.mu.Lock()
-	defer s.github.mu.Unlock()
-	s.github.doesNotAnswer = true
+	s.github.given(func(g *fakeGitHub) { g.doesNotAnswer = true })
 	return s
 }
 
 func (s *Scenario) GivenGitHubRejectsToken() *Scenario {
-	s.github.mu.Lock()
-	defer s.github.mu.Unlock()
-	s.github.rejectsToken = true
+	s.github.given(func(g *fakeGitHub) { g.rejectsToken = true })
 	return s
 }
 
 func (s *Scenario) GivenGitHubAnswers(status int, header ...string) *Scenario {
-	s.github.mu.Lock()
-	defer s.github.mu.Unlock()
-	s.github.answer = &cannedAnswer{status: status, header: header}
+	s.github.given(func(g *fakeGitHub) { g.answer = &cannedAnswer{status: status, header: header} })
 	return s
 }
 
 func (s *Scenario) GivenGitHubHangs() *Scenario {
-	s.github.mu.Lock()
-	defer s.github.mu.Unlock()
-	s.github.hangs = true
+	s.github.given(func(g *fakeGitHub) { g.hangs = true })
 	return s
 }
 
 func (s *Scenario) GivenGitHubEchoesToken() *Scenario {
-	s.github.mu.Lock()
-	defer s.github.mu.Unlock()
-	s.github.echoesToken = true
+	s.github.given(func(g *fakeGitHub) { g.echoesToken = true })
 	return s
 }
 
