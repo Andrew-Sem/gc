@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -30,6 +31,7 @@ const (
 	noAccess
 	malformedName
 	githubSilent
+	tokenRejected
 )
 
 type server struct {
@@ -66,6 +68,10 @@ func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, err := s.github.CanAccess(r.Context(), fullName)
+	if errors.Is(err, github.ErrTokenRejected) {
+		s.renderPanel(w, r, http.StatusBadGateway, tokenRejected)
+		return
+	}
 	if err != nil {
 		s.renderPanel(w, r, http.StatusBadGateway, githubSilent)
 		return

@@ -17,6 +17,7 @@ type fakeGitHub struct {
 	sees          []string
 	asked         []string
 	doesNotAnswer bool
+	rejectsToken  bool
 }
 
 func newFakeGitHub() *fakeGitHub {
@@ -29,7 +30,7 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	fullName := strings.TrimPrefix(r.URL.Path, "/repos/")
 	g.mu.Lock()
 	g.asked = append(g.asked, fullName)
-	sees, doesNotAnswer := slices.Contains(g.sees, fullName), g.doesNotAnswer
+	sees, doesNotAnswer, rejectsToken := slices.Contains(g.sees, fullName), g.doesNotAnswer, g.rejectsToken
 	g.mu.Unlock()
 
 	if doesNotAnswer {
@@ -40,7 +41,7 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case auth == "":
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message":"Not Found"}`)
-	case auth != "Bearer "+fakeGitHubToken:
+	case auth != "Bearer "+fakeGitHubToken || rejectsToken:
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, `{"message":"Bad credentials"}`)
 	case r.Method != http.MethodGet || !strings.HasPrefix(r.URL.Path, "/repos/") || !sees:

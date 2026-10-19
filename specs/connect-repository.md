@@ -75,6 +75,11 @@ displayed repository name.
 REPO-1.7.3. Submitting another casing or surrounding spaces for an already connected
 repository follows REPO-1.4.
 
+#### REPO-1.8. GitHub rejects the token
+
+REPO-1.8.1. If GitHub rejects the token, no fact is written, and the page shows the error
+"GitHub rejected the token. Check GITHUB_TOKEN." (response 502).
+
 ### REPO-2. Repository list
 
 #### REPO-2.1. Listing

@@ -22,6 +22,8 @@ templ repositoriesPanel(repositories []string, p problem) {
 				<p role="alert">Enter the repository as owner/name</p>
 			case githubSilent:
 				<p role="alert">Could not check access: GitHub did not respond</p>
+			case tokenRejected:
+				<p role="alert">GitHub rejected the token. Check GITHUB_TOKEN.</p>
 		}
 		@repositoryList(repositories)
 	</section>

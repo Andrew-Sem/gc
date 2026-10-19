@@ -28,6 +28,13 @@ func (s *Scenario) GivenGitHubDoesNotAnswer() *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenGitHubRejectsToken() *Scenario {
+	s.github.mu.Lock()
+	defer s.github.mu.Unlock()
+	s.github.rejectsToken = true
+	return s
+}
+
 func (s *Scenario) GitHubNotAsked() func() spec.Problem {
 	return func() spec.Problem {
 		if asked := s.github.askedSoFar(); len(asked) > 0 {

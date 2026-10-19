@@ -106,6 +106,16 @@ func TestConnectRepository(t *testing.T) {
 			ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub did not respond")
 	})
 
+	f.Run("connect while GitHub rejects the token", func(s *extensions.Scenario) {
+		s.GivenGitHubRejectsToken().
+			Covers("REPO-1.8.1").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("the request fails and nothing is connected").
+			ExpectStatus(http.StatusBadGateway).
+			ExpectFacts().
+			ExpectText(`#repositories-panel [role="alert"]`, "GitHub rejected the token. Check GITHUB_TOKEN.")
+	})
+
 	f.Run("repositories page lists connected repositories", func(s *extensions.Scenario) {
 		s.Covers("REPO-2.1.1", "REPO-2.1.2").
 			Given(

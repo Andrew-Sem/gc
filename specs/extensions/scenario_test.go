@@ -55,22 +55,25 @@ func TestRunAcceptsGitHubNotAsked(t *testing.T) {
 func TestFakeGitHubAnswersLikeGitHub(t *testing.T) {
 	tests := []struct {
 		name, path, auth string
-		doesNotAnswer    bool
+		given            func(*fakeGitHub)
 		want             int
 	}{
-		{"visible repository", "/repos/acme/api", "Bearer " + fakeGitHubToken, false, http.StatusOK},
-		{"invisible repository", "/repos/acme/web", "Bearer " + fakeGitHubToken, false, http.StatusNotFound},
-		{"no token", "/repos/acme/api", "", false, http.StatusNotFound},
-		{"wrong token", "/repos/acme/api", "Bearer wrong", false, http.StatusUnauthorized},
-		{"another endpoint", "/user/repos", "Bearer " + fakeGitHubToken, false, http.StatusNotFound},
-		{"no answer", "/repos/acme/api", "Bearer " + fakeGitHubToken, true, 0},
+		{"visible repository", "/repos/acme/api", "Bearer " + fakeGitHubToken, nil, http.StatusOK},
+		{"invisible repository", "/repos/acme/web", "Bearer " + fakeGitHubToken, nil, http.StatusNotFound},
+		{"no token", "/repos/acme/api", "", nil, http.StatusNotFound},
+		{"wrong token", "/repos/acme/api", "Bearer wrong", nil, http.StatusUnauthorized},
+		{"rejected token", "/repos/acme/api", "Bearer " + fakeGitHubToken, func(g *fakeGitHub) { g.rejectsToken = true }, http.StatusUnauthorized},
+		{"another endpoint", "/user/repos", "Bearer " + fakeGitHubToken, nil, http.StatusNotFound},
+		{"no answer", "/repos/acme/api", "Bearer " + fakeGitHubToken, func(g *fakeGitHub) { g.doesNotAnswer = true }, 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := newFakeGitHub()
 			defer g.server.Close()
 			g.sees = []string{"acme/api"}
-			g.doesNotAnswer = tt.doesNotAnswer
+			if tt.given != nil {
+				tt.given(g)
+			}
 
 			req, _ := http.NewRequest(http.MethodGet, g.server.URL+tt.path, nil)
 			if tt.auth != "" {

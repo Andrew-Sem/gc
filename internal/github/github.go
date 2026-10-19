@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
+
+var ErrTokenRejected = errors.New("GitHub rejected the token")
 
 type Client struct {
 	apiURL string
@@ -44,6 +47,8 @@ func (c *Client) CanAccess(ctx context.Context, fullName string) (bool, error) {
 		return true, nil
 	case http.StatusNotFound:
 		return false, nil
+	case http.StatusUnauthorized:
+		return false, ErrTokenRejected
 	}
 	return false, fmt.Errorf("GitHub answered %d", resp.StatusCode)
 }
