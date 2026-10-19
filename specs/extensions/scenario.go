@@ -1,6 +1,8 @@
 package extensions
 
 import (
+	"time"
+
 	"github.com/Andrew-Sem/gc/framework/spec"
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
@@ -42,10 +44,27 @@ func (s *Scenario) GivenGitHubAnswers(status int, header ...string) *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenGitHubHangs() *Scenario {
+	s.github.mu.Lock()
+	defer s.github.mu.Unlock()
+	s.github.hangs = true
+	return s
+}
+
 func (s *Scenario) GitHubNotAsked() func() spec.Problem {
 	return func() spec.Problem {
 		if asked := s.github.askedSoFar(); len(asked) > 0 {
 			return githubAsked{got: asked}
+		}
+		return nil
+	}
+}
+
+func (s *Scenario) GitHubWaited(want time.Duration) func() spec.Problem {
+	return func() spec.Problem {
+		got := s.github.waitedSoFar()
+		if got < want-want/10 || got > want+want/5 {
+			return githubWaited{want: want, got: got}
 		}
 		return nil
 	}

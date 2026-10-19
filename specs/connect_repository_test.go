@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/Andrew-Sem/gc/framework/spec"
 	"github.com/Andrew-Sem/gc/specs/contract"
@@ -114,6 +115,17 @@ func TestConnectRepository(t *testing.T) {
 			ExpectStatus(http.StatusBadGateway).
 			ExpectFacts().
 			ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub did not respond")
+	})
+
+	f.Run("connect while GitHub hangs", func(s *extensions.Scenario) {
+		s.GivenGitHubHangs().
+			Covers("REPO-1.6.1", "REPO-1.6.2").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("the application stops waiting after 5 seconds and nothing is connected").
+			ExpectStatus(http.StatusBadGateway).
+			ExpectFacts().
+			ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub did not respond").
+			Expect(s.GitHubWaited(5 * time.Second))
 	})
 
 	f.Run("connect while GitHub rejects the token", func(s *extensions.Scenario) {

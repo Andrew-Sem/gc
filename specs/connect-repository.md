@@ -66,6 +66,9 @@ exactly one slash, with no spaces inside either part or next to the slash. Inval
 REPO-1.6.1. If GitHub does not respond, no fact is written, and the page shows the error "Could
 not check access: GitHub did not respond" (response 502).
 
+REPO-1.6.2. The application waits 5 seconds for GitHub to answer. If no answer arrives in that
+time, GitHub does not respond.
+
 #### REPO-1.7. The name is normalized
 
 REPO-1.7.1. Before validating a submitted repository name, checking whether it is already

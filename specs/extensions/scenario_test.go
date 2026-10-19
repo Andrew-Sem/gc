@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/Andrew-Sem/gc/framework/spec"
 	"github.com/Andrew-Sem/gc/specs/contract"
@@ -90,6 +91,21 @@ func TestFakeGitHubAnswersLikeGitHub(t *testing.T) {
 				t.Errorf("status = %d, want %d (err %v)", got, tt.want, err)
 			}
 		})
+	}
+}
+
+func TestFakeGitHubMeasuresHowLongItWasAwaited(t *testing.T) {
+	g := newFakeGitHub()
+	defer g.server.Close()
+	g.hangs = true
+
+	client := &http.Client{Timeout: 200 * time.Millisecond}
+	if resp, err := client.Get(g.server.URL + "/repos/acme/api"); err == nil {
+		resp.Body.Close()
+		t.Fatalf("got status %d, want no answer", resp.StatusCode)
+	}
+	if got := g.waitedSoFar(); got < 150*time.Millisecond || got > 400*time.Millisecond {
+		t.Errorf("waited %s, want about 200ms", got)
 	}
 }
 
