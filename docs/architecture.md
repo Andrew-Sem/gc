@@ -9,28 +9,33 @@ restart persistence are planned separately.
 | Package | Responsibility |
 |---|---|
 | `framework/journal` | Generic append-only journal in memory; knows no project event types. |
-| `framework/spec` | Generic Given/When/Then scenarios, clause reporting, HTTP and HTML assertions, and exact ordered new-fact checks. |
+| `framework/spec` | Generic Given/When/Then scenarios, clause reporting, HTTP and HTML assertions, exact ordered new-fact checks, and coverage for custom scenarios. |
 | `specs/contract` | Project event definitions, the Journal interface, and GitHub settings (API URL and token) shared by specifications and application. |
-| `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, and the adapter that supplies the application factory to the framework. |
+| `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, the adapter that supplies the application factory to the framework, and the launch harness that builds and runs `cmd/gc`. |
 | `specs` | Feature contracts and executable scenarios. |
 | `internal/domain` | Repository-name validation and folds over project facts. |
 | `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
 | `internal/github` | GitHub API client for the repository access check. |
-| `cmd/gc` | Reads the address and GitHub settings, wires the in-memory journal, starts the server. |
+| `cmd/gc` | Reads the environment, refuses to start without a token or a usable address, wires the in-memory journal, starts the server. |
 
 The framework imports neither the project contract nor application packages, including in its
 own checks. Each project chooses its fact type and supplies a factory to `Feature.Run`.
 For this project, the factory is `web.New(contract.Dependencies) http.Handler`, connected in
-`specs/extensions/app.go`. Only that integration file imports the application.
+`specs/extensions/app.go`. Only that integration file imports the application. The second
+entry point is the `cmd/gc` binary: launch scenarios in `specs/extensions/launch.go` build it
+with `go build`, run it with a controlled environment, and check its exit, output, and HTTP
+answers.
 
 Each scenario gets a fresh journal and its own fake GitHub HTTP server. The application talks
 to it through its real GitHub client, so specs check the client too; the fake answers like
 GitHub: 200 for a visible repository, 404 for an invisible one or a request without a token,
-401 for a wrong token. `Given` seeds the journal, `When` sends a
+401 for a wrong token. Scenarios can also make it reject the token, answer any status with
+headers, drop the connection, hang until the client gives up (a real 5-second wait), or echo
+the token in error bodies. `Given` seeds the journal, `When` sends a
 request directly to the handler, and `ExpectFacts` compares the complete ordered appended
 suffix. `ExpectFacts()` explicitly requires an empty suffix. Project-specific checks are
-values passed to `Expect`, such as `Expect(s.GitHubNotAsked())`; common HTTP and HTML checks
-stay in the framework. The project scenario embeds the generic scenario, so common methods are
+values passed to `Expect`, such as `Expect(s.GitHubNotAsked())`; common HTTP and HTML checks,
+including `ExpectBodyWithout` for secrets, stay in the framework. The project scenario embeds the generic scenario, so common methods are
 reused directly. Common fluent methods return the generic scenario, so a scenario chain starts
 with project setup such as `GivenGitHubSees` and ends with project checks passed to `Expect`.
 
@@ -40,11 +45,12 @@ graph. Supporting mutable or non-comparable facts requires a separate decision o
 equality; this extraction does not introduce deep copying or serialization.
 
 When rebuilding this project, retain `framework` and `specs`, including their checks and
-integration contract. Reimplement `internal` and restore `cmd/gc` from a minimal starter.
+integration contract. Reimplement `internal` and `cmd/gc`.
 htmx remains under `internal/web/static`; it is an implementation dependency that the agent
 can download again, not a retained framework asset. The reconstruction requires an implementation
-of the fixed application entry point before project specs can compile; the framework's own
-checks can run without the application.
+of the fixed application entry point before project specs can compile, and a `cmd/gc` that
+builds before launch scenarios can run; the framework's own checks can run without the
+application.
 
 Application behavior specifications live under `specs`. Repository-name validation is checked
 through POST scenarios, including empty and malformed names. The scenarios also check HTML

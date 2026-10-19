@@ -53,6 +53,30 @@ A draft of GitHub interaction and token-protection specifications was written wi
 review and deleted at the user's request on 2026-10-09. GitHub specifications will be written
 again step by step with user review. REPO-1.5 keeps its earlier wording until then.
 
+#### Behavior chosen by the agent, pending user review (2026-10-20)
+
+The user delegated the remaining Stage B slices ("finish up to acceptance, commit along the
+way") and reviews them together before browser acceptance:
+
+- REPO-1.8: a rejected token (401) answers 502 with "GitHub rejected the token. Check
+  GITHUB_TOKEN." (wording approved by the user).
+- REPO-1.3.2: 403 that is not a rate limit counts as no access (422), like 404; GitHub uses it
+  for SSO-protected organizations.
+- REPO-1.10: 429, or 403 with `x-ratelimit-remaining: 0` or `retry-after`, answers 502 with
+  "GitHub rate limit reached. Try again later."
+- REPO-1.9: any other error status answers 502 with "Could not check access: GitHub failed. Try
+  again later."
+- REPO-1.6.2: the 5-second wait is checked with real time; it adds about 5 seconds to the spec
+  run. REPO-1.6.1 keeps its wording without "try again later".
+- REPO-4.1.1–4.1.3: GitHub echoes the token in error bodies; the journal, the page, and the
+  process output must not contain it. Logs are checked through the running binary's output.
+- `specs/launch.md` (RUN-1): `gc` exits with "GITHUB_TOKEN is not set" when the token is
+  missing or empty, and with "cannot listen on <address>" for a malformed or taken address.
+  RUN-1.2.2 (default `localhost:8080`) and RUN-1.3.2 (default `https://api.github.com`) are
+  intentionally uncovered: checking them would need a fixed port or the real GitHub.
+- Redirects from GitHub (renamed or transferred repositories) are deferred: they raise a naming
+  question for connected repositories that is outside this experiment.
+
 ### Stage C — finish and accept the reference feature
 
 Implement the approved specifications, including a real GitHub HTTP adapter replacing `cmd/gc`'s `noGitHub`. Use the project fake for application scenarios and a local HTTP server for adapter specifications. The fixture checks outbound requests and supplies controlled responses; it is part of the visible specification support.
