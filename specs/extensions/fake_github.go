@@ -26,6 +26,7 @@ type fakeGitHub struct {
 	hangs         bool
 	waited        time.Duration
 	hangEnded     chan struct{}
+	echoesToken   bool
 }
 
 type cannedAnswer struct {
@@ -43,35 +44,38 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	fullName := strings.TrimPrefix(r.URL.Path, "/repos/")
 	g.mu.Lock()
 	g.asked = append(g.asked, fullName)
-	sees, doesNotAnswer, rejectsToken, answer, hangs := slices.Contains(g.sees, fullName), g.doesNotAnswer, g.rejectsToken, g.answer, g.hangs
+	sees := slices.Contains(g.sees, fullName)
+	doesNotAnswer, rejectsToken, answer, hangs, echoesToken := g.doesNotAnswer, g.rejectsToken, g.answer, g.hangs, g.echoesToken
 	g.mu.Unlock()
 
 	if hangs {
 		g.hang(r)
 	}
-
 	if doesNotAnswer {
 		panic(http.ErrAbortHandler)
 	}
+
+	auth := r.Header.Get("Authorization")
 	w.Header().Set("Content-Type", "application/json")
-	if answer != nil {
+	fail := func(status int, message string) {
+		w.WriteHeader(status)
+		if echoesToken {
+			message += " for " + auth
+		}
+		fmt.Fprintf(w, `{"message":%q}`, message)
+	}
+	switch {
+	case answer != nil:
 		for i := 0; i+1 < len(answer.header); i += 2 {
 			w.Header().Set(answer.header[i], answer.header[i+1])
 		}
-		w.WriteHeader(answer.status)
-		fmt.Fprintf(w, `{"message":%q}`, http.StatusText(answer.status))
-		return
-	}
-	switch auth := r.Header.Get("Authorization"); {
+		fail(answer.status, http.StatusText(answer.status))
 	case auth == "":
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, `{"message":"Not Found"}`)
+		fail(http.StatusNotFound, "Not Found")
 	case auth != "Bearer "+fakeGitHubToken || rejectsToken:
-		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"message":"Bad credentials"}`)
+		fail(http.StatusUnauthorized, "Bad credentials")
 	case r.Method != http.MethodGet || !strings.HasPrefix(r.URL.Path, "/repos/") || !sees:
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, `{"message":"Not Found"}`)
+		fail(http.StatusNotFound, "Not Found")
 	default:
 		fmt.Fprintf(w, `{"full_name":%q}`, fullName)
 	}

@@ -221,6 +221,7 @@ func TestProblemString(t *testing.T) {
 		{"unexpected element", unexpectedElement{selector: "form"}, "expected no element form, found one"},
 		{"text mismatch", textMismatch{selector: "p", expected: "yes", got: "no"}, `expected text "yes" in p, got "no"`},
 		{"ambiguous element", ambiguousElement{selector: "p", got: 2}, "expected one element p, found 2"},
+		{"body contains", bodyContains{text: "secret"}, `expected the response not to contain "secret"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -344,3 +345,27 @@ type removed struct{ Name string }
 
 func (added) fact()   {}
 func (removed) fact() {}
+
+func TestRunChecksBodyWithout(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want []Problem
+	}{
+		{"text absent", "secret", nil},
+		{"text in an attribute", `name="repo"`, []Problem{bodyContains{text: `name="repo"`}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario[fact]{}
+			s.When(Get("/repositories")).
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectBodyWithout(tt.text)
+
+			if problems := s.Run(servesForm); !reflect.DeepEqual(problems, tt.want) {
+				t.Errorf("run returned %q, want %q", problems, tt.want)
+			}
+		})
+	}
+}

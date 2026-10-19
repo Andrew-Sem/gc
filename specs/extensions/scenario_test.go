@@ -1,6 +1,7 @@
 package extensions
 
 import (
+	"io"
 	"net/http"
 	"reflect"
 	"testing"
@@ -91,6 +92,25 @@ func TestFakeGitHubAnswersLikeGitHub(t *testing.T) {
 				t.Errorf("status = %d, want %d (err %v)", got, tt.want, err)
 			}
 		})
+	}
+}
+
+func TestFakeGitHubEchoesToken(t *testing.T) {
+	g := newFakeGitHub()
+	defer g.server.Close()
+	g.echoesToken = true
+
+	req, _ := http.NewRequest(http.MethodGet, g.server.URL+"/repos/acme/api", nil)
+	req.Header.Set("Authorization", "Bearer "+fakeGitHubToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	want := `{"message":"Not Found for Bearer ` + fakeGitHubToken + `"}`
+	if string(body) != want {
+		t.Errorf("body = %s, want %s", body, want)
 	}
 }
 

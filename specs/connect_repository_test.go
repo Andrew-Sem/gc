@@ -316,4 +316,25 @@ func TestConnectRepository(t *testing.T) {
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`)
 	})
+
+	for _, answer := range []struct {
+		github, page int
+	}{
+		{http.StatusUnauthorized, http.StatusBadGateway},
+		{http.StatusForbidden, http.StatusUnprocessableEntity},
+		{http.StatusNotFound, http.StatusUnprocessableEntity},
+		{http.StatusTooManyRequests, http.StatusBadGateway},
+		{http.StatusInternalServerError, http.StatusBadGateway},
+	} {
+		f.Run("connect while GitHub echoes the token with "+strconv.Itoa(answer.github), func(s *extensions.Scenario) {
+			s.GivenGitHubEchoesToken().
+				GivenGitHubAnswers(answer.github).
+				Covers("REPO-4.1.1", "REPO-4.1.2").
+				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+				Then("the token is neither recorded nor shown").
+				ExpectStatus(answer.page).
+				ExpectFacts().
+				ExpectBodyWithout(s.GitHubToken())
+		})
+	}
 }

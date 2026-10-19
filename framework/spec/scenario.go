@@ -12,6 +12,7 @@ type Scenario[F comparable] struct {
 	elements   []string
 	noElements []string
 	texts      []textExpectation
+	absentText []string
 	covers     []string
 	checks     []func() Problem
 
@@ -64,6 +65,11 @@ func (s *Scenario[F]) ExpectNoElement(selector string) *Scenario[F] {
 
 func (s *Scenario[F]) ExpectText(selector, text string) *Scenario[F] {
 	s.texts = append(s.texts, textExpectation{selector: selector, text: text})
+	return s
+}
+
+func (s *Scenario[F]) ExpectBodyWithout(text string) *Scenario[F] {
+	s.absentText = append(s.absentText, text)
 	return s
 }
 

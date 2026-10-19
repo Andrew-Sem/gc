@@ -51,6 +51,17 @@ func (s *Scenario) GivenGitHubHangs() *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenGitHubEchoesToken() *Scenario {
+	s.github.mu.Lock()
+	defer s.github.mu.Unlock()
+	s.github.echoesToken = true
+	return s
+}
+
+func (s *Scenario) GitHubToken() string {
+	return fakeGitHubToken
+}
+
 func (s *Scenario) GitHubNotAsked() func() spec.Problem {
 	return func() spec.Problem {
 		if asked := s.github.askedSoFar(); len(asked) > 0 {
