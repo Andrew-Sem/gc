@@ -310,3 +310,22 @@ rebuild the same scenario with less material:
   and mark promises group A could not know as `unknowable`.
 - Four attempts per group, two Codex and two Claude:
   `ARM=A experiment/series.sh controls-A codex claude codex claude`, then the same for B.
+
+### Control group results (source `7c121d4`)
+
+| Group | Hidden specs passed | Reviewers |
+|---|---|---|
+| A: PRD + architecture | 4-7 of 78 | 4 of 8 success; about 28 of 46 promises kept by meaning |
+| B: + text contracts | 10 of 78 | 8 of 8 success |
+| C: executable specs (series 2) | 78 of 78 | see series 2 |
+
+- Group B's applications behaved as the contracts describe but chose their own interface: form
+  field `repository`, block `#repositories-block`, disconnect at `/repositories/disconnect`.
+  The hidden specs look for `repo`, `#repositories-panel`, `li[data-repository]`,
+  `[role="alert"]` and `/repositories/{owner}/{name}/disconnect`, which only the executable
+  specs state. Most of B's failures are this interface mismatch, not wrong behavior.
+- Conclusion: an executable spec is also the precise definition of the interface (routes,
+  fields, HTML hooks); a text contract leaves it to each agent. Reviewers counted "unknowable"
+  promises inconsistently, so their numbers are not comparable across groups.
+- A rerun of B with an interface section in the contract was proposed and declined by the
+  user (2026-10-20): the result is clear enough.
