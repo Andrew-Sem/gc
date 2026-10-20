@@ -9,7 +9,8 @@ Rules:
 - Do not search for or read any other copy of this project, its history, or earlier attempts
   outside this directory. Everything you need is here.
 - Download htmx 2 from a public CDN if you need it.
-- You are done when `just check` and `just spec` both pass and the application works in a
-  real browser as the contracts describe.
+- No browser or browser automation is available. You are done when `just check` and
+  `just spec` both pass and you are confident the application works for an operator in a
+  browser as the contracts describe.
 
 Finish with a short summary of what you built.

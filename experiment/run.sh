@@ -8,7 +8,7 @@ effort=${EFFORT:-medium}
 echo "$model $effort $(codex --version)" > "$run/agent"
 date -u +%FT%TZ > "$run/started"
 set +e
-codex exec --skip-git-repo-check --ephemeral --disable memories \
+codex exec --skip-git-repo-check --ephemeral --ignore-user-config --disable memories \
   -m "$model" -c model_reasoning_effort="$effort" \
   -s workspace-write -c sandbox_workspace_write.network_access=true \
   --add-dir "$(go env GOCACHE)" --add-dir "$(go env GOMODCACHE)" \

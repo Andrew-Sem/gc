@@ -197,3 +197,7 @@ This section describes proposed evidence, not permission to author tests. New or
   The implementer is Codex `gpt-6.1-sol` with medium reasoning, chosen by the user. Codex
   memories are disabled because they may hold this project; skills and plugins stay as in the
   user's normal setup (user decision, 2026-10-20).
+- Pilot 1 (2026-10-20): green in 2.5 minutes, but Codex tried to drive the user's Arc browser
+  through a computer-use MCP server from the user config, because the prompt asked for a real
+  browser check. Runs now use `--ignore-user-config`, and the prompt says no browser is
+  available.
