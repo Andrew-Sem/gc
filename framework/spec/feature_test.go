@@ -98,8 +98,8 @@ func TestFeatureReportsThroughGoTest(t *testing.T) {
 		wantOutput []string
 		notOutput  string
 	}{
-		{"report", true, []string{"DEMO-1 Pages: partial, 1 of 2", "DEMO-1.1 Repositories page: partial, 1 of 2", "uncovered: [DEMO-1.1.2]"}, ""},
-		{"failing scenario", false, []string{"expected status 200, got 404"}, ""},
+		{"report", true, []string{"DEMO-1 Pages: partial, 1 of 2", "DEMO-1.1 Repositories page: partial, 1 of 2", "uncovered: [DEMO-1.1.2]", "failing: []"}, ""},
+		{"failing scenario", false, []string{"expected status 200, got 404", "failing: [DEMO-1.1.2]"}, ""},
 		{"unknown clause", false, []string{"clause DEMO-9.1.1 is not in contract testdata/contract.md"}, ""},
 		{"heading covered", false, []string{"DEMO-1.1 is a heading in contract testdata/contract.md; cover its clauses instead"}, ""},
 		{"malformed contract", false, []string{"contract testdata/malformed.md: DEMO-1.1 has no clauses"}, ""},
@@ -156,7 +156,8 @@ func TestFeatureHelper(t *testing.T) {
 	case "failing scenario":
 		f := NewFeature[string](t, "testdata/contract.md")
 		f.Run("missing page", func(s *Scenario[string]) {
-			s.When(Get("/nowhere")).
+			s.Covers("DEMO-1.1.2").
+				When(Get("/nowhere")).
 				ExpectStatus(http.StatusOK).
 				ExpectFacts()
 		}, newApp)

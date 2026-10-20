@@ -8,6 +8,19 @@ family=$2
 cp "$here/review-checklist.md" "$run/review-checklist.md"
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/gc-review-XXXXXX")
 prompt=$(sed "s#RUN_DIR#$run#" "$here/review-prompt.md")
+arm=$(cat "$run/arm" 2>/dev/null || echo C)
+if [ "$arm" != C ]; then
+  prompt="$prompt
+
+This attempt belongs to control group $arm. The implementer did not see the executable
+specifications; \`prompt.md\` shows what it was told and \`protected.sha256\` lists the files it
+had. \`acceptance.txt\` and \`acceptance.log\` show the hidden executable specifications run
+afterwards on a copy in \`acceptance/\`. Use the contracts in \`acceptance/specs/*.md\` as the
+yardstick. Mark a broken promise the implementer could not know from its inputs (for example
+an exact error text or status that only the contracts state) as \`unknowable\` instead of
+\`fail\`. In that case the verdict is success if nothing else fails. Add a final line
+\`Contract promises: <kept> kept, <unknowable> unknowable, <broken> broken\`."
+fi
 case $family in
 codex)
   codex exec --skip-git-repo-check --ephemeral --ignore-user-config --disable memories \

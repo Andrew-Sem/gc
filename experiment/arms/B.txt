@@ -1,0 +1,13 @@
+.gitignore
+AGENTS.md
+CLAUDE.md
+docs
+framework/journal
+go.mod
+go.sum
+justfile
+specs/contract
+specs/prd.md
+ui
+specs/connect-repository.md
+specs/launch.md

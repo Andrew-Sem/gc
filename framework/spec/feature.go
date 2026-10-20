@@ -18,6 +18,7 @@ type Feature[F comparable] struct {
 	contract string
 	clauses  clauses
 	covered  []string
+	failed   []string
 }
 
 type group struct {
@@ -46,6 +47,7 @@ func NewFeature[F comparable](t *testing.T, contract string) *Feature[F] {
 			t.Log(line)
 		}
 		t.Logf("uncovered: %v", uncovered(f.clauses.leaves, f.covered))
+		t.Logf("failing: %v", linked(f.clauses.leaves, f.failed))
 	})
 	return f
 }
@@ -124,6 +126,16 @@ func groupReport(c clauses, covered []string) []string {
 	return lines
 }
 
+func linked(clauses, ids []string) []string {
+	var in []string
+	for _, id := range clauses {
+		if slices.Contains(ids, id) {
+			in = append(in, id)
+		}
+	}
+	return in
+}
+
 func uncovered(clauses, covered []string) []string {
 	var rest []string
 	for _, id := range clauses {
@@ -176,7 +188,11 @@ func (f *Feature[F]) check(t *testing.T, describe func() ([]string, func() []Pro
 		}
 	}
 	f.covered = append(f.covered, covers...)
-	for _, problem := range run() {
+	problems := run()
+	if len(problems) > 0 {
+		f.failed = append(f.failed, covers...)
+	}
+	for _, problem := range problems {
 		t.Errorf("%s", problem)
 	}
 }
