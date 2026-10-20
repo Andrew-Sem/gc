@@ -15,8 +15,8 @@ described in their own features.
 **Access check** — a request to GitHub with the PAT from the environment: the repository exists
 and the token can see it.
 
-**Connected repository** — one whose latest journal fact is `RepositoryConnected`, not
-`RepositoryDisconnected`.
+**Connected repository** — one whose latest journal fact about that repository is
+`RepositoryConnected`, not `RepositoryDisconnected`.
 
 **Repositories page** — `/repositories`: the connect form and the list of connected
 repositories. The form and buttons submit through htmx; the response is the updated block with
@@ -56,10 +56,12 @@ REPO-1.4.2. Connecting an already connected repository does not ask GitHub.
 REPO-1.5.1. If the string is not of the form `owner/name`, no fact is written, GitHub is not
 asked, and the page shows the error "Enter the repository as owner/name" (response 422).
 
-REPO-1.5.2. A string is of the form `owner/name` when both parts are nonempty, separated by
-exactly one slash, with no spaces inside either part or next to the slash. Invalid examples:
-`acmeapi`, `/api`, `acme/`, `acme/api/extra`, `ac me/api`, `acme/ap i`, `acme /api`,
-`acme/ api`, and the empty string.
+REPO-1.5.2. A string is of the form `owner/name` when it is two nonempty parts separated by
+exactly one slash. The owner has only Latin letters, digits, and hyphens. The name has only
+Latin letters, digits, hyphens, underscores, and dots, and is not `.` or `..`. Valid examples:
+`acme/api`, `acme-co/api_v2.js`. Invalid examples: `acmeapi`, `/api`, `acme/`,
+`acme/api/extra`, `ac me/api`, `acme/ap i`, `acme /api`, `acme/ api`, `acme/api?x`, `acme/a#b`,
+`acme/a%20b`, `acme_co/api`, `acmé/api`, `acme/..`, and the empty string.
 
 #### REPO-1.6. GitHub does not respond
 
@@ -69,11 +71,15 @@ not check access: GitHub did not respond" (response 502).
 REPO-1.6.2. The application waits 5 seconds for GitHub to answer. If no answer arrives in that
 time, GitHub does not respond.
 
+REPO-1.6.3. GitHub also does not respond when the connection to it cannot be made or breaks
+before an answer.
+
 #### REPO-1.7. The name is normalized
 
 REPO-1.7.1. Before validating a submitted repository name, checking whether it is already
-connected, or asking GitHub, remove surrounding spaces and lowercase the name. For example,
-` Acme/API ` becomes `acme/api`.
+connected, or asking GitHub, remove surrounding whitespace (spaces, tabs, and line breaks) and
+lowercase the name. For example, ` Acme/API ` becomes `acme/api`, and so does `acme/api` with a
+tab before it and a line break after it.
 
 REPO-1.7.2. The normalized name is used in the access check, the journal fact, and the
 displayed repository name.
@@ -99,6 +105,11 @@ REPO-1.10.1. If GitHub limits requests, no fact is written, and the page shows t
 
 REPO-1.10.2. GitHub limits requests when it answers 429, or 403 with the header
 `x-ratelimit-remaining: 0` or with a `retry-after` header.
+
+#### REPO-1.11. One attempt
+
+REPO-1.11.1. A connect request asks GitHub at most once. When GitHub rejects the token, fails,
+limits requests, or does not respond, the error is shown without retrying.
 
 ### REPO-2. Repository list
 
@@ -139,6 +150,9 @@ REPO-3.2.1. Disconnecting writes `RepositoryDisconnected` (response 200).
 
 REPO-3.2.2. The response no longer lists the disconnected repository; other repositories stay
 listed.
+
+REPO-3.2.3. The repository name in a disconnect request is normalized like a submitted name
+(REPO-1.7.1), so disconnecting `Acme/API` disconnects `acme/api`.
 
 #### REPO-3.3. Disconnecting a repository that is not connected
 

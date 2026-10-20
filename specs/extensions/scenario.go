@@ -1,6 +1,7 @@
 package extensions
 
 import (
+	"slices"
 	"time"
 
 	"github.com/Andrew-Sem/gc/framework/spec"
@@ -51,14 +52,23 @@ func (s *Scenario) GivenGitHubEchoesToken() *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenGitHubUnreachable() *Scenario {
+	s.github.given(func(g *fakeGitHub) { g.unreachable = true })
+	return s
+}
+
 func (s *Scenario) GitHubToken() string {
 	return fakeGitHubToken
 }
 
 func (s *Scenario) GitHubNotAsked() func() spec.Problem {
+	return s.GitHubAsked()
+}
+
+func (s *Scenario) GitHubAsked(fullNames ...string) func() spec.Problem {
 	return func() spec.Problem {
-		if asked := s.github.askedSoFar(); len(asked) > 0 {
-			return githubAsked{got: asked}
+		if asked := s.github.askedSoFar(); !slices.Equal(asked, fullNames) {
+			return githubAsked{want: fullNames, got: asked}
 		}
 		return nil
 	}

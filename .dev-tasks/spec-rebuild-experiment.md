@@ -164,3 +164,13 @@ This section describes proposed evidence, not permission to author tests. New or
   relying on the rebuild agent and reviewer (2026-10-20).
 - REPO-2.3.1 checks the shape of every POST response without a browser: the updated block keeps
   its htmx target, the form and the list, and the response carries no `h1` or `script`.
+- Contract ambiguities found by the coverage audit were resolved on 2026-10-20: GitHub's
+  character set for names, any surrounding whitespace is trimmed, "connected" means the latest
+  fact about that repository, one GitHub attempt per request, disconnect names are normalized,
+  and an unreachable GitHub counts as not responding.
+
+## Open questions
+
+- `just spec` is far from the one-second target the user wants for agent loops. Measure where
+  the time goes (compilation, `go build` of `cmd/gc` per launch feature, process starts) and
+  decide how to speed it up.

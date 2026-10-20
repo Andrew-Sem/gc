@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/Andrew-Sem/gc/specs/contract"
@@ -23,9 +24,10 @@ func IsConnected(facts []contract.Fact, fullName string) bool {
 	return connected
 }
 
+var fullNamePattern = regexp.MustCompile(`^[a-z0-9-]+/[a-z0-9._-]+$`)
+
 func ValidFullName(fullName string) bool {
-	owner, name, found := strings.Cut(fullName, "/")
-	return found && owner != "" && name != "" && !strings.Contains(name, "/") && !strings.Contains(fullName, " ")
+	return fullNamePattern.MatchString(fullName) && !strings.HasSuffix(fullName, "/.") && !strings.HasSuffix(fullName, "/..")
 }
 
 func ConnectedRepositories(facts []contract.Fact) []string {

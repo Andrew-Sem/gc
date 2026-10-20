@@ -60,7 +60,7 @@ func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
-	fullName := strings.ToLower(strings.Trim(r.FormValue("repo"), " "))
+	fullName := normalize(r.FormValue("repo"))
 	if !domain.ValidFullName(fullName) {
 		s.renderPanel(w, r, http.StatusUnprocessableEntity, malformedName)
 		return
@@ -93,11 +93,15 @@ func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) disconnectRepository(w http.ResponseWriter, r *http.Request) {
-	fullName := r.PathValue("owner") + "/" + r.PathValue("name")
+	fullName := normalize(r.PathValue("owner") + "/" + r.PathValue("name"))
 	if domain.IsConnected(s.journal.Facts(), fullName) {
 		s.journal.Append(contract.RepositoryDisconnected{FullName: fullName})
 	}
 	s.renderPanel(w, r, http.StatusOK, noProblem)
+}
+
+func normalize(fullName string) string {
+	return strings.ToLower(strings.TrimSpace(fullName))
 }
 
 func (s *server) renderPanel(w http.ResponseWriter, r *http.Request, status int, p problem) {

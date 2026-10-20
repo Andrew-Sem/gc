@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -147,9 +148,28 @@ func TestFakeGitHubServesOverNetwork(t *testing.T) {
 }
 
 func TestGitHubAskedString(t *testing.T) {
-	p := githubAsked{got: []string{"acme/api"}}
-	want := "expected GitHub not to be asked, got [acme/api]"
-	if got := p.String(); got != want {
-		t.Errorf("String() = %q, want %q", got, want)
+	tests := []struct {
+		problem githubAsked
+		want    string
+	}{
+		{githubAsked{got: []string{"acme/api"}}, "expected GitHub not to be asked, got [acme/api]"},
+		{githubAsked{want: []string{"acme/api"}, got: []string{"acme/api", "acme/api"}}, "expected GitHub to be asked about [acme/api], got [acme/api acme/api]"},
+	}
+	for _, tt := range tests {
+		if got := tt.problem.String(); got != tt.want {
+			t.Errorf("String() = %q, want %q", got, tt.want)
+		}
+	}
+}
+
+func TestFakeGitHubUnreachable(t *testing.T) {
+	g := newFakeGitHub()
+	g.unreachable = true
+	if resp, err := (&http.Client{Transport: g.transport()}).Get(fakeGitHubURL + "/repos/acme/api"); err == nil {
+		resp.Body.Close()
+		t.Fatalf("got status %d, want a connection error", resp.StatusCode)
+	}
+	if got := g.askedSoFar(); !slices.Equal(got, []string{"acme/api"}) {
+		t.Errorf("asked %v, want [acme/api]", got)
 	}
 }

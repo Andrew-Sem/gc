@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -30,6 +31,7 @@ type fakeGitHub struct {
 	waited        time.Duration
 	hangEnded     chan struct{}
 	echoesToken   bool
+	unreachable   bool
 }
 
 type cannedAnswer struct {
@@ -47,21 +49,32 @@ func (g *fakeGitHub) listen() string {
 }
 
 func (g *fakeGitHub) transport() http.RoundTripper {
-	return inMemory{handler: http.HandlerFunc(g.serve)}
+	return inMemory{github: g}
 }
 
 type inMemory struct {
-	handler http.Handler
+	github *fakeGitHub
 }
 
 func (t inMemory) RoundTrip(req *http.Request) (*http.Response, error) {
+	g := t.github
+	g.mu.Lock()
+	unreachable := g.unreachable
+	if unreachable {
+		g.asked = append(g.asked, strings.TrimPrefix(req.URL.Path, "/repos/"))
+	}
+	g.mu.Unlock()
+	if unreachable {
+		return nil, &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}
+	}
+
 	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
 	response := httptest.NewRecorder()
 	aborted := make(chan bool, 1)
 	go func() {
 		defer func() { aborted <- recover() != nil }()
-		t.handler.ServeHTTP(response, req.WithContext(ctx))
+		http.HandlerFunc(g.serve).ServeHTTP(response, req.WithContext(ctx))
 	}()
 	select {
 	case <-req.Context().Done():
@@ -154,11 +167,14 @@ func (g *fakeGitHub) askedSoFar() []string {
 }
 
 type githubAsked struct {
-	got []string
+	want, got []string
 }
 
 func (p githubAsked) String() string {
-	return fmt.Sprintf("expected GitHub not to be asked, got %v", p.got)
+	if len(p.want) == 0 {
+		return fmt.Sprintf("expected GitHub not to be asked, got %v", p.got)
+	}
+	return fmt.Sprintf("expected GitHub to be asked about %v, got %v", p.want, p.got)
 }
 
 type githubWaited struct {
