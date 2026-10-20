@@ -94,7 +94,27 @@ func textOf(n *html.Node) string {
 	return b.String()
 }
 
-func elementProblems(body string, present, absent []string, texts []textExpectation) []Problem {
+type elementCountMismatch struct {
+	selector      string
+	expected, got int
+}
+
+func (p elementCountMismatch) String() string {
+	return fmt.Sprintf("expected %d elements %s, found %d", p.expected, p.selector, p.got)
+}
+
+func countProblem(page *html.Node, expected countExpectation) Problem {
+	sel, err := cascadia.Compile(expected.selector)
+	if err != nil {
+		return invalidSelector{selector: expected.selector, err: err.Error()}
+	}
+	if got := len(cascadia.QueryAll(page, sel)); got != expected.count {
+		return elementCountMismatch{selector: expected.selector, expected: expected.count, got: got}
+	}
+	return nil
+}
+
+func elementProblems(body string, present, absent []string, texts []textExpectation, counts []countExpectation) []Problem {
 	page, err := html.Parse(strings.NewReader(body))
 	if err != nil {
 		return []Problem{unreadablePage{err: err.Error()}}
@@ -118,6 +138,11 @@ func elementProblems(body string, present, absent []string, texts []textExpectat
 	}
 	for _, expected := range texts {
 		if p := textProblem(page, expected); p != nil {
+			problems = append(problems, p)
+		}
+	}
+	for _, expected := range counts {
+		if p := countProblem(page, expected); p != nil {
 			problems = append(problems, p)
 		}
 	}

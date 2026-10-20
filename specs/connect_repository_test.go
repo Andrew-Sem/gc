@@ -20,6 +20,7 @@ func TestConnectRepository(t *testing.T) {
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
 			ExpectElement(`form[hx-post="/repositories"] input[name="repo"]`).
+			ExpectElementCount(`form[hx-post="/repositories"] input`, 1).
 			ExpectElement(`script[src="/static/htmx.min.js"]`).
 			ExpectElement(`meta[name="htmx-config"]`).
 			ExpectElement(`#repositories-panel[hx-target="#repositories-panel"][hx-swap="outerHTML"] form`)
@@ -27,14 +28,14 @@ func TestConnectRepository(t *testing.T) {
 
 	f.Run("connect a repository the token can see", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api").
-			Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-2.3.1").
+			Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-2.1.3", "REPO-2.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the repository is connected and listed").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 			ExpectElement(extensions.UpdatedBlock).
 			ExpectNoElement(extensions.WholePage).
-			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
+			ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api Disconnect").
 			ExpectNoElement(`#repositories-panel [role="alert"]`)
 	})
 
@@ -85,7 +86,7 @@ func TestConnectRepository(t *testing.T) {
 				ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 				ExpectElement(extensions.UpdatedBlock).
 				ExpectNoElement(extensions.WholePage).
-				ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
+				ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api Disconnect").
 				ExpectNoElement(`#repositories-panel [role="alert"]`)
 		})
 	}
@@ -200,7 +201,7 @@ func TestConnectRepository(t *testing.T) {
 	}
 
 	f.Run("repositories page lists connected repositories", func(s *extensions.Scenario) {
-		s.Covers("REPO-2.1.1", "REPO-2.1.2").
+		s.Covers("REPO-2.1.1", "REPO-2.1.2", "REPO-2.1.3").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/web"},
@@ -211,8 +212,9 @@ func TestConnectRepository(t *testing.T) {
 			Then("connected repositories are listed and disconnected ones are not").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
-			ExpectElement(`#repositories li[data-repository="acme/web"]`).
-			ExpectElement(`#repositories li[data-repository="acme/api"]`).
+			ExpectElementCount(`#repositories li`, 2).
+			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web Disconnect").
+			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api Disconnect").
 			ExpectNoElement(`#repositories li[data-repository="acme/old"]`)
 	})
 
@@ -319,6 +321,23 @@ func TestConnectRepository(t *testing.T) {
 			ExpectNoElement(extensions.WholePage).
 			ExpectNoElement(`#repositories-panel li[data-repository="acme/api"]`).
 			ExpectElement(`#repositories-panel li[data-repository="acme/web"]`)
+	})
+
+	f.Run("disconnect a repository keeping the order of the rest", func(s *extensions.Scenario) {
+		s.Covers("REPO-2.2.1", "REPO-2.3.1", "REPO-3.2.1", "REPO-3.2.2").
+			Given(
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/worker"},
+				contract.RepositoryConnected{FullName: "acme/web"},
+			).
+			When(spec.Post("/repositories/acme/worker/disconnect")).
+			Then("web and api stay listed in that order").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RepositoryDisconnected{FullName: "acme/worker"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
+			ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
+			ExpectElement(`#repositories > li:nth-child(2):last-child[data-repository="acme/api"]`)
 	})
 
 	f.Run("disconnect an already disconnected repository", func(s *extensions.Scenario) {

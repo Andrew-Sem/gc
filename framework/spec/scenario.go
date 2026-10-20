@@ -4,6 +4,11 @@ type textExpectation struct {
 	selector, text string
 }
 
+type countExpectation struct {
+	selector string
+	count    int
+}
+
 type Scenario[F comparable] struct {
 	request    Request
 	status     int
@@ -12,6 +17,7 @@ type Scenario[F comparable] struct {
 	elements   []string
 	noElements []string
 	texts      []textExpectation
+	counts     []countExpectation
 	absentText []string
 	covers     []string
 	checks     []func() Problem
@@ -65,6 +71,11 @@ func (s *Scenario[F]) ExpectNoElement(selector string) *Scenario[F] {
 
 func (s *Scenario[F]) ExpectText(selector, text string) *Scenario[F] {
 	s.texts = append(s.texts, textExpectation{selector: selector, text: text})
+	return s
+}
+
+func (s *Scenario[F]) ExpectElementCount(selector string, count int) *Scenario[F] {
+	s.counts = append(s.counts, countExpectation{selector: selector, count: count})
 	return s
 }
 

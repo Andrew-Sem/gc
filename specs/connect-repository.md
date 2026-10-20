@@ -108,6 +108,9 @@ REPO-2.1.1. Connected repositories are shown on the page as a list.
 
 REPO-2.1.2. Disconnected repositories are not shown.
 
+REPO-2.1.3. Each row of the list reads as the repository name followed by its "Disconnect"
+button.
+
 #### REPO-2.2. Order
 
 REPO-2.2.1. The page and updated list responses show the most recently connected repository

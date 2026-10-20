@@ -107,8 +107,8 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 		}
 	}
 
-	if len(s.elements) > 0 || len(s.noElements) > 0 || len(s.texts) > 0 {
-		problems = append(problems, elementProblems(response.Body.String(), s.elements, s.noElements, s.texts)...)
+	if len(s.elements) > 0 || len(s.noElements) > 0 || len(s.texts) > 0 || len(s.counts) > 0 {
+		problems = append(problems, elementProblems(response.Body.String(), s.elements, s.noElements, s.texts, s.counts)...)
 	}
 	return problems
 }
