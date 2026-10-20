@@ -30,6 +30,9 @@ the list and, if something went wrong, an error message.
 
 REPO-1.1.1. The repositories page shows a connect form with a single `owner/name` field.
 
+REPO-1.1.2. Pages include the shared interface head `ui.Head` (htmx and its response rules),
+and the application serves the files of `ui.Static` under `/static/`.
+
 #### REPO-1.2. The access check passes
 
 REPO-1.2.1. If the access check passes, `RepositoryConnected` with this `owner/name` is written

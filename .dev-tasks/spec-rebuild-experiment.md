@@ -278,3 +278,8 @@ This section describes proposed evidence, not permission to author tests. New or
   random port in the prompt.
 - The Claude reviewer's report extraction took the last message instead of the report once;
   `review.sh` now takes the last text starting at `Verdict:`.
+
+- htmx and its response rules moved from the replaceable application into a retained `ui`
+  package (user decision, 2026-10-20), reversing "htmx is deleted with the application". Series
+  2 had one attempt that configured htmx to swap every status. Specs now check that the page
+  head carries `ui.HTMXConfig` and that `/static/htmx.min.js` is `ui`'s file (REPO-1.1.2).

@@ -1,9 +1,10 @@
 package web
 
+import "github.com/Andrew-Sem/gc/ui"
+
 templ repositoriesView(repositories []string) {
 	<!DOCTYPE html>
-	<meta name="htmx-config" content={ htmxConfig }/>
-	<script src="/static/htmx.min.js"></script>
+	@ui.Head()
 	<title>Repositories</title>
 	<h1>Repositories</h1>
 	@repositoriesPanel(repositories, noProblem)

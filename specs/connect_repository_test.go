@@ -9,6 +9,7 @@ import (
 	"github.com/Andrew-Sem/gc/framework/spec"
 	"github.com/Andrew-Sem/gc/specs/contract"
 	"github.com/Andrew-Sem/gc/specs/extensions"
+	"github.com/Andrew-Sem/gc/ui"
 )
 
 func TestConnectRepository(t *testing.T) {
@@ -21,9 +22,27 @@ func TestConnectRepository(t *testing.T) {
 			ExpectFacts().
 			ExpectElement(`form[hx-post="/repositories"] input[name="repo"]`).
 			ExpectElementCount(`form[hx-post="/repositories"] input`, 1).
-			ExpectElement(`script[src="/static/htmx.min.js"]`).
-			ExpectElement(`meta[name="htmx-config"]`).
 			ExpectElement(`#repositories-panel[hx-target="#repositories-panel"][hx-swap="outerHTML"] form`)
+	})
+
+	f.Run("repositories page uses the shared interface head", func(s *extensions.Scenario) {
+		s.Covers("REPO-1.1.2").
+			When(spec.Get("/repositories")).
+			Then("htmx and its response rules come from ui").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(`meta[name="htmx-config"][content='`+ui.HTMXConfig+`']`).
+			ExpectElementCount(`meta[name="htmx-config"]`, 1).
+			ExpectElement(`script[src="` + ui.HTMXPath + `"]`)
+	})
+
+	f.Run("htmx is served from ui", func(s *extensions.Scenario) {
+		s.Covers("REPO-1.1.2").
+			When(spec.Get(ui.HTMXPath)).
+			Then("the shared htmx file is served").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectBodyContaining(`version:"` + ui.HTMXVersion + `"`)
 	})
 
 	f.Run("connect a repository the token can see", func(s *extensions.Scenario) {

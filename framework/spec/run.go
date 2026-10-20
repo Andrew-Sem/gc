@@ -38,6 +38,14 @@ func (p factsMismatch[F]) String() string {
 	return fmt.Sprintf("expected facts %s, got %s", factList(p.expected...), factList(p.got...))
 }
 
+type bodyMissing struct {
+	text string
+}
+
+func (p bodyMissing) String() string {
+	return fmt.Sprintf("expected the response to contain %q", p.text)
+}
+
 type bodyContains struct {
 	text string
 }
@@ -93,6 +101,12 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 	written := j.Facts()[before:]
 	if !slices.Equal(written, s.expected) {
 		problems = append(problems, factsMismatch[F]{expected: s.expected, got: written})
+	}
+
+	for _, text := range s.bodyTexts {
+		if !strings.Contains(response.Body.String(), text) {
+			problems = append(problems, bodyMissing{text: text})
+		}
 	}
 
 	for _, text := range s.absentText {

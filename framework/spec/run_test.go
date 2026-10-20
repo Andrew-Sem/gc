@@ -222,6 +222,7 @@ func TestProblemString(t *testing.T) {
 		{"text mismatch", textMismatch{selector: "p", expected: "yes", got: "no"}, `expected text "yes" in p, got "no"`},
 		{"ambiguous element", ambiguousElement{selector: "p", got: 2}, "expected one element p, found 2"},
 		{"body contains", bodyContains{text: "secret"}, `expected the response not to contain "secret"`},
+		{"body missing", bodyMissing{text: "secret"}, `expected the response to contain "secret"`},
 		{"element count mismatch", elementCountMismatch{selector: "li", expected: 1, got: 2}, "expected 1 elements li, found 2"},
 	}
 	for _, tt := range tests {
@@ -394,6 +395,30 @@ func TestRunChecksElementCount(t *testing.T) {
 				ExpectElementCount(tt.selector, tt.count)
 
 			if problems := s.Run(servesAlert); !reflect.DeepEqual(problems, tt.want) {
+				t.Errorf("run returned %q, want %q", problems, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunChecksBodyContaining(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+		want []Problem
+	}{
+		{"text present", `name="repo"`, nil},
+		{"text missing", "secret", []Problem{bodyMissing{text: "secret"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario[fact]{}
+			s.When(Get("/repositories")).
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectBodyContaining(tt.text)
+
+			if problems := s.Run(servesForm); !reflect.DeepEqual(problems, tt.want) {
 				t.Errorf("run returned %q, want %q", problems, tt.want)
 			}
 		})

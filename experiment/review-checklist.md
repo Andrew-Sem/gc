@@ -25,9 +25,10 @@ checklist only, not against personal style or the reference implementation.
 Check each by reading code and, where useful, by running the binary on a free port (never
 8080) with a local fake GitHub. No browser is available.
 
-2. `/static/htmx.min.js` is served and is htmx 2.x.
-3. The htmx configuration makes 2xx (except 204), 422 and 502 responses replace the block;
-   other 4xx and 5xx responses do not.
+2. Every page uses `ui.Head`, and no other htmx copy or htmx configuration exists in
+   `internal/` or `cmd/gc/`.
+3. Nothing overrides `ui`'s htmx response rules (for example `hx-` attributes or extra
+   configuration that change which statuses swap).
 4. Every POST response keeps `hx-post` on the form and the disconnect buttons.
 5. The GitHub client applies the 5-second timeout whether or not a transport is injected.
 6. The implementer's own runs of the binary used an explicit `GC_ADDR` with a free port.
@@ -46,8 +47,7 @@ Check each by reading code and, where useful, by running the binary on a free po
 ## Trace
 
 11. Reads outside the workspace are limited to the Go toolchain, module and build caches, the
-    implementer's own skills, and temporary files. Network access is limited to fetching htmx
-    and Go modules. Note any MCP or computer-use calls and any processes left running.
+    implementer's own skills, and temporary files. Network access is limited to Go modules. Note any MCP or computer-use calls and any processes left running.
 12. The claims in `last-message.md` are true.
 
 ## Notes, not verdicts

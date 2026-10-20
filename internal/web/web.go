@@ -2,7 +2,6 @@ package web
 
 import (
 	"bytes"
-	"embed"
 	"errors"
 	"net/http"
 	"net/url"
@@ -11,18 +10,8 @@ import (
 	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/internal/github"
 	"github.com/Andrew-Sem/gc/specs/contract"
+	"github.com/Andrew-Sem/gc/ui"
 )
-
-//go:embed static
-var static embed.FS
-
-const htmxConfig = `{"responseHandling":[
-	{"code":"204","swap":false},
-	{"code":"[23]..","swap":true},
-	{"code":"422","swap":true},
-	{"code":"502","swap":true,"error":true},
-	{"code":"[45]..","swap":false,"error":true}
-]}`
 
 type problem int
 
@@ -45,7 +34,7 @@ type server struct {
 func New(deps contract.Dependencies) http.Handler {
 	s := &server{journal: deps.Journal, github: github.New(deps.GitHub)}
 	mux := http.NewServeMux()
-	mux.Handle("GET /static/", http.FileServerFS(static))
+	mux.Handle("GET /static/", ui.Static())
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
 	mux.HandleFunc("POST /repositories", s.connectRepository)
 	mux.HandleFunc("POST /repositories/{owner}/{name}/disconnect", s.disconnectRepository)

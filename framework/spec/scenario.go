@@ -19,6 +19,7 @@ type Scenario[F comparable] struct {
 	texts      []textExpectation
 	counts     []countExpectation
 	absentText []string
+	bodyTexts  []string
 	covers     []string
 	checks     []func() Problem
 
@@ -76,6 +77,11 @@ func (s *Scenario[F]) ExpectText(selector, text string) *Scenario[F] {
 
 func (s *Scenario[F]) ExpectElementCount(selector string, count int) *Scenario[F] {
 	s.counts = append(s.counts, countExpectation{selector: selector, count: count})
+	return s
+}
+
+func (s *Scenario[F]) ExpectBodyContaining(text string) *Scenario[F] {
+	s.bodyTexts = append(s.bodyTexts, text)
 	return s
 }
 

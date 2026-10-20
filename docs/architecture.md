@@ -13,6 +13,7 @@ restart persistence are planned separately.
 | `specs/contract` | Project event definitions, the Journal interface, and GitHub settings (API URL, token, and the transport every GitHub request must use) shared by specifications and application. |
 | `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, the adapter that supplies the application factory to the framework, and the launch harness that builds and runs `cmd/gc`. |
 | `specs` | Feature contracts and executable scenarios. |
+| `ui` | Shared interface platform: the htmx file, its response rules, the `Head` component every page includes, and the static file handler. |
 | `internal/domain` | Repository-name validation and folds over project facts. |
 | `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
 | `internal/github` | GitHub API client for the repository access check. |
@@ -56,19 +57,19 @@ comparable value structs. The journal copies its slice on read, not an arbitrary
 graph. Supporting mutable or non-comparable facts requires a separate decision on copying and
 equality; this extraction does not introduce deep copying or serialization.
 
-When rebuilding this project, retain `framework` and `specs`, including their checks and
-integration contract. Reimplement `internal` and `cmd/gc`.
-htmx remains under `internal/web/static`; it is an implementation dependency that the agent
-can download again, not a retained framework asset. The reconstruction requires an implementation
+When rebuilding this project, retain `framework`, `specs`, and `ui`, including their checks and
+integration contract. Reimplement `internal` and `cmd/gc`. htmx and its response rules live in
+`ui`, not in the application: they are interface-wide decisions, and specs compare the page
+head and the served htmx file with `ui`. The reconstruction requires an implementation
 of the fixed application entry point before project specs can compile, and a `cmd/gc` that
 builds before launch scenarios can run; the framework's own checks can run without the
 application.
 
 Application behavior specifications live under `specs`. Repository-name validation is checked
 through POST scenarios, including empty and malformed names. The scenarios also check HTML
-responses. No test files remain under `internal`. Tests of the htmx asset body and its internal
-response-rule configuration were removed; actual browser interaction is checked separately
-at acceptance, not inferred from the fast HTTP/HTML specifications.
+responses. No test files remain under `internal`. Specs check that pages use `ui`'s htmx and response rules;
+actual browser interaction is checked separately at acceptance, not inferred from the fast
+HTTP/HTML specifications.
 
 Planned, not built yet:
 
