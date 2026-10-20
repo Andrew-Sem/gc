@@ -1,0 +1,9 @@
+.gitignore
+AGENTS.md
+CLAUDE.md
+docs
+framework
+go.mod
+go.sum
+justfile
+specs

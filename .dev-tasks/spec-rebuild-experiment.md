@@ -192,3 +192,8 @@ This section describes proposed evidence, not permission to author tests. New or
 - `just spec` is far from the one-second target the user wants for agent loops. Measure where
   the time goes (compilation, `go build` of `cmd/gc` per launch feature, process starts) and
   decide how to speed it up.
+- Stage D harness lives in `experiment/` (not retained in rebuilds): `retained.txt`, the fixed
+  `prompt.md`, and `prepare.sh` / `run.sh` / `verify.sh`. Runs go to `~/gc-rebuilds/<name>`.
+  The implementer is Codex `gpt-6.1-sol` with medium reasoning, chosen by the user. Codex
+  memories are disabled because they may hold this project; skills and plugins stay as in the
+  user's normal setup (user decision, 2026-10-20).
