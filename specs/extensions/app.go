@@ -33,8 +33,9 @@ func (f *Feature) Run(name string, describe func(*Scenario)) {
 func (s *Scenario) app(newApp func(contract.Dependencies) http.Handler) func(*journal.Journal[contract.Fact]) http.Handler {
 	return func(j *journal.Journal[contract.Fact]) http.Handler {
 		return newApp(contract.Dependencies{
-			Journal: j,
-			GitHub:  contract.GitHub{APIURL: fakeGitHubURL, Token: fakeGitHubToken, Transport: s.github.transport()},
+			Journal:       j,
+			GitHub:        contract.GitHub{APIURL: fakeGitHubURL, Token: fakeGitHubToken, Transport: s.github.transport()},
+			WebhookSecret: fakeWebhookSecret,
 		})
 	}
 }

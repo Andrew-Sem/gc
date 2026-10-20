@@ -14,6 +14,7 @@ type GitHub struct {
 }
 
 type Dependencies struct {
-	Journal Journal
-	GitHub  GitHub
+	Journal       Journal
+	GitHub        GitHub
+	WebhookSecret string
 }

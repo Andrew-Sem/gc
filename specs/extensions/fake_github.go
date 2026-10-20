@@ -17,6 +17,7 @@ const (
 	movedRepositoryPath  = "/repositories/42"
 	fakeGitHubURL        = "http://127.0.0.1:9"
 	fakeGitHubToken      = "spec-github-token"
+	fakeWebhookSecret    = "spec-webhook-secret"
 	longerThanAnyTimeout = 10 * time.Second
 )
 

@@ -38,6 +38,7 @@ func New(deps contract.Dependencies) http.Handler {
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
 	mux.HandleFunc("POST /repositories", s.connectRepository)
 	mux.HandleFunc("POST /repositories/{owner}/{name}/disconnect", s.disconnectRepository)
+	mux.HandleFunc("POST /webhooks/github", s.receiveWebhook)
 	return mux
 }
 

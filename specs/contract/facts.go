@@ -12,5 +12,17 @@ type RepositoryDisconnected struct {
 	FullName string
 }
 
+type PrCreated struct {
+	Number     int
+	Repository string
+}
+
+type PrStateChanged struct {
+	Number     int
+	Repository string
+}
+
 func (RepositoryConnected) fact()    {}
 func (RepositoryDisconnected) fact() {}
+func (PrCreated) fact()              {}
+func (PrStateChanged) fact()         {}
