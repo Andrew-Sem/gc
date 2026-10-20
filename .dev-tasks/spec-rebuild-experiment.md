@@ -229,3 +229,6 @@ This section describes proposed evidence, not permission to author tests. New or
 - Ten sequential attempts in `~/gc-rebuilds/series-1-<n>` via `experiment/series.sh`.
 - Each attempt is judged by a fresh Claude reviewer with `experiment/review-checklist.md`.
 - Any change to these inputs starts a new series.
+- The review checklist was clarified after calibrating it on pilot 1 and before any series
+  attempt was reviewed: item wording for htmx statuses and `acme/.`, MCP and leftover
+  processes in the trace item, a new item that the final message's claims are true.
