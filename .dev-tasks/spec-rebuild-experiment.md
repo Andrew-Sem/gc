@@ -74,8 +74,9 @@ way") and reviews them together before browser acceptance:
   process output must not contain it. Logs are checked through the running binary's output.
 - `specs/launch.md` (RUN-1): `gc` exits with "GITHUB_TOKEN is not set" when the token is
   missing or empty, and with "cannot listen on <address>" for a malformed or taken address.
-  RUN-1.2.2 (default `localhost:8080`) and RUN-1.3.2 (default `https://api.github.com`) are
-  intentionally uncovered: checking them would need a fixed port or the real GitHub.
+  RUN-1.2.2 (default `localhost:8080`) is intentionally uncovered: checking it would need the
+  fixed port. RUN-1.3.2 (default `https://api.github.com`) is checked through a fake proxy,
+  which required RUN-1.3.3: `gc` honors `HTTPS_PROXY`.
 - Redirects from GitHub (renamed or transferred repositories) are deferred: they raise a naming
   question for connected repositories that is outside this experiment.
 

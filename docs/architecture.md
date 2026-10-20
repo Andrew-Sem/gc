@@ -22,9 +22,12 @@ The framework imports neither the project contract nor application packages, inc
 own checks. Each project chooses its fact type and supplies a factory to `Feature.Run`.
 For this project, the factory is `web.New(contract.Dependencies) http.Handler`, connected in
 `specs/extensions/app.go`. Only that integration file imports the application. The second
-entry point is the `cmd/gc` binary: launch scenarios in `specs/extensions/launch.go` build it
-with `go build`, run it with a controlled environment, and check its exit, output, and HTTP
-answers.
+entry point is the `cmd/gc` binary. It serves the same `web.New` handler, never a separate
+one, so the fast scenarios and the binary check one application. Launch scenarios in
+`specs/extensions/launch.go` build it with `go build`, run it with a controlled environment,
+and check its exit, output, and HTTP answers. The environment points `HTTPS_PROXY` at a fake
+proxy that records which host `gc` asks for and refuses to forward, so the default GitHub API
+is checked without leaving the machine.
 
 Each scenario gets a fresh journal and its own fake GitHub. HTTP scenarios run inside a
 `testing/synctest` bubble, so timeouts pass in virtual time: a 5-second wait costs nothing.

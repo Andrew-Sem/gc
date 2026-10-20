@@ -53,6 +53,24 @@ func TestLaunch(t *testing.T) {
 			ExpectOutput("cannot listen on " + s.Address())
 	})
 
+	f.RunLaunch("connect through api.github.com without GITHUB_API_URL", func(s *extensions.Launch) {
+		s.GivenUnset("GITHUB_API_URL").
+			Covers("RUN-1.3.2", "RUN-1.3.3").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("gc asks api.github.com through the proxy, which refuses").
+			ExpectStatus(http.StatusBadGateway).
+			ExpectProxyAsked("api.github.com:443")
+	})
+
+	f.RunLaunch("connect through the proxy in HTTPS_PROXY", func(s *extensions.Launch) {
+		s.GivenEnv("GITHUB_API_URL", "https://github.example.test").
+			Covers("RUN-1.3.3").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("gc asks the configured API through the proxy, which refuses").
+			ExpectStatus(http.StatusBadGateway).
+			ExpectProxyAsked("github.example.test:443")
+	})
+
 	f.RunLaunch("connect through the GitHub API in GITHUB_API_URL", func(s *extensions.Launch) {
 		s.GivenGitHubSees("acme/api").
 			Covers("RUN-1.3.1").

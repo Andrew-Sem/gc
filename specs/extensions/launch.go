@@ -6,11 +6,13 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Andrew-Sem/gc/framework/spec"
@@ -26,6 +28,7 @@ type Launch struct {
 	github  *fakeGitHub
 	addr    string
 	apiURL  string
+	proxy   *fakeProxy
 	covers  []string
 	env     map[string]string
 	unset   []string
@@ -38,11 +41,19 @@ type Launch struct {
 	status        int
 	outputs       []string
 	absentOutputs []string
+	proxyAsked    []string
 }
 
 func newLaunch(binary string) *Launch {
 	github := newFakeGitHub()
-	return &Launch{binary: binary, github: github, apiURL: github.listen(), addr: freeAddress(), env: map[string]string{}}
+	return &Launch{
+		binary: binary,
+		github: github,
+		apiURL: github.listen(),
+		proxy:  newFakeProxy(),
+		addr:   freeAddress(),
+		env:    map[string]string{},
+	}
 }
 
 func freeAddress() string {
@@ -149,6 +160,11 @@ func (l *Launch) ExpectOutputWithout(text string) *Launch {
 	return l
 }
 
+func (l *Launch) ExpectProxyAsked(hosts ...string) *Launch {
+	l.proxyAsked = hosts
+	return l
+}
+
 func (l *Launch) Address() string {
 	return l.addr
 }
@@ -187,6 +203,10 @@ func (l *Launch) environ() []string {
 		"GC_ADDR":        l.addr,
 		"GITHUB_API_URL": l.apiURL,
 		"GITHUB_TOKEN":   fakeGitHubToken,
+		"HTTPS_PROXY":    l.proxy.server.URL,
+		"HTTP_PROXY":     l.proxy.server.URL,
+		"NO_PROXY":       "",
+		"no_proxy":       "",
 	}
 	maps.Copy(env, l.env)
 	var result []string
@@ -206,6 +226,7 @@ func (l *Launch) environ() []string {
 
 func (l *Launch) Run() []spec.Problem {
 	defer l.github.server.Close()
+	defer l.proxy.server.Close()
 	if problems := l.shapeProblems(); len(problems) > 0 {
 		return problems
 	}
@@ -265,6 +286,11 @@ func (l *Launch) Run() []spec.Problem {
 			problems = append(problems, launchProblem(fmt.Sprintf("expected output to contain %q, got %q", text, output.String())))
 		}
 	}
+	if l.proxyAsked != nil {
+		if got := l.proxy.askedSoFar(); !slices.Equal(got, l.proxyAsked) {
+			problems = append(problems, launchProblem(fmt.Sprintf("expected the proxy to be asked for %v, got %v", l.proxyAsked, got)))
+		}
+	}
 	for _, text := range l.absentOutputs {
 		if strings.Contains(output.String(), text) {
 			problems = append(problems, launchProblem(fmt.Sprintf("expected output not to contain %q", text)))
@@ -307,4 +333,27 @@ func (l *Launch) send() []spec.Problem {
 		return []spec.Problem{launchProblem(fmt.Sprintf("expected status %d, got %d", l.status, resp.StatusCode))}
 	}
 	return nil
+}
+
+type fakeProxy struct {
+	server *httptest.Server
+	mu     sync.Mutex
+	asked  []string
+}
+
+func newFakeProxy() *fakeProxy {
+	p := &fakeProxy{}
+	p.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p.mu.Lock()
+		p.asked = append(p.asked, r.Host)
+		p.mu.Unlock()
+		http.Error(w, "the spec proxy forwards nothing", http.StatusForbidden)
+	}))
+	return p
+}
+
+func (p *fakeProxy) askedSoFar() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.asked)
 }
