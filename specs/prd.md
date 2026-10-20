@@ -8,6 +8,9 @@ Human scenarios are carried out through admin pages: a form is submitted over HT
 server responds with HTML. Calling internal functions directly does not count as implementing a
 scenario.
 
+Each feature's contract details its scenario. Where the PRD and a contract differ, the contract
+is right.
+
 ## The system works by two rules
 
 1. **Hourly wake-up** — for repositories whose configured pace has come due: if there are fewer
@@ -103,29 +106,17 @@ precision is limited by the sweep step.
 
 ## 3. Connect a repository
 
-Access to GitHub is granted by a **PAT from the environment**, shared by the whole instance. The
-operator issues it themselves and sets it as `GITHUB_TOKEN` in the environment (see the
-[launch contract](launch.md)); the token is not entered in the admin, not shown, and not stored
-in the journal. The token needs permissions to read the repository and
-branch protection, and to write contents and pull requests.
+The operator chooses which repositories garbage-collector works with: a form checks access with
+the instance's PAT and writes `RepositoryConnected`; a button next to each repository writes
+`RepositoryDisconnected`. Past facts stay in the journal; nobody touches or closes open PRs. The
+operator sets the PAT as `GITHUB_TOKEN`; it needs permissions to read the repository and branch
+protection, and to write contents and pull requests. Details: the
+[connect contract](connect-repository.md) and the [launch contract](launch.md).
 
-Connecting a repository is a single form with an `owner/name` field and a button. The backend
-uses the token to check that the repository exists and is accessible, and writes
-`RepositoryConnected` only after a successful check. An inaccessible or nonexistent repository
-creates no fact: the page shows an error.
-
-Next to the list of connected repositories is a disconnect button: it writes
-`RepositoryDisconnected`, and no new ticks run for the repository. Past facts stay in the
-journal; nobody touches or closes open PRs.
-
-The operator configures webhooks on repositories to the same public path, signed with the
-instance's single webhook secret. The HTTP boundary first checks `X-Hub-Signature-256` with the
-instance's webhook secret, then dedupes by delivery ID, and only then parses the payload. An
-event about a repository that is not connected is dropped after the signature check.
-
-The `pull_request` and `check_run` events are needed. A missing webhook does not break merging:
-the sweep still requests evidence itself, but the "why is the PR stuck" screen will refresh only
-once every six hours.
+The operator points each repository's webhooks for `pull_request` and `check_run` events at one
+path, signed with the instance's webhook secret. Webhooks keep the "why is the PR stuck" screen fresh; a missing webhook does not break
+merging, since the sweep requests evidence itself. Details: the
+[webhook contract](receive-webhooks.md).
 
 ## 4. Configure the model and key
 
@@ -185,13 +176,13 @@ truth. Here are meaning and boundaries.
 
 | Fact | When it occurs |
 |---|---|
-| `PrStateChanged` | We saw a newer PR snapshot that differs from the known one. Carries head, target branch, draft, open, mergeable, creation and update dates. |
+| `PrStateChanged` | We saw a PR snapshot, not older than the known one, that differs from it. Carries head, target branch, draft, open, mergeable, creation and update dates. |
 | `CheckRunStateChanged` | We saw a newer check run state. Carries raw data: id, required identity, status, conclusion, and times. Whether it is required is not derived from the webhook. |
 | `RequiredChecksObserved` | We fully obtained the required inventory and all attempts for one PR, head, and `sweepId`. A partial response cannot be this fact. |
 | `LookupIncomplete` | A lookup broke off: rate limit, no permissions, an upstream error, or the pagination limit. A checks lookup carries `sweepId` and blocks only this sweep attempt. |
 
 `PrStateChanged` and `CheckRunStateChanged` are emitted only for our PRs and only if the
-observation is newer than the known one. The delivery ID drops an exact duplicate at intake,
+observation is not older than the known one. The delivery ID drops an exact duplicate at intake,
 `updatedAt` protects against late delivery of an old state, and comparing snapshots protects
 against a duplicate in content.
 
@@ -202,7 +193,7 @@ complete. Merging is allowed only on the current sweep's `RequiredChecksObserved
 
 | Fact | When it occurs |
 |---|---|
-| `PrCreated` | The agent opened a PR. Carries `reportId`, number, branch, and first commit. Triggers reconciliation. |
+| `PrCreated` | The agent opened a PR. Carries `reportId`, repository, number, branch, and first commit. Triggers reconciliation. |
 | `AgentRunFinished` | An agent run ended. Carries `reportId`, repository, optional PR, outcome, and token usage. A failure before the PR was created does not invent a number. |
 | `AdmissionApproved` | Admission allowed starting new work. |
 | `MergeApproved` | The merge gate of the current `sweepId` allowed the merge. This is a decision, not an accomplished fact. |

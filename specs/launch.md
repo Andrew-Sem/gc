@@ -11,8 +11,8 @@ page.
 
 ## Glossary
 
-**Environment** — the variables `gc` reads at start: `GITHUB_TOKEN`, `GC_ADDR`,
-`GITHUB_API_URL`, and the standard proxy variables `HTTPS_PROXY`, `HTTP_PROXY`, and
+**Environment** — the variables `gc` reads at start: `GITHUB_TOKEN`, `GC_WEBHOOK_SECRET`,
+`GC_ADDR`, `GITHUB_API_URL`, and the standard proxy variables `HTTPS_PROXY`, `HTTP_PROXY`, and
 `NO_PROXY`.
 
 **Output** — everything `gc` writes to stdout and stderr, including its logs.
@@ -43,3 +43,8 @@ RUN-1.3.1. `gc` checks repository access through the GitHub API at `GITHUB_API_U
 RUN-1.3.2. Without `GITHUB_API_URL`, `gc` uses `https://api.github.com`.
 
 RUN-1.3.3. When `HTTPS_PROXY` is set, `gc` reaches an `https` GitHub API through that proxy.
+
+#### RUN-1.4. Webhook secret
+
+RUN-1.4.1. Without `GC_WEBHOOK_SECRET`, `gc` does not start: it exits with a non-zero status
+and prints "GC_WEBHOOK_SECRET is not set".
