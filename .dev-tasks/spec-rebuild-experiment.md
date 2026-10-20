@@ -159,3 +159,8 @@ This section describes proposed evidence, not permission to author tests. New or
 - User rejected browser-driven specifications (headless Chrome through `chromedp`, or a
   lighter headless browser) on 2026-10-20. htmx configuration, the served htmx asset and its
   version stay unchecked by specs; the independent reviewer and manual acceptance cover them.
+- User kept 422/502 error responses (which need the htmx response-handling configuration)
+  rather than switching errors to 200, accepting that the configuration stays unchecked and
+  relying on the rebuild agent and reviewer (2026-10-20).
+- REPO-2.3.1 checks the shape of every POST response without a browser: the updated block keeps
+  its htmx target, the form and the list, and the response carries no `h1` or `script`.

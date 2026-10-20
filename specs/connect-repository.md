@@ -119,6 +119,11 @@ remaining repositories keep their relative order.
 REPO-2.2.3. Connecting an already connected repository leaves the list order unchanged,
 including when the submitted name differs only in casing or surrounding spaces.
 
+#### REPO-2.3. Updated block
+
+REPO-2.3.1. The response to the connect form or a disconnect button is the updated block, not
+a whole page: the connect form, the list, and the error if there is one.
+
 ### REPO-3. Disconnecting
 
 #### REPO-3.1. Disconnect button

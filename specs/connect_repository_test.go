@@ -27,42 +27,50 @@ func TestConnectRepository(t *testing.T) {
 
 	f.Run("connect a repository the token can see", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api").
-			Covers("REPO-1.2.1", "REPO-1.2.2").
+			Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-2.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the repository is connected and listed").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
 			ExpectNoElement(`#repositories-panel [role="alert"]`)
 	})
 
 	f.Run("connect a repository the token cannot see", func(s *extensions.Scenario) {
-		s.Covers("REPO-1.3.1", "REPO-1.3.2").
+		s.Covers("REPO-1.3.1", "REPO-1.3.2", "REPO-2.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request is rejected and nothing is connected").
 			ExpectStatus(http.StatusUnprocessableEntity).
 			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectText(`#repositories-panel [role="alert"]`, "No access to this repository")
 	})
 
 	f.Run("connect a repository GitHub forbids", func(s *extensions.Scenario) {
 		s.GivenGitHubAnswers(http.StatusForbidden, "X-RateLimit-Remaining", "4999").
-			Covers("REPO-1.3.1", "REPO-1.3.2").
+			Covers("REPO-1.3.1", "REPO-1.3.2", "REPO-2.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request is rejected and nothing is connected").
 			ExpectStatus(http.StatusUnprocessableEntity).
 			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectText(`#repositories-panel [role="alert"]`, "No access to this repository")
 	})
 
 	f.Run("connect an already connected repository", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api").
-			Covers("REPO-1.4.1", "REPO-1.4.2").
+			Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-2.3.1").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("nothing more is recorded and GitHub is not asked").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
 			Expect(s.GitHubNotAsked())
 	})
@@ -70,11 +78,13 @@ func TestConnectRepository(t *testing.T) {
 	for _, name := range []string{"Acme/API", " acme/api ", " Acme/API "} {
 		f.Run("connect a normalized repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
 			s.GivenGitHubSees("acme/api").
-				Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-1.7.1", "REPO-1.7.2").
+				Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-1.7.1", "REPO-1.7.2", "REPO-2.3.1").
 				When(spec.Post("/repositories").WithForm("repo", name)).
 				Then("the normalized repository name is recorded and displayed").
 				ExpectStatus(http.StatusOK).
 				ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
 				ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
 				ExpectNoElement(`#repositories-panel [role="alert"]`)
 		})
@@ -82,12 +92,14 @@ func TestConnectRepository(t *testing.T) {
 
 	for _, name := range []string{"Acme/API", " acme/api ", " Acme/API "} {
 		f.Run("connect an already connected normalized repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
-			s.Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-1.7.3").
+			s.Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-1.7.3", "REPO-2.3.1").
 				Given(contract.RepositoryConnected{FullName: "acme/api"}).
 				When(spec.Post("/repositories").WithForm("repo", name)).
 				Then("nothing more is recorded and GitHub is not asked").
 				ExpectStatus(http.StatusOK).
 				ExpectFacts().
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
 				ExpectElement(`#repositories-panel li[data-repository="acme/api"]`).
 				ExpectNoElement(`#repositories-panel [role="alert"]`).
 				Expect(s.GitHubNotAsked())
@@ -97,11 +109,13 @@ func TestConnectRepository(t *testing.T) {
 	for _, name := range []string{"acmeapi", "/api", "acme/", "acme/api/extra", "", "ac me/api", "acme/ap i", "acme /api", "acme/ api", "   "} {
 		f.Run("reject malformed repository name "+strconv.Quote(name), func(s *extensions.Scenario) {
 			s.GivenGitHubSees(name).
-				Covers("REPO-1.5.1", "REPO-1.5.2").
+				Covers("REPO-1.5.1", "REPO-1.5.2", "REPO-2.3.1").
 				When(spec.Post("/repositories").WithForm("repo", name)).
 				Then("the request is rejected and GitHub is not asked").
 				ExpectStatus(http.StatusUnprocessableEntity).
 				ExpectFacts().
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
 				ExpectText(`#repositories-panel [role="alert"]`, "Enter the repository as owner/name").
 				Expect(s.GitHubNotAsked())
 		})
@@ -109,32 +123,38 @@ func TestConnectRepository(t *testing.T) {
 
 	f.Run("connect while GitHub does not answer", func(s *extensions.Scenario) {
 		s.GivenGitHubDoesNotAnswer().
-			Covers("REPO-1.6.1").
+			Covers("REPO-1.6.1", "REPO-2.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request fails and nothing is connected").
 			ExpectStatus(http.StatusBadGateway).
 			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub did not respond")
 	})
 
 	f.Run("connect while GitHub hangs", func(s *extensions.Scenario) {
 		s.GivenGitHubHangs().
-			Covers("REPO-1.6.1", "REPO-1.6.2").
+			Covers("REPO-1.6.1", "REPO-1.6.2", "REPO-2.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the application stops waiting after 5 seconds and nothing is connected").
 			ExpectStatus(http.StatusBadGateway).
 			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub did not respond").
 			Expect(s.GitHubWaited(5 * time.Second))
 	})
 
 	f.Run("connect while GitHub rejects the token", func(s *extensions.Scenario) {
 		s.GivenGitHubRejectsToken().
-			Covers("REPO-1.8.1").
+			Covers("REPO-1.8.1", "REPO-2.3.1").
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 			Then("the request fails and nothing is connected").
 			ExpectStatus(http.StatusBadGateway).
 			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectText(`#repositories-panel [role="alert"]`, "GitHub rejected the token. Check GITHUB_TOKEN.")
 	})
 
@@ -146,11 +166,13 @@ func TestConnectRepository(t *testing.T) {
 	} {
 		f.Run("connect while GitHub fails with "+strconv.Itoa(status), func(s *extensions.Scenario) {
 			s.GivenGitHubAnswers(status).
-				Covers("REPO-1.9.1").
+				Covers("REPO-1.9.1", "REPO-2.3.1").
 				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 				Then("the request fails and nothing is connected").
 				ExpectStatus(http.StatusBadGateway).
 				ExpectFacts().
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
 				ExpectText(`#repositories-panel [role="alert"]`, "Could not check access: GitHub failed. Try again later.")
 		})
 	}
@@ -166,11 +188,13 @@ func TestConnectRepository(t *testing.T) {
 	} {
 		f.Run("connect while GitHub limits requests with "+limit.name, func(s *extensions.Scenario) {
 			s.GivenGitHubAnswers(limit.status, limit.header...).
-				Covers("REPO-1.10.1", "REPO-1.10.2").
+				Covers("REPO-1.10.1", "REPO-1.10.2", "REPO-2.3.1").
 				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 				Then("the request fails and nothing is connected").
 				ExpectStatus(http.StatusBadGateway).
 				ExpectFacts().
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
 				ExpectText(`#repositories-panel [role="alert"]`, "GitHub rate limit reached. Try again later.")
 		})
 	}
@@ -210,7 +234,7 @@ func TestConnectRepository(t *testing.T) {
 
 	f.Run("connect a repository at the top of the list", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/web").
-			Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-2.2.1").
+			Covers("REPO-1.2.1", "REPO-1.2.2", "REPO-2.2.1", "REPO-2.3.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/worker"},
@@ -219,6 +243,8 @@ func TestConnectRepository(t *testing.T) {
 			Then("web is connected above worker and api").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/web"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
 			ExpectElement(`#repositories > li:nth-child(2)[data-repository="acme/worker"]`).
 			ExpectElement(`#repositories > li:nth-child(3):last-child[data-repository="acme/api"]`)
@@ -226,7 +252,7 @@ func TestConnectRepository(t *testing.T) {
 
 	f.Run("reconnect a repository at the top of the list", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/web").
-			Covers("REPO-2.2.2", "REPO-3.4.1").
+			Covers("REPO-2.2.2", "REPO-3.4.1", "REPO-2.3.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/web"},
 				contract.RepositoryConnected{FullName: "acme/api"},
@@ -237,6 +263,8 @@ func TestConnectRepository(t *testing.T) {
 			Then("web is reconnected above worker and api without a duplicate row").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/web"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
 			ExpectElement(`#repositories > li:nth-child(2)[data-repository="acme/worker"]`).
 			ExpectElement(`#repositories > li:nth-child(3):last-child[data-repository="acme/api"]`)
@@ -244,7 +272,7 @@ func TestConnectRepository(t *testing.T) {
 
 	for _, name := range []string{"acme/api", " Acme/API "} {
 		f.Run("connect an already connected repository without reordering "+strconv.Quote(name), func(s *extensions.Scenario) {
-			s.Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-2.2.3").
+			s.Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-2.2.3", "REPO-2.3.1").
 				Given(
 					contract.RepositoryConnected{FullName: "acme/api"},
 					contract.RepositoryConnected{FullName: "acme/worker"},
@@ -254,6 +282,8 @@ func TestConnectRepository(t *testing.T) {
 				Then("repositories remain listed as web, worker, api and no fact is recorded").
 				ExpectStatus(http.StatusOK).
 				ExpectFacts().
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
 				ExpectElement(`#repositories > li:nth-child(1)[data-repository="acme/web"]`).
 				ExpectElement(`#repositories > li:nth-child(2)[data-repository="acme/worker"]`).
 				ExpectElement(`#repositories > li:nth-child(3):last-child[data-repository="acme/api"]`).
@@ -276,7 +306,7 @@ func TestConnectRepository(t *testing.T) {
 	})
 
 	f.Run("disconnect a connected repository", func(s *extensions.Scenario) {
-		s.Covers("REPO-3.2.1", "REPO-3.2.2").
+		s.Covers("REPO-3.2.1", "REPO-3.2.2", "REPO-2.3.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryConnected{FullName: "acme/web"},
@@ -285,12 +315,14 @@ func TestConnectRepository(t *testing.T) {
 			Then("the repository is disconnected and only the other one is listed").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(contract.RepositoryDisconnected{FullName: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectNoElement(`#repositories-panel li[data-repository="acme/api"]`).
 			ExpectElement(`#repositories-panel li[data-repository="acme/web"]`)
 	})
 
 	f.Run("disconnect an already disconnected repository", func(s *extensions.Scenario) {
-		s.Covers("REPO-3.3.1").
+		s.Covers("REPO-3.3.1", "REPO-2.3.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryDisconnected{FullName: "acme/api"},
@@ -299,13 +331,15 @@ func TestConnectRepository(t *testing.T) {
 			Then("nothing more is recorded").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories-panel`).
 			ExpectNoElement(`#repositories-panel li[data-repository="acme/api"]`)
 	})
 
 	f.Run("reconnect a disconnected repository", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api").
-			Covers("REPO-3.4.1").
+			Covers("REPO-3.4.1", "REPO-2.3.1").
 			Given(
 				contract.RepositoryConnected{FullName: "acme/api"},
 				contract.RepositoryDisconnected{FullName: "acme/api"},
@@ -314,6 +348,8 @@ func TestConnectRepository(t *testing.T) {
 			Then("the repository is connected again and listed").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"]`)
 	})
 
@@ -329,11 +365,13 @@ func TestConnectRepository(t *testing.T) {
 		f.Run("connect while GitHub echoes the token with "+strconv.Itoa(answer.github), func(s *extensions.Scenario) {
 			s.GivenGitHubEchoesToken().
 				GivenGitHubAnswers(answer.github).
-				Covers("REPO-4.1.1", "REPO-4.1.2").
+				Covers("REPO-4.1.1", "REPO-4.1.2", "REPO-2.3.1").
 				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
 				Then("the token is neither recorded nor shown").
 				ExpectStatus(answer.page).
 				ExpectFacts().
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
 				ExpectBodyWithout(s.GitHubToken())
 		})
 

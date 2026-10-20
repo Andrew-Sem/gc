@@ -7,6 +7,11 @@ import (
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
+const (
+	UpdatedBlock = `#repositories-panel[hx-target="#repositories-panel"][hx-swap="outerHTML"]:has(form input[name="repo"]):has(#repositories)`
+	WholePage    = `h1, script`
+)
+
 type Scenario struct {
 	*spec.Scenario[contract.Fact]
 	github *fakeGitHub
