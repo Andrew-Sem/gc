@@ -79,6 +79,28 @@ func TestConnectRepository(t *testing.T) {
 			ExpectText(`#repositories-panel [role="alert"]`, "No access to this repository")
 	})
 
+	for _, status := range []int{
+		http.StatusMovedPermanently,
+		http.StatusFound,
+		http.StatusTemporaryRedirect,
+		http.StatusPermanentRedirect,
+	} {
+		f.Run("connect a repository GitHub moved with "+strconv.Itoa(status), func(s *extensions.Scenario) {
+			s.GivenGitHubMovedRepository(status).
+				Covers("REPO-1.12.1", "REPO-1.11.1", "REPO-2.3.1").
+				Given(contract.RepositoryConnected{FullName: "acme/web"}).
+				When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+				Then("the redirect is not followed and nothing is connected").
+				ExpectStatus(http.StatusUnprocessableEntity).
+				ExpectFacts().
+				ExpectElement(extensions.UpdatedBlock).
+				ExpectNoElement(extensions.WholePage).
+				ExpectElement(`#repositories-panel li[data-repository="acme/web"]`).
+				ExpectText(`#repositories-panel [role="alert"]`, "GitHub moved this repository. Enter its current name.").
+				Expect(s.GitHubAsked("acme/api"))
+		})
+	}
+
 	f.Run("connect an already connected repository", func(s *extensions.Scenario) {
 		s.GivenGitHubSees("acme/api").
 			Covers("REPO-1.4.1", "REPO-1.4.2", "REPO-2.3.1").

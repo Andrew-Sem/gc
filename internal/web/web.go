@@ -34,6 +34,7 @@ const (
 	tokenRejected
 	githubFailed
 	rateLimited
+	moved
 )
 
 type server struct {
@@ -76,6 +77,9 @@ func (s *server) connectRepository(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, github.ErrRateLimited):
 		s.renderPanel(w, r, http.StatusBadGateway, rateLimited)
+		return
+	case errors.Is(err, github.ErrMoved):
+		s.renderPanel(w, r, http.StatusUnprocessableEntity, moved)
 		return
 	case errors.Is(err, github.ErrFailed):
 		s.renderPanel(w, r, http.StatusBadGateway, githubFailed)

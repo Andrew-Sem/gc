@@ -79,6 +79,8 @@ way") and reviews them together before browser acceptance:
   which required RUN-1.3.3: `gc` honors `HTTPS_PROXY`.
 - Redirects from GitHub (renamed or transferred repositories) are deferred: they raise a naming
   question for connected repositories that is outside this experiment.
+  Resolved on 2026-10-20 after series 2 showed the ambiguity: a redirect is not followed and
+  shows "GitHub moved this repository. Enter its current name." (REPO-1.12.1, response 422).
 
 ### Stage C — finish and accept the reference feature
 

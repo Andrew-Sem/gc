@@ -16,6 +16,7 @@ var (
 	ErrTokenRejected = errors.New("GitHub rejected the token")
 	ErrRateLimited   = errors.New("GitHub rate limit reached")
 	ErrFailed        = errors.New("GitHub failed")
+	ErrMoved         = errors.New("GitHub moved the repository")
 )
 
 type Client struct {
@@ -28,7 +29,11 @@ func New(config contract.GitHub) *Client {
 	return &Client{
 		apiURL: strings.TrimSuffix(config.APIURL, "/"),
 		token:  config.Token,
-		http:   &http.Client{Transport: config.Transport, Timeout: 5 * time.Second},
+		http: &http.Client{
+			Transport:     config.Transport,
+			Timeout:       5 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 	}
 }
 
@@ -51,6 +56,8 @@ func (c *Client) CanAccess(ctx context.Context, fullName string) (bool, error) {
 		return true, nil
 	case resp.StatusCode == http.StatusUnauthorized:
 		return false, ErrTokenRejected
+	case resp.StatusCode >= 300 && resp.StatusCode < 400:
+		return false, ErrMoved
 	case rateLimited(resp):
 		return false, ErrRateLimited
 	case resp.StatusCode == http.StatusNotFound, resp.StatusCode == http.StatusForbidden:

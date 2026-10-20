@@ -45,6 +45,13 @@ page shows the error "No access to this repository" (response 422).
 REPO-1.3.2. GitHub reports a repository as inaccessible when it answers 404, or 403 that is not
 a rate limit (REPO-1.10.2).
 
+#### REPO-1.12. GitHub moved the repository
+
+REPO-1.12.1. If GitHub answers with a redirect (301, 302, 307, or 308), for example because the
+repository was renamed or transferred, the application does not follow it. No fact is written,
+and the page shows the error "GitHub moved this repository. Enter its current name." (response
+422).
+
 #### REPO-1.4. The repository is already connected
 
 REPO-1.4.1. Connecting an already connected repository writes no facts (response 200).
@@ -111,7 +118,8 @@ REPO-1.10.2. GitHub limits requests when it answers 429, or 403 with the header
 #### REPO-1.11. One attempt
 
 REPO-1.11.1. A connect request asks GitHub at most once. When GitHub rejects the token, fails,
-limits requests, or does not respond, the error is shown without retrying.
+limits requests, moves the repository, or does not respond, the error is shown without
+retrying.
 
 ### REPO-2. Repository list
 

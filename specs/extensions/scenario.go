@@ -57,6 +57,11 @@ func (s *Scenario) GivenGitHubUnreachable() *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenGitHubMovedRepository(status int) *Scenario {
+	s.github.given(func(g *fakeGitHub) { g.moves = status })
+	return s
+}
+
 func (s *Scenario) GitHubToken() string {
 	return fakeGitHubToken
 }

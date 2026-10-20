@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	movedRepositoryPath  = "/repositories/42"
 	fakeGitHubURL        = "http://127.0.0.1:9"
 	fakeGitHubToken      = "spec-github-token"
 	longerThanAnyTimeout = 10 * time.Second
@@ -32,6 +33,7 @@ type fakeGitHub struct {
 	hangEnded     chan struct{}
 	echoesToken   bool
 	unreachable   bool
+	moves         int
 }
 
 type cannedAnswer struct {
@@ -100,7 +102,7 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	g.mu.Lock()
 	g.asked = append(g.asked, fullName)
 	sees := slices.Contains(g.sees, fullName)
-	doesNotAnswer, rejectsToken, answer, hangs, echoesToken := g.doesNotAnswer, g.rejectsToken, g.answer, g.hangs, g.echoesToken
+	doesNotAnswer, rejectsToken, answer, hangs, echoesToken, moves := g.doesNotAnswer, g.rejectsToken, g.answer, g.hangs, g.echoesToken, g.moves
 	g.mu.Unlock()
 
 	if hangs {
@@ -120,6 +122,11 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `{"message":%q}`, message)
 	}
 	switch {
+	case moves != 0 && strings.HasPrefix(r.URL.Path, "/repos/"):
+		w.Header().Set("Location", movedRepositoryPath)
+		fail(moves, http.StatusText(moves))
+	case moves != 0 && r.URL.Path == movedRepositoryPath:
+		fmt.Fprint(w, `{"full_name":"Acme/Api-Renamed"}`)
 	case answer != nil:
 		for i := 0; i+1 < len(answer.header); i += 2 {
 			w.Header().Set(answer.header[i], answer.header[i+1])

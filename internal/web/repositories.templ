@@ -28,6 +28,8 @@ templ repositoriesPanel(repositories []string, p problem) {
 				<p role="alert">Could not check access: GitHub failed. Try again later.</p>
 			case rateLimited:
 				<p role="alert">GitHub rate limit reached. Try again later.</p>
+			case moved:
+				<p role="alert">GitHub moved this repository. Enter its current name.</p>
 		}
 		@repositoryList(repositories)
 	</section>

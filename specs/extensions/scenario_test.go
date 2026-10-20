@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -108,6 +109,30 @@ func TestFakeGitHubAnswersInItsOwnCasing(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if want := `{"full_name":"Acme/Api"}`; string(body) != want {
 		t.Errorf("body = %s, want %s", body, want)
+	}
+}
+
+func TestFakeGitHubMovesRepository(t *testing.T) {
+	g := newFakeGitHub()
+	g.moves = http.StatusMovedPermanently
+	ask := func(client *http.Client) (int, string) {
+		req, _ := http.NewRequest(http.MethodGet, fakeGitHubURL+"/repos/acme/api", nil)
+		req.Header.Set("Authorization", "Bearer "+fakeGitHubToken)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, resp.Header.Get("Location") + string(body)
+	}
+
+	noFollow := &http.Client{Transport: g.transport(), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	if status, got := ask(noFollow); status != http.StatusMovedPermanently || !strings.HasPrefix(got, movedRepositoryPath) {
+		t.Errorf("without following: %d %s, want 301 to %s", status, got, movedRepositoryPath)
+	}
+	if status, got := ask(&http.Client{Transport: g.transport()}); status != http.StatusOK || got != `{"full_name":"Acme/Api-Renamed"}` {
+		t.Errorf("following: %d %s, want 200 with the renamed repository", status, got)
 	}
 }
 
