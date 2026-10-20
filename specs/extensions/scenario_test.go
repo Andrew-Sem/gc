@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Andrew-Sem/gc/framework/spec"
@@ -13,7 +14,6 @@ import (
 
 func TestRunFindsGitHubAsked(t *testing.T) {
 	s := newScenario(&spec.Scenario[contract.Fact]{})
-	t.Cleanup(s.github.server.Close)
 	s.When(spec.Post("/repositories")).
 		ExpectStatus(http.StatusOK).
 		ExpectFacts().
@@ -21,7 +21,8 @@ func TestRunFindsGitHubAsked(t *testing.T) {
 
 	asksGitHub := func(deps contract.Dependencies) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if resp, err := http.Get(deps.GitHub.APIURL + "/repos/acme/api"); err == nil {
+			client := &http.Client{Transport: deps.GitHub.Transport}
+			if resp, err := client.Get(deps.GitHub.APIURL + "/repos/acme/api"); err == nil {
 				resp.Body.Close()
 			}
 			w.WriteHeader(http.StatusOK)
@@ -37,7 +38,6 @@ func TestRunFindsGitHubAsked(t *testing.T) {
 
 func TestRunAcceptsGitHubNotAsked(t *testing.T) {
 	s := newScenario(&spec.Scenario[contract.Fact]{})
-	t.Cleanup(s.github.server.Close)
 	s.When(spec.Post("/repositories")).
 		ExpectStatus(http.StatusOK).
 		ExpectFacts().
@@ -72,17 +72,16 @@ func TestFakeGitHubAnswersLikeGitHub(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := newFakeGitHub()
-			defer g.server.Close()
 			g.sees = []string{"acme/api"}
 			if tt.given != nil {
 				tt.given(g)
 			}
 
-			req, _ := http.NewRequest(http.MethodGet, g.server.URL+tt.path, nil)
+			req, _ := http.NewRequest(http.MethodGet, fakeGitHubURL+tt.path, nil)
 			if tt.auth != "" {
 				req.Header.Set("Authorization", tt.auth)
 			}
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := (&http.Client{Transport: g.transport()}).Do(req)
 			got := 0
 			if err == nil {
 				got = resp.StatusCode
@@ -97,12 +96,11 @@ func TestFakeGitHubAnswersLikeGitHub(t *testing.T) {
 
 func TestFakeGitHubEchoesToken(t *testing.T) {
 	g := newFakeGitHub()
-	defer g.server.Close()
 	g.echoesToken = true
 
-	req, _ := http.NewRequest(http.MethodGet, g.server.URL+"/repos/acme/api", nil)
+	req, _ := http.NewRequest(http.MethodGet, fakeGitHubURL+"/repos/acme/api", nil)
 	req.Header.Set("Authorization", "Bearer "+fakeGitHubToken)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := (&http.Client{Transport: g.transport()}).Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,17 +113,36 @@ func TestFakeGitHubEchoesToken(t *testing.T) {
 }
 
 func TestFakeGitHubMeasuresHowLongItWasAwaited(t *testing.T) {
-	g := newFakeGitHub()
-	defer g.server.Close()
-	g.hangs = true
+	synctest.Test(t, func(t *testing.T) {
+		g := newFakeGitHub()
+		g.hangs = true
 
-	client := &http.Client{Timeout: 200 * time.Millisecond}
-	if resp, err := client.Get(g.server.URL + "/repos/acme/api"); err == nil {
-		resp.Body.Close()
-		t.Fatalf("got status %d, want no answer", resp.StatusCode)
+		client := &http.Client{Transport: g.transport(), Timeout: 5 * time.Second}
+		if resp, err := client.Get(fakeGitHubURL + "/repos/acme/api"); err == nil {
+			resp.Body.Close()
+			t.Fatalf("got status %d, want no answer", resp.StatusCode)
+		}
+		if got := g.waitedSoFar(); got != 5*time.Second {
+			t.Errorf("waited %s, want 5s", got)
+		}
+	})
+}
+
+func TestFakeGitHubServesOverNetwork(t *testing.T) {
+	g := newFakeGitHub()
+	url := g.listen()
+	defer g.server.Close()
+	g.sees = []string{"acme/api"}
+
+	req, _ := http.NewRequest(http.MethodGet, url+"/repos/acme/api", nil)
+	req.Header.Set("Authorization", "Bearer "+fakeGitHubToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := g.waitedSoFar(); got < 150*time.Millisecond || got > 400*time.Millisecond {
-		t.Errorf("waited %s, want about 200ms", got)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
 }
 

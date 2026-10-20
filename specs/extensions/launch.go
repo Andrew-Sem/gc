@@ -25,6 +25,7 @@ type Launch struct {
 	binary  string
 	github  *fakeGitHub
 	addr    string
+	apiURL  string
 	covers  []string
 	env     map[string]string
 	unset   []string
@@ -40,7 +41,8 @@ type Launch struct {
 }
 
 func newLaunch(binary string) *Launch {
-	return &Launch{binary: binary, github: newFakeGitHub(), addr: freeAddress(), env: map[string]string{}}
+	github := newFakeGitHub()
+	return &Launch{binary: binary, github: github, apiURL: github.listen(), addr: freeAddress(), env: map[string]string{}}
 }
 
 func freeAddress() string {
@@ -183,7 +185,7 @@ func (l *Launch) shapeProblems() []spec.Problem {
 func (l *Launch) environ() []string {
 	env := map[string]string{
 		"GC_ADDR":        l.addr,
-		"GITHUB_API_URL": l.github.server.URL,
+		"GITHUB_API_URL": l.apiURL,
 		"GITHUB_TOKEN":   fakeGitHubToken,
 	}
 	maps.Copy(env, l.env)

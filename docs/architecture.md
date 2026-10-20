@@ -26,12 +26,19 @@ entry point is the `cmd/gc` binary: launch scenarios in `specs/extensions/launch
 with `go build`, run it with a controlled environment, and check its exit, output, and HTTP
 answers.
 
-Each scenario gets a fresh journal and its own fake GitHub HTTP server. The application talks
-to it through its real GitHub client, so specs check the client too; the fake answers like
+Each scenario gets a fresh journal and its own fake GitHub. HTTP scenarios run inside a
+`testing/synctest` bubble, so timeouts pass in virtual time: a 5-second wait costs nothing.
+Inside the bubble the fake GitHub lives in memory and is reached only through
+`contract.GitHub.Transport`; the application must send every GitHub request through that
+transport (`cmd/gc` leaves it nil, which means the real network). The `APIURL` given to
+scenarios points at a closed local port, so a client that ignores the transport fails with an
+ordinary connection error. Launch scenarios run outside the bubble and serve the same fake over
+real HTTP. The application talks to the fake through its real GitHub client, so specs check
+the client too; the fake answers like
 GitHub: 200 for a visible repository, 404 for an invisible one or a request without a token,
 401 for a wrong token. Scenarios can also make it reject the token, answer any status with
-headers, drop the connection, hang until the client gives up (a real 5-second wait), or echo
-the token in error bodies. `Given` seeds the journal, `When` sends a
+headers, drop the connection, hang until the client gives up, or echo the token in error
+bodies. `Given` seeds the journal, `When` sends a
 request directly to the handler, and `ExpectFacts` compares the complete ordered appended
 suffix. `ExpectFacts()` explicitly requires an empty suffix. Project-specific checks are
 values passed to `Expect`, such as `Expect(s.GitHubNotAsked())`; common HTTP and HTML checks,

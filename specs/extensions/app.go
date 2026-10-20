@@ -22,11 +22,6 @@ func NewFeature(t *testing.T, path string) *Feature {
 
 func (f *Feature) Run(name string, describe func(*Scenario)) {
 	var scenario *Scenario
-	defer func() {
-		if scenario != nil {
-			scenario.github.server.Close()
-		}
-	}()
 	f.core.Run(name, func(core *spec.Scenario[contract.Fact]) {
 		scenario = newScenario(core)
 		describe(scenario)
@@ -39,7 +34,7 @@ func (s *Scenario) app(newApp func(contract.Dependencies) http.Handler) func(*jo
 	return func(j *journal.Journal[contract.Fact]) http.Handler {
 		return newApp(contract.Dependencies{
 			Journal: j,
-			GitHub:  contract.GitHub{APIURL: s.github.server.URL, Token: fakeGitHubToken},
+			GitHub:  contract.GitHub{APIURL: fakeGitHubURL, Token: fakeGitHubToken, Transport: s.github.transport()},
 		})
 	}
 }

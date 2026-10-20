@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/Andrew-Sem/gc/framework/journal"
 )
@@ -139,7 +140,7 @@ type Custom interface {
 }
 
 func (f *Feature[F]) Run(name string, describe func(s *Scenario[F]), newApp func(*journal.Journal[F]) http.Handler) {
-	f.run(name, func() ([]string, func() []Problem) {
+	f.run(name, true, func() ([]string, func() []Problem) {
 		s := &Scenario[F]{}
 		describe(s)
 		return s.covers, func() []Problem { return s.Run(newApp) }
@@ -147,27 +148,35 @@ func (f *Feature[F]) Run(name string, describe func(s *Scenario[F]), newApp func
 }
 
 func (f *Feature[F]) RunCustom(name string, describe func() Custom) {
-	f.run(name, func() ([]string, func() []Problem) {
+	f.run(name, false, func() ([]string, func() []Problem) {
 		c := describe()
 		return c.Covered(), c.Run
 	})
 }
 
-func (f *Feature[F]) run(name string, describe func() ([]string, func() []Problem)) {
+func (f *Feature[F]) run(name string, virtualTime bool, describe func() ([]string, func() []Problem)) {
 	f.t.Run(name, func(t *testing.T) {
-		covers, run := describe()
-		for _, id := range covers {
-			switch {
-			case slices.Contains(f.clauses.leaves, id):
-			case slices.ContainsFunc(f.clauses.groups, func(g group) bool { return g.id == id }):
-				t.Errorf("%s is a heading in contract %s; cover its clauses instead", id, f.contract)
-			default:
-				t.Errorf("clause %s is not in contract %s", id, f.contract)
-			}
+		if virtualTime {
+			synctest.Test(t, func(t *testing.T) { f.check(t, describe) })
+			return
 		}
-		f.covered = append(f.covered, covers...)
-		for _, problem := range run() {
-			t.Errorf("%s", problem)
-		}
+		f.check(t, describe)
 	})
+}
+
+func (f *Feature[F]) check(t *testing.T, describe func() ([]string, func() []Problem)) {
+	covers, run := describe()
+	for _, id := range covers {
+		switch {
+		case slices.Contains(f.clauses.leaves, id):
+		case slices.ContainsFunc(f.clauses.groups, func(g group) bool { return g.id == id }):
+			t.Errorf("%s is a heading in contract %s; cover its clauses instead", id, f.contract)
+		default:
+			t.Errorf("clause %s is not in contract %s", id, f.contract)
+		}
+	}
+	f.covered = append(f.covered, covers...)
+	for _, problem := range run() {
+		t.Errorf("%s", problem)
+	}
 }

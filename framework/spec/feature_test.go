@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Andrew-Sem/gc/framework/journal"
 )
@@ -188,3 +189,21 @@ type custom struct {
 
 func (c custom) Covered() []string { return c.covers }
 func (c custom) Run() []Problem    { return c.problems }
+
+func TestRunUsesVirtualTime(t *testing.T) {
+	sleepsAMinute := func(*journal.Journal[string]) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(time.Minute)
+		})
+	}
+	start := time.Now()
+	f := NewFeature[string](t, "testdata/contract.md")
+	f.Run("slow page", func(s *Scenario[string]) {
+		s.When(Get("/repositories")).
+			ExpectStatus(http.StatusOK).
+			ExpectFacts()
+	}, sleepsAMinute)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("scenario took %s of real time, want virtual time", elapsed)
+	}
+}

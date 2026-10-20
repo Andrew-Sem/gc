@@ -17,7 +17,7 @@ func TestLaunchEnvironment(t *testing.T) {
 	l.GivenEnv("GC_ADDR", "no-port").GivenUnset("GITHUB_TOKEN")
 
 	env := l.environ()
-	for _, want := range []string{"GC_ADDR=no-port", "GITHUB_API_URL=" + l.github.server.URL, "GC_SPEC_KEPT=kept"} {
+	for _, want := range []string{"GC_ADDR=no-port", "GITHUB_API_URL=" + l.apiURL, "GC_SPEC_KEPT=kept"} {
 		if !slices.Contains(env, want) {
 			t.Errorf("environment has no %s", want)
 		}

@@ -62,7 +62,7 @@ func (s *Scenario) GitHubNotAsked() func() spec.Problem {
 func (s *Scenario) GitHubWaited(want time.Duration) func() spec.Problem {
 	return func() spec.Problem {
 		got := s.github.waitedSoFar()
-		if got < want-want/10 || got > want+want/5 {
+		if got != want {
 			return githubWaited{want: want, got: got}
 		}
 		return nil

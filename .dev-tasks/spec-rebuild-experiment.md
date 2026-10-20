@@ -66,8 +66,10 @@ way") and reviews them together before browser acceptance:
   "GitHub rate limit reached. Try again later."
 - REPO-1.9: any other error status answers 502 with "Could not check access: GitHub failed. Try
   again later."
-- REPO-1.6.2: the 5-second wait is checked with real time; it adds about 5 seconds to the spec
-  run. REPO-1.6.1 keeps its wording without "try again later".
+- REPO-1.6.2: the 5-second wait is checked in virtual time (`testing/synctest`), chosen by
+  the user over a configurable timeout or an injected clock. The cost is a `Transport` field
+  in `contract.GitHub` that the application must use. REPO-1.6.1 keeps its wording without
+  "try again later".
 - REPO-4.1.1–4.1.3: GitHub echoes the token in error bodies; the journal, the page, and the
   process output must not contain it. Logs are checked through the running binary's output.
 - `specs/launch.md` (RUN-1): `gc` exits with "GITHUB_TOKEN is not set" when the token is

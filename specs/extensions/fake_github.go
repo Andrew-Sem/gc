@@ -1,6 +1,8 @@
 package extensions
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 )
 
 const (
+	fakeGitHubURL        = "http://127.0.0.1:9"
 	fakeGitHubToken      = "spec-github-token"
 	longerThanAnyTimeout = 10 * time.Second
 )
@@ -35,9 +38,42 @@ type cannedAnswer struct {
 }
 
 func newFakeGitHub() *fakeGitHub {
-	g := &fakeGitHub{hangEnded: make(chan struct{})}
+	return &fakeGitHub{hangEnded: make(chan struct{})}
+}
+
+func (g *fakeGitHub) listen() string {
 	g.server = httptest.NewServer(http.HandlerFunc(g.serve))
-	return g
+	return g.server.URL
+}
+
+func (g *fakeGitHub) transport() http.RoundTripper {
+	return inMemory{handler: http.HandlerFunc(g.serve)}
+}
+
+type inMemory struct {
+	handler http.Handler
+}
+
+func (t inMemory) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx, cancel := context.WithCancel(req.Context())
+	defer cancel()
+	response := httptest.NewRecorder()
+	aborted := make(chan bool, 1)
+	go func() {
+		defer func() { aborted <- recover() != nil }()
+		t.handler.ServeHTTP(response, req.WithContext(ctx))
+	}()
+	select {
+	case <-req.Context().Done():
+		cancel()
+		<-aborted
+		return nil, req.Context().Err()
+	case wasAborted := <-aborted:
+		if wasAborted {
+			return nil, errors.New("connection closed by GitHub")
+		}
+		return response.Result(), nil
+	}
 }
 
 func (g *fakeGitHub) given(change func(*fakeGitHub)) {

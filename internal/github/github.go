@@ -28,7 +28,7 @@ func New(config contract.GitHub) *Client {
 	return &Client{
 		apiURL: strings.TrimSuffix(config.APIURL, "/"),
 		token:  config.Token,
-		http:   &http.Client{Timeout: 5 * time.Second},
+		http:   &http.Client{Transport: config.Transport, Timeout: 5 * time.Second},
 	}
 }
 
