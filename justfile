@@ -13,7 +13,7 @@ spec: generate
     go test -count=1 -v ./specs/...
 
 lint: generate
-    gofmt -l .
+    test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
     go vet ./...
     go tool templ fmt -fail .
 

@@ -187,6 +187,24 @@ This section describes proposed evidence, not permission to author tests. New or
 - `GITHUB_API_URL` with a path (GitHub Enterprise), the exact whitespace set, and 2xx answers
   other than 200 are unspecified.
 
+## Later, from the Codex review of 2026-10-20
+
+- Connect is check-then-append: two concurrent requests can both pass the duplicate check and
+  append two facts. The journal mutex protects the slice, not the invariant. Fix with a
+  conditional append or per-repository serialization, without holding a lock across the GitHub
+  request.
+- Cross-origin form posts can connect or disconnect repositories even on `localhost`; add
+  `http.CrossOriginProtection` with its own clause after the series, not before, so the frozen
+  inputs stay unchanged.
+- `cmd/gc` uses `http.Serve` without server timeouts.
+- The access check proves only that the token sees the repository, not that it can write
+  contents, open PRs, or read branch protection, as the PRD requires.
+- PRD: "closing practically never fails" leaves a failed close invisible; the PRD mixes
+  implemented and future behavior.
+- No CI workflow yet.
+- Uncovered clauses are reported but do not fail the run; a strict mode with an allowlist is
+  possible.
+
 ## Open questions
 
 - `just spec` is far from the one-second target the user wants for agent loops. Measure where
