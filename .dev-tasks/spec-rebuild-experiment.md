@@ -248,3 +248,31 @@ This section describes proposed evidence, not permission to author tests. New or
   scratch directory.
 - Run with `experiment/series.sh series-2 codex claude codex claude codex claude codex claude
   codex claude`; the source commit is pinned at start and recorded in every run directory.
+
+### Series 2 results (source `d2bb8c3`)
+
+| # | Implementer | Time | Specs | Codex reviewer | Claude reviewer |
+|---|---|---|---|---|---|
+| 1 | Codex | 2m32s | pass | success | success |
+| 2 | Claude | 2m39s | pass | failure: follows redirects | success |
+| 3 | Codex | 3m33s | pass | success | success |
+| 4 | Claude | 2m23s | pass | failure: htmx swaps every status; follows redirects | failure: htmx swaps every status |
+| 5 | Codex | 2m16s | pass | success | success |
+| 6 | Claude | 2m23s | pass | failure: follows redirects | success |
+| 7 | Codex | 3m05s | pass | success | success |
+| 8 | Claude | 2m55s | pass | invalid: saw another copy on localhost:8080 | success |
+| 9 | Codex | 2m29s | pass | success | success |
+| 10 | Claude | 2m35s | pass | failure: follows redirects | success |
+
+- All ten attempts pass every executable spec; no trace shows cheating (independent trace scan:
+  no writes outside `internal/` and `cmd/gc/`, no reads of the reference or other attempts, no
+  hardcoded spec constants, no MCP or computer use).
+- Every Claude attempt follows GitHub redirects, every Codex attempt disables them. Only the
+  Codex reviewer probes redirects. This is the deferred redirect question surfacing as a real
+  ambiguity of REPO-1.11.1.
+- One Claude attempt configured htmx to swap every status; both reviewers caught it.
+- Attempt 8's invalid verdict is a harness flaw: attempts and reviews ran concurrently and every
+  agent smoke-tested localhost:8080. Fixed by requiring `GC_ADDR` (RUN-1.2.4) and asking for a
+  random port in the prompt.
+- The Claude reviewer's report extraction took the last message instead of the report once;
+  `review.sh` now takes the last text starting at `Verdict:`.

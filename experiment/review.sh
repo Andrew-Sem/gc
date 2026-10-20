@@ -24,10 +24,14 @@ claude)
     --dangerously-skip-permissions --output-format stream-json --verbose \
     < /dev/null > "$run/review-claude.trace.jsonl" 2> "$run/review-claude.stderr.txt")
   python3 -I -c 'import json,sys
+report = ""
 for l in open(sys.argv[1]):
-    try: e=json.loads(l)
+    try: e = json.loads(l)
     except ValueError: continue
-    if e.get("type")=="result": open(sys.argv[2],"w").write(str(e.get("result","")))' "$run/review-claude.trace.jsonl" "$run/review-claude.md"
+    for b in e.get("message", {}).get("content", []) if e.get("type") == "assistant" else []:
+        text = b.get("text", "") if b.get("type") == "text" else ""
+        if "Verdict:" in text: report = text[text.index("Verdict:"):]
+open(sys.argv[2], "w").write(report)' "$run/review-claude.trace.jsonl" "$run/review-claude.md"
   ;;
 *) echo "unknown reviewer $family" >&2; exit 2 ;;
 esac
