@@ -35,6 +35,15 @@ func TestLaunch(t *testing.T) {
 			ExpectServing()
 	})
 
+	f.RunLaunch("start without an address", func(s *extensions.Launch) {
+		s.GivenUnset("GC_ADDR").
+			Covers("RUN-1.2.4").
+			WhenStarted().
+			Then("gc refuses to start").
+			ExpectExit().
+			ExpectOutput("GC_ADDR is not set")
+	})
+
 	f.RunLaunch("start on a malformed address", func(s *extensions.Launch) {
 		s.GivenEnv("GC_ADDR", "no-port").
 			Covers("RUN-1.2.3").

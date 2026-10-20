@@ -18,7 +18,10 @@ func main() {
 	if token == "" {
 		fail("GITHUB_TOKEN is not set")
 	}
-	addr := cmp.Or(os.Getenv("GC_ADDR"), "localhost:8080")
+	addr := os.Getenv("GC_ADDR")
+	if addr == "" {
+		fail("GC_ADDR is not set")
+	}
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		fail(fmt.Sprintf("cannot listen on %s: %v", addr, err))

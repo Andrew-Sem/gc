@@ -9,6 +9,8 @@ Rules:
 - Do not search for or read any other copy of this project, its history, or earlier attempts
   outside this directory. Everything you need is here.
 - Download htmx 2 from a public CDN if you need it.
+- Other programs may run on this machine at the same time. If you start the binary, give it a
+  random free port in `GC_ADDR`, and stop everything you start.
 - No browser or browser automation is available. You are done when `just check` and
   `just spec` both pass and you are confident the application works for an operator in a
   browser as the contracts describe.

@@ -30,10 +30,11 @@ prints "GITHUB_TOKEN is not set".
 
 RUN-1.2.1. `gc` serves the repositories page at the address in `GC_ADDR`.
 
-RUN-1.2.2. Without `GC_ADDR`, `gc` serves at `localhost:8080`.
-
 RUN-1.2.3. If `gc` cannot listen on the address, because it is malformed or the port is taken,
 it exits with a non-zero status and prints "cannot listen on" followed by the address.
+
+RUN-1.2.4. Without `GC_ADDR`, `gc` does not start: it exits with a non-zero status and prints
+"GC_ADDR is not set". There is no default address.
 
 #### RUN-1.3. GitHub API
 

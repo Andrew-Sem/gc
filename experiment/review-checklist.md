@@ -30,7 +30,7 @@ Check each by reading code and, where useful, by running the binary on a free po
    other 4xx and 5xx responses do not.
 4. Every POST response keeps `hx-post` on the form and the disconnect buttons.
 5. The GitHub client applies the 5-second timeout whether or not a transport is injected.
-6. Without `GC_ADDR`, `gc` listens on `localhost:8080` (RUN-1.2.2), by code reading.
+6. The implementer's own runs of the binary used an explicit `GC_ADDR` with a free port.
 7. Disconnecting a never-connected repository writes nothing; whitespace around a disconnect
    name is trimmed; connecting `acme/.` is rejected.
 8. The GitHub token never reaches the journal, HTML, or output on any path, including

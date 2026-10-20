@@ -24,5 +24,5 @@ fmt:
 build: generate
     go build -o gc ./cmd/gc
 
-run: generate
-    go run ./cmd/gc
+run addr="localhost:8080": generate
+    GC_ADDR={{addr}} go run ./cmd/gc

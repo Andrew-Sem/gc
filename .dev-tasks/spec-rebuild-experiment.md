@@ -44,7 +44,7 @@ After direct permission, draft the missing executable specifications and any req
 - Wait at most five seconds for GitHub; timeout has the same failure behavior, with no automatic retry or connection fact.
 - List repositories by most recent connection first. Disconnecting and reconnecting moves the repository to the top. Repeating a connection that is already active leaves its position unchanged.
 - Without `GITHUB_TOKEN`, startup fails with a clear error that does not disclose a token.
-- The listen address defaults to `localhost:8080` and is configurable through `GC_ADDR`. An invalid address or occupied port causes startup to fail with a clear error.
+- The listen address defaults to `localhost:8080` and is configurable through `GC_ADDR`. An invalid address or occupied port causes startup to fail with a clear error. Superseded on 2026-10-20: `GC_ADDR` is required (RUN-1.2.4), because every rebuild agent smoke-tested the default port and concurrent attempts collided on it.
 - Use the standard GitHub API by default, with `GITHUB_API_URL` overriding the endpoint for a local HTTP fixture.
 
 Name normalization and list ordering now have user-reviewed executable specifications and are implemented. All 31 repository scenarios pass; lint and build pass. The remaining decisions still need contract wording and executable-specification drafts, explicit permission to write those tests, and user review. Exact English error wording, application response statuses for the new failure cases, and any remaining GitHub protocol mappings are not yet approved.
@@ -74,8 +74,8 @@ way") and reviews them together before browser acceptance:
   process output must not contain it. Logs are checked through the running binary's output.
 - `specs/launch.md` (RUN-1): `gc` exits with "GITHUB_TOKEN is not set" when the token is
   missing or empty, and with "cannot listen on <address>" for a malformed or taken address.
-  RUN-1.2.2 (default `localhost:8080`) is intentionally uncovered: checking it would need the
-  fixed port. RUN-1.3.2 (default `https://api.github.com`) is checked through a fake proxy,
+  RUN-1.2.2 (default `localhost:8080`) was intentionally uncovered, then removed on
+  2026-10-20 in favor of a required `GC_ADDR` (RUN-1.2.4). RUN-1.3.2 (default `https://api.github.com`) is checked through a fake proxy,
   which required RUN-1.3.3: `gc` honors `HTTPS_PROXY`.
 - Redirects from GitHub (renamed or transferred repositories) are deferred: they raise a naming
   question for connected repositories that is outside this experiment.
