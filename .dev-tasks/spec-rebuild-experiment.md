@@ -292,3 +292,21 @@ passed every executable spec in about 2.5 minutes, with no sign of cheating. The
 findings (redirects, htmx configuration, the shared port) were turned into contract clauses,
 the retained `ui` package, and a required `GC_ADDR`. A series on the current inputs has not
 been run.
+
+## Control groups (user idea, 2026-10-20)
+
+To learn whether the executable specs are what made series 2 succeed, two control groups
+rebuild the same scenario with less material:
+
+- **A**: PRD, architecture, `specs/contract`, `ui`, `framework/journal`
+  (`experiment/arms/A.txt`, `experiment/arms/prompt-A.md`). Told to implement only PRD
+  scenario 3.
+- **B**: A plus the text contracts `connect-repository.md` and `launch.md`
+  (`experiment/arms/B.txt`, `experiment/arms/prompt-B.md`).
+- Both get the seam (`web.New`, `contract.Dependencies`, `Transport`, `ui`) so the hidden specs
+  can compile, and may write their own tests under `internal/`.
+- `experiment/acceptance.sh` runs the hidden executable specs on a copy and reports passed
+  scenarios and the clauses linked to failing ones. Both reviewers judge against the contracts
+  and mark promises group A could not know as `unknowable`.
+- Four attempts per group, two Codex and two Claude:
+  `ARM=A experiment/series.sh controls-A codex claude codex claude`, then the same for B.
