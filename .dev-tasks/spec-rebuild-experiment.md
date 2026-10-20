@@ -219,3 +219,13 @@ This section describes proposed evidence, not permission to author tests. New or
   through a computer-use MCP server from the user config, because the prompt asked for a real
   browser check. Runs now use `--ignore-user-config`, and the prompt says no browser is
   available.
+
+## Series 1 (frozen 2026-10-20)
+
+- Inputs: retained files of the commit that adds this section (`experiment/retained.txt`),
+  `experiment/prompt.md`, `experiment/run.sh` flags (`--ignore-user-config`, memories off,
+  workspace-write sandbox with network), Codex CLI 0.162.1, `gpt-6.1-sol` medium, no time or
+  token limit.
+- Ten sequential attempts in `~/gc-rebuilds/series-1-<n>` via `experiment/series.sh`.
+- Each attempt is judged by a fresh Claude reviewer with `experiment/review-checklist.md`.
+- Any change to these inputs starts a new series.
