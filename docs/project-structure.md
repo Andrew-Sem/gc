@@ -18,5 +18,5 @@ specs/                Project requirements and executable scenarios
 
 The project uses the framework; the framework knows nothing about the project.
 
-For a new project, reuse `framework`. For a rebuild, retain `framework` and `specs`,
-replace `internal`, and reset `cmd/gc` to a starter.
+For a new project, reuse `framework`. For a rebuild, retain `framework` and `specs`, and
+reimplement `internal` and `cmd/gc`.

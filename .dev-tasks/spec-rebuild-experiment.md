@@ -170,6 +170,23 @@ This section describes proposed evidence, not permission to author tests. New or
   fact about that repository, one GitHub attempt per request, disconnect names are normalized,
   and an unreachable GitHub counts as not responding.
 
+- The second coverage audit (2026-10-20) led to: error responses keep the existing list, POST
+  fragments keep `hx-post`, the fake GitHub answers `full_name` in its own casing, the journal
+  is safe for concurrent requests, REPO-1.8.2 pins a rejected token to 401, and stale PRD and
+  structure docs were corrected.
+
+## Known risks left to the reviewer
+
+- The 5-second timeout is checked only in the bubble; a client that sets the timeout only when a
+  transport is injected passes the specs but hangs in the real binary.
+- The fake GitHub's constants (`spec-github-token`, `http://127.0.0.1:9`) could be special-cased.
+- Disconnecting a never-connected repository, whitespace around a disconnect path, and the
+  repository name `.` are stated in the contract but not exercised.
+- Two concurrent connects of the same repository can both pass the duplicate check and append
+  two facts.
+- `GITHUB_API_URL` with a path (GitHub Enterprise), the exact whitespace set, and 2xx answers
+  other than 200 are unspecified.
+
 ## Open questions
 
 - `just spec` is far from the one-second target the user wants for agent loops. Measure where

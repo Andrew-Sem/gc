@@ -132,7 +132,7 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method != http.MethodGet || !strings.HasPrefix(r.URL.Path, "/repos/") || !sees:
 		fail(http.StatusNotFound, "Not Found")
 	default:
-		fmt.Fprintf(w, `{"full_name":%q}`, fullName)
+		fmt.Fprintf(w, `{"full_name":%q}`, canonicalCasing(fullName))
 	}
 }
 
@@ -183,4 +183,9 @@ type githubWaited struct {
 
 func (p githubWaited) String() string {
 	return fmt.Sprintf("expected the application to wait %s for GitHub, it waited %s", p.want, p.got.Round(time.Millisecond))
+}
+
+func canonicalCasing(fullName string) string {
+	owner, name, _ := strings.Cut(fullName, "/")
+	return strings.ToUpper(owner[:1]) + owner[1:] + "/" + strings.ToUpper(name[:1]) + name[1:]
 }

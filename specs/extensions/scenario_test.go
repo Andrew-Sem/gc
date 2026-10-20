@@ -95,6 +95,22 @@ func TestFakeGitHubAnswersLikeGitHub(t *testing.T) {
 	}
 }
 
+func TestFakeGitHubAnswersInItsOwnCasing(t *testing.T) {
+	g := newFakeGitHub()
+	g.sees = []string{"acme/api"}
+	req, _ := http.NewRequest(http.MethodGet, fakeGitHubURL+"/repos/acme/api", nil)
+	req.Header.Set("Authorization", "Bearer "+fakeGitHubToken)
+	resp, err := (&http.Client{Transport: g.transport()}).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if want := `{"full_name":"Acme/Api"}`; string(body) != want {
+		t.Errorf("body = %s, want %s", body, want)
+	}
+}
+
 func TestFakeGitHubEchoesToken(t *testing.T) {
 	g := newFakeGitHub()
 	g.echoesToken = true

@@ -8,9 +8,9 @@ restart persistence are planned separately.
 
 | Package | Responsibility |
 |---|---|
-| `framework/journal` | Generic append-only journal in memory; knows no project event types. |
+| `framework/journal` | Generic append-only journal in memory, safe for concurrent requests; knows no project event types. |
 | `framework/spec` | Generic Given/When/Then scenarios, clause reporting, HTTP and HTML assertions, exact ordered new-fact checks, and coverage for custom scenarios. |
-| `specs/contract` | Project event definitions, the Journal interface, and GitHub settings (API URL and token) shared by specifications and application. |
+| `specs/contract` | Project event definitions, the Journal interface, and GitHub settings (API URL, token, and the transport every GitHub request must use) shared by specifications and application. |
 | `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, the adapter that supplies the application factory to the framework, and the launch harness that builds and runs `cmd/gc`. |
 | `specs` | Feature contracts and executable scenarios. |
 | `internal/domain` | Repository-name validation and folds over project facts. |
@@ -35,8 +35,10 @@ Inside the bubble the fake GitHub lives in memory and is reached only through
 `contract.GitHub.Transport`; the application must send every GitHub request through that
 transport (`cmd/gc` leaves it nil, which means the real network). The `APIURL` given to
 scenarios points at a closed local port, so a client that ignores the transport fails with an
-ordinary connection error. Launch scenarios run outside the bubble and serve the same fake over
-real HTTP. The application talks to the fake through its real GitHub client, so specs check
+ordinary connection error. The bubble waits for every goroutine the scenario starts, so
+`web.New` and request handlers must not leave background goroutines running; one that never
+ends makes the scenario hang or fail as a deadlock. Launch scenarios run outside the bubble and
+serve the same fake over real HTTP. The application talks to the fake through its real GitHub client, so specs check
 the client too; the fake answers like
 GitHub: 200 for a visible repository, 404 for an invisible one or a request without a token,
 401 for a wrong token. Scenarios can also make it reject the token, answer any status with

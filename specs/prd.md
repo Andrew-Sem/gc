@@ -104,11 +104,10 @@ precision is limited by the sweep step.
 ## 3. Connect a repository
 
 Access to GitHub is granted by a **PAT from the environment**, shared by the whole instance. The
-operator issues it themselves and puts it into `.env`; the token is not entered in the admin, not
-shown, and not stored in the journal. The token needs permissions to read the repository and
+operator issues it themselves and sets it as `GITHUB_TOKEN` in the environment (see the
+[launch contract](launch.md)); the token is not entered in the admin, not shown, and not stored
+in the journal. The token needs permissions to read the repository and
 branch protection, and to write contents and pull requests.
-
-<!-- FLAG: `.env` and `.env.example` have been removed from the repository, and the list of variables lived in specs/runtime.md, which is also gone. The reference to `.env` is stale — decide where configuration moves. -->
 
 Connecting a repository is a single form with an `owner/name` field and a button. The backend
 uses the token to check that the repository exists and is accessible, and writes
@@ -177,7 +176,7 @@ and replaces its HTML fragment.
 
 ## Facts
 
-Fifteen facts in four groups. The formal types are in the domain package, which is the source of
+Fifteen facts in four groups. The formal types are in `specs/contract`, which is the source of
 truth. Here are meaning and boundaries.
 
 <!-- FLAG: the header says "Fifteen facts", while the tables list sixteen: 4 + 5 + 3 + 4. The number is sacred and is not corrected automatically — decide whether a fact is missing from the text or extra in the table. -->

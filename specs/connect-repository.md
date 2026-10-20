@@ -92,6 +92,8 @@ repository follows REPO-1.4.
 REPO-1.8.1. If GitHub rejects the token, no fact is written, and the page shows the error
 "GitHub rejected the token. Check GITHUB_TOKEN." (response 502).
 
+REPO-1.8.2. GitHub rejects the token when it answers 401.
+
 #### REPO-1.9. GitHub fails
 
 REPO-1.9.1. If GitHub answers with any other error, for example 400, 500, 502, or 503, no fact
