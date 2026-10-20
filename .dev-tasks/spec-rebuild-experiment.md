@@ -283,3 +283,12 @@ This section describes proposed evidence, not permission to author tests. New or
   package (user decision, 2026-10-20), reversing "htmx is deleted with the application". Series
   2 had one attempt that configured htmx to swap every status. Specs now check that the page
   head carries `ui.HTMXConfig` and that `/static/htmx.min.js` is `ui`'s file (REPO-1.1.2).
+
+## Status (2026-10-20)
+
+The user paused further series: two pilots, series 1 (two attempts) and series 2 (ten attempts,
+two model families, two reviewers each) gave enough information to move on. Every attempt
+passed every executable spec in about 2.5 minutes, with no sign of cheating. The reviewer
+findings (redirects, htmx configuration, the shared port) were turned into contract clauses,
+the retained `ui` package, and a required `GC_ADDR`. A series on the current inputs has not
+been run.
