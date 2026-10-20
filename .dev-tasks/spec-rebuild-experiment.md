@@ -232,3 +232,19 @@ This section describes proposed evidence, not permission to author tests. New or
 - The review checklist was clarified after calibrating it on pilot 1 and before any series
   attempt was reviewed: item wording for htmx statuses and `acme/.`, MCP and leftover
   processes in the trace item, a new item that the final message's claims are true.
+- Series 1 stopped after two attempts (both success: verify green, series-1-1 reviewed as
+  success) when the session ended during attempt 3, an infrastructure failure. Attempt 3 was
+  also prepared from a later HEAD because `prepare.sh` read HEAD at each attempt; the
+  retained files were identical, but the harness now pins the source commit per series.
+
+## Series 2 (user design, 2026-10-20)
+
+- Ten attempts alternating implementers: five Codex `gpt-6.1-sol` medium (`codex exec`, user
+  config ignored, memories off) and five Claude `claude-opus-5-5` medium (`claude -p`, project
+  settings only, no MCP servers, no session persistence). Both families must work with the
+  method; agent-specific luck should not decide the result.
+- Every attempt gets two independent reviewers, one Codex and one Claude, both following
+  `experiment/review-checklist.md` with `experiment/review-prompt.md`, working on a copy in a
+  scratch directory.
+- Run with `experiment/series.sh series-2 codex claude codex claude codex claude codex claude
+  codex claude`; the source commit is pinned at start and recorded in every run directory.
