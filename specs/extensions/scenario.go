@@ -16,10 +16,11 @@ const (
 type Scenario struct {
 	*spec.Scenario[contract.Fact]
 	github *fakeGitHub
+	agent  *fakeAgent
 }
 
 func newScenario(core *spec.Scenario[contract.Fact]) *Scenario {
-	return &Scenario{Scenario: core, github: newFakeGitHub()}
+	return &Scenario{Scenario: core, github: newFakeGitHub(), agent: &fakeAgent{}}
 }
 
 func (s *Scenario) Covers(ids ...string) *Scenario {
@@ -77,6 +78,54 @@ func (s *Scenario) GivenGitHubUnreachable() *Scenario {
 func (s *Scenario) GivenGitHubMovedRepository(status int) *Scenario {
 	s.github.given(func(g *fakeGitHub) { g.moves = status })
 	return s
+}
+
+func (s *Scenario) GivenGitHubCreatesPR(number int) *Scenario {
+	s.github.given(func(g *fakeGitHub) { g.createsPR = number })
+	return s
+}
+
+func (s *Scenario) GivenAgentChanges(branch, title, description string) *Scenario {
+	s.agent.change = &contract.AgentChange{Branch: branch, Base: "main", Title: title, Description: description}
+	return s
+}
+
+func (s *Scenario) GivenAgentFails() *Scenario {
+	s.agent.fails = true
+	return s
+}
+
+func (s *Scenario) GivenAgentHangs() *Scenario {
+	s.agent.hangs = true
+	return s
+}
+
+func (s *Scenario) GivenAgentWorksFor(duration time.Duration) *Scenario {
+	s.agent.worksFor = duration
+	return s
+}
+
+func (s *Scenario) AgentAsked(repositories ...string) func() spec.Problem {
+	return func() spec.Problem {
+		want := slices.Sorted(slices.Values(repositories))
+		got := slices.Sorted(slices.Values(s.agent.askedSoFar()))
+		if !slices.Equal(got, want) {
+			return agentAsked{want: want, got: got}
+		}
+		return nil
+	}
+}
+
+func (s *Scenario) GitHubPRCreated(repository, branch, title, description string) func() spec.Problem {
+	return func() spec.Problem {
+		want := createdPR{Repository: repository, Head: branch, Base: "main", Title: title, Description: description}
+		s.github.mu.Lock()
+		defer s.github.mu.Unlock()
+		if !slices.Equal(s.github.created, []createdPR{want}) {
+			return githubPRCreated{want: want, got: s.github.created}
+		}
+		return nil
+	}
 }
 
 func (s *Scenario) GitHubToken() string {

@@ -1,6 +1,9 @@
 package contract
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 type Journal interface {
 	Append(...Fact)
@@ -13,8 +16,20 @@ type GitHub struct {
 	Transport http.RoundTripper
 }
 
+type AgentChange struct {
+	Branch      string
+	Base        string
+	Title       string
+	Description string
+}
+
+type Agent interface {
+	Work(ctx context.Context, repository string) (*AgentChange, error)
+}
+
 type Dependencies struct {
 	Journal       Journal
 	GitHub        GitHub
+	Agent         Agent
 	WebhookSecret string
 }

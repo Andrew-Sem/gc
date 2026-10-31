@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,18 @@ func (f *Feature) Run(name string, describe func(*Scenario)) {
 
 func (s *Scenario) WhenWokenUp() *Scenario {
 	s.WhenAction(func(j *journal.Journal[contract.Fact]) { domain.WakeUp(j) })
+	return s
+}
+
+func (s *Scenario) WhenWokenUpFor(wait time.Duration) *Scenario {
+	s.WhenAction(func(j *journal.Journal[contract.Fact]) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var runs sync.WaitGroup
+		web.WakeUp(ctx, s.dependencies(j), &runs)
+		time.Sleep(wait)
+		cancel()
+		runs.Wait()
+	})
 	return s
 }
 
@@ -97,6 +110,7 @@ func (s *Scenario) dependencies(j *journal.Journal[contract.Fact]) contract.Depe
 	return contract.Dependencies{
 		Journal:       j,
 		GitHub:        contract.GitHub{APIURL: fakeGitHubURL, Token: fakeGitHubToken, Transport: s.github.transport()},
+		Agent:         s.agent,
 		WebhookSecret: fakeWebhookSecret,
 	}
 }

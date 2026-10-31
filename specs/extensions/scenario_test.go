@@ -3,6 +3,7 @@ package extensions
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"slices"
 	"strings"
@@ -212,5 +213,52 @@ func TestFakeGitHubUnreachable(t *testing.T) {
 	}
 	if got := g.askedSoFar(); !slices.Equal(got, []string{"acme/api"}) {
 		t.Errorf("asked %v, want [acme/api]", got)
+	}
+}
+
+func TestFakeGitHubCreatesPR(t *testing.T) {
+	g := newFakeGitHub()
+	g.createsPR = 42
+	request := func(body string) *http.Response {
+		req := httptest.NewRequest(http.MethodPost, "/repos/acme/api/pulls", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+fakeGitHubToken)
+		response := httptest.NewRecorder()
+		g.serve(response, req)
+		return response.Result()
+	}
+	if got := request(`{"head":"gc/run-1","title":"Title"}`).StatusCode; got != http.StatusUnprocessableEntity {
+		t.Errorf("status without a base = %d, want %d", got, http.StatusUnprocessableEntity)
+	}
+	if got := request(`{"head":"gc/run-1","base":"main","title":"Title","body":"Why"}`).StatusCode; got != http.StatusCreated {
+		t.Errorf("status = %d, want %d", got, http.StatusCreated)
+	}
+	want := []createdPR{{Repository: "acme/api", Head: "gc/run-1", Base: "main", Title: "Title", Description: "Why"}}
+	if !reflect.DeepEqual(g.created, want) {
+		t.Errorf("created = %+v, want %+v", g.created, want)
+	}
+}
+
+func TestGitHubPRCreatedFindsAnotherPR(t *testing.T) {
+	s := newScenario(&spec.Scenario[contract.Fact]{})
+	if s.GitHubPRCreated("acme/api", "gc/run-1", "Title", "Why")() == nil {
+		t.Error("no PR was created, want a problem")
+	}
+	s.github.created = []createdPR{{Repository: "acme/api", Head: "gc/run-1", Base: "main", Title: "Other", Description: "Why"}}
+	if s.GitHubPRCreated("acme/api", "gc/run-1", "Title", "Why")() == nil {
+		t.Error("another PR was created, want a problem")
+	}
+}
+
+func TestAgentAskedComparesRepositories(t *testing.T) {
+	s := newScenario(&spec.Scenario[contract.Fact]{})
+	if problem := s.AgentAsked()(); problem != nil {
+		t.Errorf("no run and none expected: %v", problem)
+	}
+	s.agent.asked = []string{"acme/web", "acme/api"}
+	if problem := s.AgentAsked("acme/api", "acme/web")(); problem != nil {
+		t.Errorf("order must not matter: %v", problem)
+	}
+	if s.AgentAsked("acme/api")() == nil {
+		t.Error("an extra run was started, want a problem")
 	}
 }

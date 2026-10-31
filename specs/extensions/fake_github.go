@@ -2,6 +2,7 @@ package extensions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -18,6 +19,7 @@ const (
 	fakeGitHubURL        = "http://127.0.0.1:9"
 	fakeGitHubToken      = "spec-github-token"
 	fakeWebhookSecret    = "spec-webhook-secret"
+	fakeOpenAIKey        = "spec-openai-key"
 	longerThanAnyTimeout = 10 * time.Second
 )
 
@@ -35,6 +37,16 @@ type fakeGitHub struct {
 	echoesToken   bool
 	unreachable   bool
 	moves         int
+	createsPR     int
+	created       []createdPR
+}
+
+type createdPR struct {
+	Repository  string
+	Head        string `json:"head"`
+	Base        string `json:"base"`
+	Title       string `json:"title"`
+	Description string `json:"body"`
 }
 
 type cannedAnswer struct {
@@ -103,7 +115,7 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	g.mu.Lock()
 	g.asked = append(g.asked, fullName)
 	sees := slices.Contains(g.sees, fullName)
-	doesNotAnswer, rejectsToken, answer, hangs, echoesToken, moves := g.doesNotAnswer, g.rejectsToken, g.answer, g.hangs, g.echoesToken, g.moves
+	doesNotAnswer, rejectsToken, answer, hangs, echoesToken, moves, createsPR := g.doesNotAnswer, g.rejectsToken, g.answer, g.hangs, g.echoesToken, g.moves, g.createsPR
 	g.mu.Unlock()
 
 	if hangs {
@@ -137,6 +149,18 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusNotFound, "Not Found")
 	case auth != "Bearer "+fakeGitHubToken || rejectsToken:
 		fail(http.StatusUnauthorized, "Bad credentials")
+	case r.Method == http.MethodPost && strings.HasSuffix(fullName, "/pulls") && createsPR != 0:
+		var pr createdPR
+		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil || pr.Head == "" || pr.Base == "" || pr.Title == "" {
+			fail(http.StatusUnprocessableEntity, "Validation Failed")
+			return
+		}
+		pr.Repository = strings.TrimSuffix(fullName, "/pulls")
+		g.mu.Lock()
+		g.created = append(g.created, pr)
+		g.mu.Unlock()
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"number":%d}`, createsPR)
 	case r.Method != http.MethodGet || !strings.HasPrefix(r.URL.Path, "/repos/") || !sees:
 		fail(http.StatusNotFound, "Not Found")
 	default:
@@ -183,6 +207,15 @@ func (p githubAsked) String() string {
 		return fmt.Sprintf("expected GitHub not to be asked, got %v", p.got)
 	}
 	return fmt.Sprintf("expected GitHub to be asked about %v, got %v", p.want, p.got)
+}
+
+type githubPRCreated struct {
+	want createdPR
+	got  []createdPR
+}
+
+func (p githubPRCreated) String() string {
+	return fmt.Sprintf("expected GitHub to create only the PR %+v, got %+v", p.want, p.got)
 }
 
 type githubWaited struct {

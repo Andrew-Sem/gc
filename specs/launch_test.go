@@ -106,6 +106,24 @@ func TestLaunch(t *testing.T) {
 			ExpectOutput("GC_WEBHOOK_SECRET is not set")
 	})
 
+	f.RunLaunch("start without an OpenAI key", func(s *extensions.Launch) {
+		s.GivenUnset("OPENAI_API_KEY").
+			Covers("RUN-1.5.1").
+			WhenStarted().
+			Then("gc refuses to start").
+			ExpectExit().
+			ExpectOutput("OPENAI_API_KEY is not set")
+	})
+
+	f.RunLaunch("start with an empty OpenAI key", func(s *extensions.Launch) {
+		s.GivenEnv("OPENAI_API_KEY", "").
+			Covers("RUN-1.5.1").
+			WhenStarted().
+			Then("gc refuses to start").
+			ExpectExit().
+			ExpectOutput("OPENAI_API_KEY is not set")
+	})
+
 	f.RunLaunch("accept a webhook signed with the configured secret", func(s *extensions.Launch) {
 		s.Covers("RUN-1.4.2").
 			When(extensions.PullRequestDelivery(extensions.PullRequest{

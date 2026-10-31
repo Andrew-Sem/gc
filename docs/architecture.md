@@ -16,7 +16,8 @@ restart persistence are planned separately.
 | `ui` | Shared interface platform: the htmx file, its response rules, the `Head` component every page includes, and the static file handler. |
 | `internal/domain` | Repository-name validation, folds over project facts, and the wake-up decision. |
 | `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
-| `internal/github` | GitHub API client for the repository access check. |
+| `internal/github` | GitHub API client: repository access, the clone URL, and creating PRs. |
+| `internal/agent` | One agent run: a throwaway clone, Codex as a subprocess in its sandbox, then `git` commit and push. `git` talks to GitHub directly, outside `contract.GitHub.Transport`. |
 | `cmd/gc` | Reads the environment, refuses to start without a token or a usable address, wires the in-memory journal, starts the server. |
 
 The framework imports neither the project contract nor application packages, including in its
@@ -26,7 +27,7 @@ For this project, the factory is `web.New(contract.Dependencies) http.Handler`, 
 no HTTP request starts, such as a wake-up, uses `WhenAction`: it acts on the journal directly and
 checks the new facts. The second
 entry point is the `cmd/gc` binary. It runs `web.Serve`, which serves the same `web.New` handler, never a separate
-one, and wakes the system up at the start of every hour, so the fast scenarios and the binary
+one, wakes the system up at the start of every hour, and starts an agent run for each approval, so the fast scenarios and the binary
 check one application. Launch scenarios in
 `specs/extensions/launch.go` build it with `go build`, run it with a controlled environment,
 and check its exit, output, and HTTP answers. The environment points `HTTPS_PROXY` at a fake
@@ -68,6 +69,8 @@ of the fixed application entry point before project specs can compile, and a `cm
 builds before launch scenarios can run; the framework's own checks can run without the
 application.
 
+Agent scenarios in `specs/extensions/agent_run.go` run `internal/agent` outside the bubble against a fake `codex` shell script that records what it was given, and a local `git http-backend` that requires the GitHub token, so clone, commit, and push are real.
+
 Application behavior specifications live under `specs`. Repository-name validation is checked
 through POST scenarios, including empty and malformed names. The scenarios also check HTML
 responses. No test files remain under `internal`. Specs check that pages use `ui`'s htmx and response rules;
@@ -81,7 +84,6 @@ Planned, not built yet:
 | `internal/domain` | `Decide` and `Evolve` on top of the fact vocabulary. |
 | `internal/github` | Parsing webhooks into commands. |
 | `internal/store` | Journal, task queue, and settings in SQLite; replaces the in-memory journal. |
-| `internal/agent` | Running Codex, working copies, `git`, creating PRs. |
 | `internal/app` | Wiring: scheduler, task executor, ports, start and stop; `cmd/gc` assembles it. |
 
 ## Flow

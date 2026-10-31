@@ -1,6 +1,7 @@
 package specs
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -31,19 +32,25 @@ func TestOpenPullRequests(t *testing.T) {
 		s.Covers("OPEN-1.1.5").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
 			WhenRunning("14:20", 41*time.Minute).
-			Then("one PR is approved at 15:00").
-			ExpectFacts(contract.AdmissionApproved{Repository: "acme/api"})
+			Then("one PR is approved at 15:00, and the agent changes nothing").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeNoPR},
+			)
 	})
 
 	f.Run("a decision comes every hour", func(s *extensions.Scenario) {
 		s.Covers("OPEN-1.1.5").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
 			WhenRunning("14:20", 2*time.Hour+41*time.Minute).
-			Then("a PR is approved at 15:00, 16:00, and 17:00").
+			Then("a PR is approved at 15:00, 16:00, and 17:00, and the agent changes nothing").
 			ExpectFacts(
 				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeNoPR},
 				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeNoPR},
 				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeNoPR},
 			)
 	})
 
@@ -218,5 +225,139 @@ func TestOpenPullRequests(t *testing.T) {
 			WhenWokenUp().
 			Then("no new PR is approved and the numbers are recorded").
 			ExpectFacts(contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12})
+	})
+
+	f.Run("open a PR when the agent changed code", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.1.1", "OPEN-2.2.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenGitHubCreatesPR(42).
+			WhenWokenUpFor(time.Minute).
+			Then("the PR is created and recorded").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.PrCreated{Repository: "acme/api", Number: 42},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42},
+			).
+			Expect(s.AgentAsked("acme/api")).
+			Expect(s.GitHubPRCreated("acme/api", "gc/run-1", "Remove dead code", "The helper has no callers."))
+	})
+
+	f.Run("each approved repository gets its own run", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.1.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}, contract.RepositoryConnected{FullName: "acme/web"}).
+			GivenAgentHangs().
+			WhenWokenUpFor(time.Minute).
+			Then("the agent works on both repositories").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/web"},
+				contract.AdmissionApproved{Repository: "acme/api"},
+			).
+			Expect(s.AgentAsked("acme/api", "acme/web"))
+	})
+
+	f.Run("no run after a decline", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.1.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenOpenPRs("acme/api", 12).
+			WhenWokenUpFor(time.Minute).
+			Then("the agent is not started").
+			ExpectFacts(contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12}).
+			Expect(s.AgentAsked())
+	})
+
+	f.Run("a new run works alongside the previous one", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.1.3").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentHangs().
+			WhenRunning("14:59", time.Hour+2*time.Minute).
+			Then("the second run starts while the first is still working").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AdmissionApproved{Repository: "acme/api"},
+			).
+			Expect(s.AgentAsked("acme/api", "acme/api"))
+	})
+
+	f.Run("a created PR takes a place at the next wake-up", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.2.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenOpenPRs("acme/api", 11).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenGitHubCreatesPR(42).
+			WhenRunning("14:59", time.Hour+2*time.Minute).
+			Then("the 15:00 run opens the twelfth PR, and the 16:00 decision is a decline").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.PrCreated{Repository: "acme/api", Number: 42},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42},
+				contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12},
+			)
+	})
+
+	f.Run("no PR when the agent changed nothing", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.3.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			WhenWokenUpFor(time.Minute).
+			Then("the run is recorded without a PR").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeNoPR},
+			).
+			Expect(s.GitHubNotAsked())
+	})
+
+	f.Run("no PR when the agent fails", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.4.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentFails().
+			WhenWokenUpFor(time.Minute).
+			Then("the run is recorded as failed").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeFailed},
+			).
+			Expect(s.GitHubNotAsked())
+	})
+
+	f.Run("no PR when GitHub refuses to create it", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.4.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenGitHubAnswers(http.StatusUnprocessableEntity).
+			WhenWokenUpFor(time.Minute).
+			Then("the run is recorded as failed and no PR is counted").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeFailed},
+			)
+	})
+
+	f.Run("stop a run at the limit", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.5.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentHangs().
+			WhenWokenUpFor(2*time.Hour+time.Minute).
+			Then("the run is stopped and recorded as timed out").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomeTimedOut},
+			).
+			Expect(s.GitHubNotAsked())
+	})
+
+	f.Run("a run just before the limit is not stopped", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.5.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenAgentWorksFor(2*time.Hour-time.Minute).
+			GivenGitHubCreatesPR(42).
+			WhenWokenUpFor(2*time.Hour+time.Minute).
+			Then("the PR is created and recorded").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.PrCreated{Repository: "acme/api", Number: 42},
+				contract.AgentRunFinished{Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42},
+			)
 	})
 }

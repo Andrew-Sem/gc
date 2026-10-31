@@ -1,8 +1,7 @@
 # Open pull requests
 
-This contract details scenario 1 of the [PRD](prd.md). This slice covers the decision to open a
-PR; running the agent comes in a later slice. Merging and closing PRs is not garbage-collector's
-job for now.
+This contract details scenario 1 of the [PRD](prd.md). Merging and closing PRs is not
+garbage-collector's job for now.
 
 ## Why
 
@@ -20,6 +19,14 @@ repository, whether to open one more.
 `PrStateChanged` for it says it is closed.
 
 **Limit** — the maximum number of open PRs in a repository: 12.
+
+**Agent** — the program that looks for technical debt in one repository and changes its code.
+It edits files only: `gc` opens the PR. When it changed something, it also gives the PR's title
+and description and the branch its work was pushed to.
+
+**Run** — one launch of the agent for one approval.
+
+**Run limit** — the longest a run may last: 2 hours.
 
 ## Clauses
 
@@ -67,3 +74,42 @@ again.
 
 OPEN-1.4.4. A PR without `PrCreated` is not ours: whatever `PrStateChanged` says about it, it
 neither takes nor frees a place.
+
+### OPEN-2. Running the agent
+
+#### OPEN-2.1. Starting runs
+
+OPEN-2.1.1. Each `AdmissionApproved` starts one run for that repository.
+
+OPEN-2.1.2. A decline starts no run.
+
+OPEN-2.1.3. A new run does not wait for earlier ones: if a run of the same repository is still
+working, the new one works alongside it.
+
+#### OPEN-2.2. The agent changed code
+
+OPEN-2.2.1. If the agent changed code, `gc` asks GitHub to create a PR from its branch with its
+title and description. Then `PrCreated` with the repository and the PR's number and
+`AgentRunFinished` with the outcome "PR" and the same number are written to the journal.
+
+OPEN-2.2.2. A PR created by a run takes a place from the next wake-up on.
+
+#### OPEN-2.3. The agent changed nothing
+
+OPEN-2.3.1. If the agent changed nothing, `gc` does not ask GitHub to create a PR, and
+`AgentRunFinished` with the outcome "no PR" is written to the journal.
+
+#### OPEN-2.4. The run failed
+
+OPEN-2.4.1. If the agent fails, `gc` does not ask GitHub to create a PR, and `AgentRunFinished`
+with the outcome "failed" is written to the journal.
+
+OPEN-2.4.2. If GitHub does not create the PR, no `PrCreated` is written, and `AgentRunFinished`
+with the outcome "failed" is written to the journal.
+
+#### OPEN-2.5. The run limit
+
+OPEN-2.5.1. A run that reaches the run limit is stopped, `gc` does not ask GitHub to create a PR,
+and `AgentRunFinished` with the outcome "timed out" is written to the journal.
+
+OPEN-2.5.2. A run that finishes before the run limit is not affected by it.

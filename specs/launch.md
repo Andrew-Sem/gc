@@ -12,7 +12,7 @@ page.
 ## Glossary
 
 **Environment** — the variables `gc` reads at start: `GITHUB_TOKEN`, `GC_WEBHOOK_SECRET`,
-`GC_ADDR`, `GITHUB_API_URL`, and the standard proxy variables `HTTPS_PROXY`, `HTTP_PROXY`, and
+`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `GC_ADDR`, `GITHUB_API_URL`, and the standard proxy variables `HTTPS_PROXY`, `HTTP_PROXY`, and
 `NO_PROXY`.
 
 **Output** — everything `gc` writes to stdout and stderr, including its logs.
@@ -50,3 +50,8 @@ RUN-1.4.1. Without `GC_WEBHOOK_SECRET`, `gc` does not start: it exits with a non
 and prints "GC_WEBHOOK_SECRET is not set".
 
 RUN-1.4.2. `gc` checks webhook signatures with the value of `GC_WEBHOOK_SECRET`.
+
+#### RUN-1.5. OpenAI key
+
+RUN-1.5.1. Without `OPENAI_API_KEY`, `gc` does not start: it exits with a non-zero status and
+prints "OPENAI_API_KEY is not set".

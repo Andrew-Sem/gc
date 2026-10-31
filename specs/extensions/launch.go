@@ -208,6 +208,7 @@ func (l *Launch) environ() []string {
 		"HTTPS_PROXY":       l.proxy.server.URL,
 		"HTTP_PROXY":        l.proxy.server.URL,
 		"NO_PROXY":          "",
+		"OPENAI_API_KEY":    fakeOpenAIKey,
 		"no_proxy":          "",
 	}
 	maps.Copy(env, l.env)
