@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -32,6 +33,11 @@ const (
 	agentRunLimit   = 30 * time.Second
 	processGoneWait = 5 * time.Second
 )
+
+var answerFields = []string{
+	"change", "description", "evidence", "finding", "follow_up", "rejected_candidates",
+	"risk", "rollback", "selected_candidate", "slug", "title", "validation",
+}
 
 type AgentSaw struct {
 	Commits            int
@@ -177,14 +183,14 @@ func (a *AgentRun) ExpectNoChange() *AgentRun {
 	})
 }
 
-func (a *AgentRun) ExpectChange(base, title, description, file, content string) *AgentRun {
+func (a *AgentRun) ExpectChange(base, title, file, content string) *AgentRun {
 	return a.expect(func() []spec.Problem {
 		if a.change == nil {
 			return agentProblems("expected a change, got none")
 		}
 		var problems []spec.Problem
-		if a.change.Base != base || a.change.Title != title || a.change.Description != description {
-			problems = append(problems, agentProblems("expected a change onto %q titled %q with description %q, got %+v", base, title, description, *a.change)...)
+		if a.change.Base != base || a.change.Title != title {
+			problems = append(problems, agentProblems("expected a change onto %q titled %q, got %+v", base, title, *a.change)...)
 		}
 		if got, err := a.remoteGit("show", a.change.Branch+":"+file); err != nil || got != content {
 			problems = append(problems, agentProblems("expected branch %q to have %s with %q, got %q (%v)", a.change.Branch, file, content, got, err)...)
@@ -194,6 +200,50 @@ func (a *AgentRun) ExpectChange(base, title, description, file, content string) 
 		}
 		return problems
 	})
+}
+
+func (a *AgentRun) ExpectReport(slug, content string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		path, problems := a.reportPath(slug)
+		if len(problems) > 0 {
+			return problems
+		}
+		if got, err := a.remoteGit("show", a.change.Branch+":"+path); err != nil || got != content {
+			return agentProblems("expected the report to read %q, got %q (%v)", content, got, err)
+		}
+		if commits, err := a.remoteGit("rev-list", "--count", "main.."+a.change.Branch); err != nil || strings.TrimSpace(commits) != "1" {
+			return agentProblems("expected the report in the agent's one commit, got %q commits (%v)", commits, err)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectDescriptionEndingWithReportPath(prefix string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		path, problems := a.reportPath("dead-code")
+		if len(problems) > 0 {
+			return problems
+		}
+		if a.change.Description != prefix+path {
+			return agentProblems("expected description %q, got %q", prefix+path, a.change.Description)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) reportPath(slug string) (string, []spec.Problem) {
+	if a.change == nil {
+		return "", agentProblems("expected a change, got none")
+	}
+	out, err := a.remoteGit("diff", "--name-only", "main", a.change.Branch, "--", "docs/gc-reviews")
+	if err != nil {
+		return "", agentProblems("cannot list the reports: %v", err)
+	}
+	path := strings.TrimSpace(out)
+	if !regexp.MustCompile(`^docs/gc-reviews/[0-9]{8}-[0-9]{6}Z-` + regexp.QuoteMeta(slug) + `\.md$`).MatchString(path) {
+		return "", agentProblems("expected one report for %q, got %q", slug, out)
+	}
+	return path, nil
 }
 
 func (a *AgentRun) ExpectBranches(count int, prefix string) *AgentRun {
@@ -432,7 +482,7 @@ func (a *AgentRun) Run() []spec.Problem {
 		}
 	}
 
-	var problems []spec.Problem
+	problems := a.schemaProblems()
 	if a.expectFails && a.err == nil {
 		problems = append(problems, agentProblems("expected the run to fail, it returned %+v", a.change)...)
 	}
@@ -443,6 +493,30 @@ func (a *AgentRun) Run() []spec.Problem {
 		problems = append(problems, check()...)
 	}
 	return problems
+}
+
+func (a *AgentRun) schemaProblems() []spec.Problem {
+	raw, err := os.ReadFile(filepath.Join(a.records, "schema"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return agentProblems("cannot read the answer schema: %v", err)
+	}
+	var schema struct {
+		Properties           map[string]struct{ Type string } `json:"properties"`
+		Required             []string                         `json:"required"`
+		AdditionalProperties *bool                            `json:"additionalProperties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return agentProblems("the answer schema is not JSON: %v", err)
+	}
+	properties := slices.Sorted(maps.Keys(schema.Properties))
+	required := slices.Sorted(slices.Values(schema.Required))
+	if !slices.Equal(properties, answerFields) || !slices.Equal(required, answerFields) || schema.AdditionalProperties == nil || *schema.AdditionalProperties {
+		return agentProblems("expected the answer schema to require exactly %q, got %s", answerFields, raw)
+	}
+	return nil
 }
 
 func (a *AgentRun) work(codex agent.Codex) []spec.Problem {
@@ -598,7 +672,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ -n "$answer" ] || exit 64
-grep -q '"title"' "$schema" && grep -q '"description"' "$schema" || exit 65
+cp "$schema" "$records/schema" || exit 65
 env > "$records/env"
 pwd -P > "$records/cwd"
 printf '%s' "$CODEX_HOME" > "$records/home"

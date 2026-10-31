@@ -1,24 +1,160 @@
 package specs
 
 import (
+	"encoding/json"
+	"maps"
 	"testing"
 
 	"github.com/Andrew-Sem/gc/specs/extensions"
 )
 
-const answer = `{"title":"Remove dead code","description":"The helper has no callers."}`
+var answerFields = map[string]string{
+	"slug":                "dead-code",
+	"title":               "Remove dead code",
+	"description":         "The helper has no callers, so it is removed.",
+	"finding":             "The helper has no callers.",
+	"evidence":            "A search finds no other use.",
+	"selected_candidate":  "Remove the helper.",
+	"rejected_candidates": "Rename it: nothing calls it.",
+	"change":              "Delete the helper.",
+	"validation":          "The tests pass.",
+	"risk":                "Low.",
+	"rollback":            "Revert the commit.",
+	"follow_up":           "None",
+}
+
+var answer = answerWith(nil)
+
+const report = `## Finding
+
+The helper has no callers.
+
+## Evidence
+
+A search finds no other use.
+
+## Selected Candidate
+
+Remove the helper.
+
+## Rejected Candidates
+
+Rename it: nothing calls it.
+
+## Change
+
+Delete the helper.
+
+## Validation
+
+The tests pass.
+
+## Risk
+
+Low.
+
+## Rollback
+
+Revert the commit.
+
+## Follow-up
+
+None
+`
+
+const description = "The helper has no callers, so it is removed.\n\nReport: "
+
+func answerWith(changes map[string]string) string {
+	fields := maps.Clone(answerFields)
+	maps.Copy(fields, changes)
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		panic(err)
+	}
+	return string(encoded)
+}
+
+func answerWithout(field string) string {
+	fields := maps.Clone(answerFields)
+	delete(fields, field)
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		panic(err)
+	}
+	return string(encoded)
+}
 
 func TestRunAgent(t *testing.T) {
 	f := extensions.NewFeature(t, "run-agent.md")
 
 	f.RunAgent("hand over a change", func(s *extensions.AgentRun) {
-		s.Covers("AGENT-3.1.1", "AGENT-3.1.2").
+		s.Covers("AGENT-3.1.1").
 			GivenRepositoryWithCommits(1).
 			GivenAgentChanges("cleaned.txt", "clean").
 			GivenAgentAnswers(answer).
 			WhenAgentRuns().
 			Then("the change is on a new branch and main is untouched").
-			ExpectChange("main", "Remove dead code", "The helper has no callers.", "cleaned.txt", "clean")
+			ExpectChange("main", "Remove dead code", "cleaned.txt", "clean")
+	})
+
+	f.RunAgent("write the report", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.1", "AGENT-3.5.2").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the commit adds one report named after the slug, and main is untouched").
+			ExpectReport("dead-code", report)
+	})
+
+	f.RunAgent("the PR description points to the report", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.1.2", "AGENT-3.5.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the description is the agent's short text and ends with the report's path").
+			ExpectDescriptionEndingWithReportPath(description)
+	})
+
+	for _, tt := range []struct{ name, slug string }{
+		{"fail when the slug leaves the folder", "../../evil"},
+		{"fail when the slug has capital letters", "Dead-Code"},
+		{"fail when the slug has other characters", "dead.code"},
+		{"fail when the slug is too long", "a123456789b123456789c123456789d123456789e123456789f123456789g"},
+	} {
+		f.RunAgent(tt.name, func(s *extensions.AgentRun) {
+			s.Covers("AGENT-3.5.4").
+				GivenRepositoryWithCommits(1).
+				GivenAgentChanges("cleaned.txt", "clean").
+				GivenAgentAnswers(answerWith(map[string]string{"slug": tt.slug})).
+				WhenAgentRuns().
+				Then("the run fails and nothing is pushed").
+				ExpectFailure().
+				ExpectBranches(0, "gc/")
+		})
+	}
+
+	f.RunAgent("fail when an answer field is missing", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.5").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answerWithout("rollback")).
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("fail when an answer field is empty", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.5").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answerWith(map[string]string{"evidence": " "})).
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
 	})
 
 	f.RunAgent("clone and push with the GitHub token", func(s *extensions.AgentRun) {
@@ -175,7 +311,7 @@ func TestRunAgent(t *testing.T) {
 	})
 
 	f.RunAgent("no change when the agent changed nothing", func(s *extensions.AgentRun) {
-		s.Covers("AGENT-3.2.1").
+		s.Covers("AGENT-3.2.1", "AGENT-3.5.6").
 			GivenRepositoryWithCommits(1).
 			GivenAgentAnswers(answer).
 			WhenAgentRuns().
@@ -211,7 +347,7 @@ func TestRunAgent(t *testing.T) {
 		s.Covers("AGENT-3.3.2").
 			GivenRepositoryWithCommits(1).
 			GivenAgentChanges("cleaned.txt", "clean").
-			GivenAgentAnswers(`{"title":"","description":"The helper has no callers."}`).
+			GivenAgentAnswers(answerWith(map[string]string{"title": ""})).
 			WhenAgentRuns().
 			Then("the run fails and nothing is pushed").
 			ExpectFailure().

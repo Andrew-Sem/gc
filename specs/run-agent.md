@@ -15,8 +15,16 @@ token. Everything that touches GitHub is done by `gc` once the agent has finishe
 **Working copy** — a shallow clone of the repository's default branch in a temporary folder of
 its own.
 
-**Answer** — the agent's final message: JSON with a `title` and a `description`, as described by
-a schema `gc` passes to Codex.
+**Answer** — the agent's final message: JSON with the fields `slug`, `title`, `description`,
+`finding`, `evidence`, `selected_candidate`, `rejected_candidates`, `change`, `validation`,
+`risk`, `rollback`, and `follow_up`, as described by a schema `gc` passes to Codex. The prompt
+asks for a `description` of a few sentences; the full explanation goes in the other fields.
+
+**Slug** — a short name for what the run fixed: 1 to 60 lowercase Latin letters, digits, and
+hyphens.
+
+**Report** — a Markdown file in the repository that explains why a PR was made:
+`docs/gc-reviews/<YYYYMMDD-HHMMSSZ>-<slug>.md`, with the time of the commit in UTC.
 
 **Agent's environment** — the environment variables the Codex process receives.
 
@@ -77,8 +85,8 @@ sandbox and outside the working copy. It is removed when the run ends.
 
 AGENT-3.1.1. `gc` commits every changed file and pushes the commit to a new branch.
 
-AGENT-3.1.2. The run returns that branch, the default branch as the base, and the title and
-description from the answer.
+AGENT-3.1.2. The run returns that branch, the default branch as the base, the title from the
+answer, and the description of AGENT-3.5.3.
 
 AGENT-3.1.3. Each run gets a branch of its own, named `gc/` followed by a unique part.
 
@@ -98,3 +106,24 @@ the run fails and nothing is pushed.
 #### AGENT-3.4. Stopping
 
 AGENT-3.4.1. When a run is stopped, Codex is killed together with the processes it started.
+
+#### AGENT-3.5. The report
+
+AGENT-3.5.1. `gc`, not the agent, writes the report and commits it in the same commit as the
+agent's changes. The base branch does not get it.
+
+AGENT-3.5.2. The report has these headings in this order, each followed by a blank line and the
+matching answer field: `## Finding`, `## Evidence`, `## Selected Candidate`,
+`## Rejected Candidates`, `## Change`, `## Validation`, `## Risk`, `## Rollback`, `## Follow-up`.
+A blank line separates the sections, and the file ends with one newline.
+
+AGENT-3.5.3. The PR description is the answer's `description`, a blank line, and the line
+`Report: <the report's path>`. The other answer fields appear only in the report.
+
+AGENT-3.5.4. If the agent changed files but the slug is not valid, the run fails and nothing is
+pushed.
+
+AGENT-3.5.5. If the agent changed files but any answer field is missing or empty, the run fails
+and nothing is pushed. A field with nothing to say says "None".
+
+AGENT-3.5.6. If the agent changed nothing, there is no report.

@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"syscall"
@@ -48,19 +49,45 @@ Every candidate must name a concrete violated invariant, the affected code path,
 
 Prefer no change over a speculative one, but screen the repository properly before deciding that: stopping after a handful of searches in one directory is not a conservative answer, it is an unscreened one. If you find nothing safe to fix, change nothing.
 
-Leave your changes uncommitted. Finish with a title and a description for the pull request; the description states the finding, the evidence, the change, how you validated it, and the risk.`
+Leave your changes uncommitted and do not write a report file: the fields below become one. Finish with these fields, writing "None" where there is nothing to say: slug, a short name for what you fixed, in lowercase letters, digits, and hyphens; title, for the pull request; description, a few sentences for the pull request, no more; finding; evidence; selected_candidate, what you chose and why; rejected_candidates, what else you considered and why you rejected it; change; validation, what you ran and what it showed; risk; rollback; follow_up.`
 
 const answerSchema = `{
   "type": "object",
   "properties": {
+    "slug": {"type": "string"},
     "title": {"type": "string"},
-    "description": {"type": "string"}
+    "description": {"type": "string"},
+    "finding": {"type": "string"},
+    "evidence": {"type": "string"},
+    "selected_candidate": {"type": "string"},
+    "rejected_candidates": {"type": "string"},
+    "change": {"type": "string"},
+    "validation": {"type": "string"},
+    "risk": {"type": "string"},
+    "rollback": {"type": "string"},
+    "follow_up": {"type": "string"}
   },
-  "required": ["title", "description"],
+  "required": ["slug", "title", "description", "finding", "evidence", "selected_candidate", "rejected_candidates", "change", "validation", "risk", "rollback", "follow_up"],
   "additionalProperties": false
 }`
 
 const killDelay = 5 * time.Second
+
+const reportsFolder = "docs/gc-reviews"
+
+var slugPattern = regexp.MustCompile(`^[a-z0-9-]{1,60}$`)
+
+var reportSections = []struct{ heading, field string }{
+	{"Finding", "finding"},
+	{"Evidence", "evidence"},
+	{"Selected Candidate", "selected_candidate"},
+	{"Rejected Candidates", "rejected_candidates"},
+	{"Change", "change"},
+	{"Validation", "validation"},
+	{"Risk", "risk"},
+	{"Rollback", "rollback"},
+	{"Follow-up", "follow_up"},
+}
 
 var passedToAgent = []string{
 	"PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "SSL_CERT_FILE",
@@ -126,7 +153,11 @@ func (c Codex) Work(ctx context.Context, repository string) (*contract.AgentChan
 	if changed == "" {
 		return nil, nil
 	}
-	title, description, err := readAnswer(answerFile)
+	answer, err := readAnswer(answerFile)
+	if err != nil {
+		return nil, err
+	}
+	reportPath, err := writeReport(workingCopy, answer)
 	if err != nil {
 		return nil, err
 	}
@@ -137,13 +168,18 @@ func (c Codex) Work(ctx context.Context, repository string) (*contract.AgentChan
 	if _, err := c.git(ctx, workingCopy, nil, "add", "--all"); err != nil {
 		return nil, err
 	}
-	if _, err := c.git(ctx, workingCopy, nil, "-c", "user.name=garbage-collector", "-c", "user.email=garbage-collector@users.noreply.github.com", "commit", "--no-verify", "--message", title); err != nil {
+	if _, err := c.git(ctx, workingCopy, nil, "-c", "user.name=garbage-collector", "-c", "user.email=garbage-collector@users.noreply.github.com", "commit", "--no-verify", "--message", answer["title"]); err != nil {
 		return nil, err
 	}
 	if _, err := c.git(ctx, workingCopy, authenticated, "push", "--no-verify", "origin", "HEAD:refs/heads/"+branch); err != nil {
 		return nil, err
 	}
-	return &contract.AgentChange{Branch: branch, Base: base, Title: title, Description: description}, nil
+	return &contract.AgentChange{
+		Branch:      branch,
+		Base:        base,
+		Title:       answer["title"],
+		Description: answer["description"] + "\n\nReport: " + reportPath,
+	}, nil
 }
 
 func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schema, answerFile string) error {
@@ -176,22 +212,49 @@ func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schem
 	return nil
 }
 
-func readAnswer(path string) (title, description string, err error) {
+func readAnswer(path string) (map[string]string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return "", "", fmt.Errorf("the agent gave no answer: %w", err)
+		return nil, fmt.Errorf("the agent gave no answer: %w", err)
 	}
-	var answer struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-	}
+	var answer map[string]string
 	if err := json.Unmarshal(raw, &answer); err != nil {
-		return "", "", fmt.Errorf("the agent's answer is not JSON: %w", err)
+		return nil, fmt.Errorf("the agent's answer is not valid: %w", err)
 	}
-	if strings.TrimSpace(answer.Title) == "" {
-		return "", "", errors.New("the agent's answer has no title")
+	required := []string{"slug", "title", "description"}
+	for _, section := range reportSections {
+		required = append(required, section.field)
 	}
-	return answer.Title, answer.Description, nil
+	for _, field := range required {
+		answer[field] = strings.TrimSpace(answer[field])
+		if answer[field] == "" {
+			return nil, fmt.Errorf("the agent's answer has no %s", field)
+		}
+	}
+	if !slugPattern.MatchString(answer["slug"]) {
+		return nil, errors.New("the agent's answer has an invalid slug")
+	}
+	return answer, nil
+}
+
+func writeReport(workingCopy string, answer map[string]string) (string, error) {
+	var sections []string
+	for _, section := range reportSections {
+		sections = append(sections, "## "+section.heading+"\n\n"+answer[section.field])
+	}
+	root, err := os.OpenRoot(workingCopy)
+	if err != nil {
+		return "", err
+	}
+	defer root.Close()
+	if err := root.MkdirAll(reportsFolder, 0o755); err != nil {
+		return "", fmt.Errorf("cannot create the reports folder: %w", err)
+	}
+	path := reportsFolder + "/" + time.Now().UTC().Format("20060102-150405Z") + "-" + answer["slug"] + ".md"
+	if err := root.WriteFile(path, []byte(strings.Join(sections, "\n\n")+"\n"), 0o644); err != nil {
+		return "", fmt.Errorf("cannot write the report: %w", err)
+	}
+	return path, nil
 }
 
 func newBranch() (string, error) {
