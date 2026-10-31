@@ -66,6 +66,10 @@ func (s *Scenario) GitHubToken() string {
 	return fakeGitHubToken
 }
 
+func (s *Scenario) WebhookSecret() string {
+	return fakeWebhookSecret
+}
+
 func (s *Scenario) GitHubNotAsked() func() spec.Problem {
 	return s.GitHubAsked()
 }

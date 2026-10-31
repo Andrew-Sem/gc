@@ -27,12 +27,13 @@ const (
 )
 
 type server struct {
-	journal contract.Journal
-	github  *github.Client
+	journal       contract.Journal
+	github        *github.Client
+	webhookSecret string
 }
 
 func New(deps contract.Dependencies) http.Handler {
-	s := &server{journal: deps.Journal, github: github.New(deps.GitHub)}
+	s := &server{journal: deps.Journal, github: github.New(deps.GitHub), webhookSecret: deps.WebhookSecret}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)

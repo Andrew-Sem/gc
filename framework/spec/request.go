@@ -42,6 +42,12 @@ func (r Request) WithHeader(name, value string) Request {
 	return r
 }
 
+func (r Request) WithoutHeader(name string) Request {
+	r.header = r.header.Clone()
+	r.header.Del(name)
+	return r
+}
+
 func (r Request) WithBody(contentType, body string) Request {
 	r.body = body
 	return r.WithHeader("Content-Type", contentType)

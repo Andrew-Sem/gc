@@ -1,7 +1,11 @@
 package web
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/Andrew-Sem/gc/specs/contract"
@@ -17,8 +21,17 @@ type pullRequestEvent struct {
 }
 
 func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if !s.validSignature(r.Header.Get("X-Hub-Signature-256"), body) {
+		http.Error(w, "Invalid signature", http.StatusUnauthorized)
+		return
+	}
 	var event pullRequestEvent
-	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+	if err := json.Unmarshal(body, &event); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -27,4 +40,11 @@ func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		Number:     event.PullRequest.Number,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) validSignature(signature string, body []byte) bool {
+	mac := hmac.New(sha256.New, []byte(s.webhookSecret))
+	mac.Write(body)
+	want := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(signature), []byte(want))
 }

@@ -64,3 +64,26 @@ func TestWithHeaderLeavesOriginalUnchanged(t *testing.T) {
 		t.Errorf("original event = %q, want %q", got, "pull_request")
 	}
 }
+
+func TestWithoutHeaderRemovesOnlyThatHeader(t *testing.T) {
+	original := Post("/webhooks/github").
+		WithHeader("X-GitHub-Event", "pull_request").
+		WithHeader("X-Hub-Signature-256", "sha256=abc")
+	got := original.WithoutHeader("X-Hub-Signature-256").httpRequest().Header
+	if _, present := got["X-Hub-Signature-256"]; present {
+		t.Errorf("signature header is still there: %v", got)
+	}
+	if got.Get("X-GitHub-Event") != "pull_request" {
+		t.Errorf("event header = %q, want %q", got.Get("X-GitHub-Event"), "pull_request")
+	}
+	if original.httpRequest().Header.Get("X-Hub-Signature-256") != "sha256=abc" {
+		t.Error("original request lost its header")
+	}
+}
+
+func TestWithoutHeaderOnRequestWithoutHeaders(t *testing.T) {
+	got := Post("/webhooks/github").WithoutHeader("X-Hub-Signature-256").httpRequest().Header
+	if _, present := got["X-Hub-Signature-256"]; present {
+		t.Errorf("signature header appeared: %v", got)
+	}
+}
