@@ -40,18 +40,20 @@ func (p factsMismatch[F]) String() string {
 
 type bodyMissing struct {
 	text string
+	got  string
 }
 
 func (p bodyMissing) String() string {
-	return fmt.Sprintf("expected the response to contain %q", p.text)
+	return fmt.Sprintf("expected the response to contain %q, got %q", p.text, p.got)
 }
 
 type bodyContains struct {
 	text string
+	got  string
 }
 
 func (p bodyContains) String() string {
-	return fmt.Sprintf("expected the response not to contain %q", p.text)
+	return fmt.Sprintf("expected the response not to contain %q, got %q", p.text, p.got)
 }
 
 type callCountMismatch struct {
@@ -105,13 +107,13 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 
 	for _, text := range s.bodyTexts {
 		if !strings.Contains(response.Body.String(), text) {
-			problems = append(problems, bodyMissing{text: text})
+			problems = append(problems, bodyMissing{text: text, got: response.Body.String()})
 		}
 	}
 
 	for _, text := range s.absentText {
 		if strings.Contains(response.Body.String(), text) {
-			problems = append(problems, bodyContains{text: text})
+			problems = append(problems, bodyContains{text: text, got: response.Body.String()})
 		}
 	}
 

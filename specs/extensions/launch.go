@@ -66,6 +66,7 @@ func freeAddress() string {
 }
 
 func (f *Feature) RunLaunch(name string, describe func(*Launch)) {
+	f.t.Helper()
 	binary := f.gcBinary()
 	f.core.RunCustom(name, func() spec.Custom {
 		l := newLaunch(binary)

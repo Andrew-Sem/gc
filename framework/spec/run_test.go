@@ -221,8 +221,8 @@ func TestProblemString(t *testing.T) {
 		{"unexpected element", unexpectedElement{selector: "form"}, "expected no element form, found one"},
 		{"text mismatch", textMismatch{selector: "p", expected: "yes", got: "no"}, `expected text "yes" in p, got "no"`},
 		{"ambiguous element", ambiguousElement{selector: "p", got: 2}, "expected one element p, found 2"},
-		{"body contains", bodyContains{text: "secret"}, `expected the response not to contain "secret"`},
-		{"body missing", bodyMissing{text: "secret"}, `expected the response to contain "secret"`},
+		{"body contains", bodyContains{text: "secret", got: "page"}, `expected the response not to contain "secret", got "page"`},
+		{"body missing", bodyMissing{text: "secret", got: "page"}, `expected the response to contain "secret", got "page"`},
 		{"element count mismatch", elementCountMismatch{selector: "li", expected: 1, got: 2}, "expected 1 elements li, found 2"},
 	}
 	for _, tt := range tests {
@@ -355,7 +355,7 @@ func TestRunChecksBodyWithout(t *testing.T) {
 		want []Problem
 	}{
 		{"text absent", "secret", nil},
-		{"text in an attribute", `name="repo"`, []Problem{bodyContains{text: `name="repo"`}}},
+		{"text in an attribute", `name="repo"`, []Problem{bodyContains{text: `name="repo"`, got: `<form><input name="repo"></form>`}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -408,7 +408,7 @@ func TestRunChecksBodyContaining(t *testing.T) {
 		want []Problem
 	}{
 		{"text present", `name="repo"`, nil},
-		{"text missing", "secret", []Problem{bodyMissing{text: "secret"}}},
+		{"text missing", "secret", []Problem{bodyMissing{text: "secret", got: `<form><input name="repo"></form>`}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

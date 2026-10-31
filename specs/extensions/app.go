@@ -21,6 +21,7 @@ func NewFeature(t *testing.T, path string) *Feature {
 }
 
 func (f *Feature) Run(name string, describe func(*Scenario)) {
+	f.t.Helper()
 	var scenario *Scenario
 	f.core.Run(name, func(core *spec.Scenario[contract.Fact]) {
 		scenario = newScenario(core)

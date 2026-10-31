@@ -2,11 +2,14 @@ package spec
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -106,6 +109,8 @@ func TestFeatureReportsThroughGoTest(t *testing.T) {
 		{"missing contract", false, []string{"cannot read contract"}, "still running"},
 		{"custom scenario", true, []string{"DEMO-1.1 Repositories page: partial, 1 of 2", "uncovered: [DEMO-1.1.1]"}, ""},
 		{"failing custom scenario", false, []string{"the custom check failed", "clause DEMO-9.1.1 is not in contract testdata/contract.md"}, ""},
+		{"parallel report", true, []string{"DEMO-1 Pages: complete, 2 of 2", "uncovered: []", "failing: []"}, "DATA RACE"},
+		{"parallel failure", false, []string{"DEMO-1 Pages: complete, 2 of 2", "uncovered: []", "failing: [DEMO-1.1.2]"}, "DATA RACE"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.helper, func(t *testing.T) {
@@ -132,6 +137,24 @@ func TestFeatureReportsThroughGoTest(t *testing.T) {
 	}
 }
 
+func TestScenarioFailureNamesTheSpecLine(t *testing.T) {
+	for _, tt := range []struct{ helper, want string }{
+		{"failing scenario", "expected status 200, got 404"},
+		{"unknown clause", "clause DEMO-9.1.1 is not in contract"},
+		{"heading covered", "DEMO-1.1 is a heading"},
+		{"failing custom scenario", "the custom check failed"},
+	} {
+		t.Run(tt.helper, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=^TestFeatureHelper$", "-test.v")
+			cmd.Env = append(os.Environ(), "GC_FEATURE_HELPER="+tt.helper)
+			out, _ := cmd.CombinedOutput()
+			if !regexp.MustCompile(`feature_test\.go:[0-9]+: ` + regexp.QuoteMeta(tt.want)).Match(out) {
+				t.Errorf("expected %q to point at the scenario in feature_test.go:\n%s", tt.want, out)
+			}
+		})
+	}
+}
+
 func TestFeatureHelper(t *testing.T) {
 	helper := os.Getenv("GC_FEATURE_HELPER")
 	if helper == "" {
@@ -150,6 +173,21 @@ func TestFeatureHelper(t *testing.T) {
 			ExpectFacts()
 	}
 	switch helper {
+	case "parallel report", "parallel failure":
+		f := NewFeature[string](t, "testdata/contract.md")
+		var registered atomic.Bool
+		for i := range 32 {
+			f.Run(fmt.Sprint(i), func(s *Scenario[string]) {
+				s.Covers(fmt.Sprintf("DEMO-1.1.%d", i%2+1)).When(Get("/")).ExpectStatus(http.StatusOK).ExpectFacts()
+			}, func(*journal.Journal[string]) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					if !registered.Load() || (helper == "parallel failure" && i%2 == 1) {
+						w.WriteHeader(http.StatusNotFound)
+					}
+				})
+			})
+		}
+		registered.Store(true)
 	case "report":
 		f := NewFeature[string](t, "testdata/contract.md")
 		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-1.1.1") }, newApp)
@@ -204,7 +242,9 @@ func TestRunUsesVirtualTime(t *testing.T) {
 			ExpectStatus(http.StatusOK).
 			ExpectFacts()
 	}, sleepsAMinute)
-	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Errorf("scenario took %s of real time, want virtual time", elapsed)
-	}
+	t.Cleanup(func() {
+		if elapsed := time.Since(start); elapsed > 5*time.Second {
+			t.Errorf("scenario took %s of real time, want virtual time", elapsed)
+		}
+	})
 }

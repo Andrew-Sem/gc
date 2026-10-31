@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 
@@ -14,6 +15,7 @@ import (
 )
 
 type Feature[F comparable] struct {
+	mu       sync.Mutex
 	t        *testing.T
 	contract string
 	clauses  clauses
@@ -43,6 +45,8 @@ func NewFeature[F comparable](t *testing.T, contract string) *Feature[F] {
 	}
 	f := &Feature[F]{t: t, contract: contract, clauses: c}
 	t.Cleanup(func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
 		for _, line := range groupReport(f.clauses, f.covered) {
 			t.Log(line)
 		}
@@ -152,6 +156,7 @@ type Custom interface {
 }
 
 func (f *Feature[F]) Run(name string, describe func(s *Scenario[F]), newApp func(*journal.Journal[F]) http.Handler) {
+	f.t.Helper()
 	f.run(name, true, func() ([]string, func() []Problem) {
 		s := &Scenario[F]{}
 		describe(s)
@@ -160,6 +165,7 @@ func (f *Feature[F]) Run(name string, describe func(s *Scenario[F]), newApp func
 }
 
 func (f *Feature[F]) RunCustom(name string, describe func() Custom) {
+	f.t.Helper()
 	f.run(name, false, func() ([]string, func() []Problem) {
 		c := describe()
 		return c.Covered(), c.Run
@@ -167,9 +173,15 @@ func (f *Feature[F]) RunCustom(name string, describe func() Custom) {
 }
 
 func (f *Feature[F]) run(name string, virtualTime bool, describe func() ([]string, func() []Problem)) {
+	f.t.Helper()
 	f.t.Run(name, func(t *testing.T) {
+		t.Helper()
 		if virtualTime {
-			synctest.Test(t, func(t *testing.T) { f.check(t, describe) })
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				t.Helper()
+				f.check(t, describe)
+			})
 			return
 		}
 		f.check(t, describe)
@@ -177,6 +189,7 @@ func (f *Feature[F]) run(name string, virtualTime bool, describe func() ([]strin
 }
 
 func (f *Feature[F]) check(t *testing.T, describe func() ([]string, func() []Problem)) {
+	t.Helper()
 	covers, run := describe()
 	for _, id := range covers {
 		switch {
@@ -187,10 +200,14 @@ func (f *Feature[F]) check(t *testing.T, describe func() ([]string, func() []Pro
 			t.Errorf("clause %s is not in contract %s", id, f.contract)
 		}
 	}
+	f.mu.Lock()
 	f.covered = append(f.covered, covers...)
+	f.mu.Unlock()
 	problems := run()
 	if len(problems) > 0 {
+		f.mu.Lock()
 		f.failed = append(f.failed, covers...)
+		f.mu.Unlock()
 	}
 	for _, problem := range problems {
 		t.Errorf("%s", problem)
