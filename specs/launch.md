@@ -48,3 +48,5 @@ RUN-1.3.3. When `HTTPS_PROXY` is set, `gc` reaches an `https` GitHub API through
 
 RUN-1.4.1. Without `GC_WEBHOOK_SECRET`, `gc` does not start: it exits with a non-zero status
 and prints "GC_WEBHOOK_SECRET is not set".
+
+RUN-1.4.2. `gc` checks webhook signatures with the value of `GC_WEBHOOK_SECRET`.

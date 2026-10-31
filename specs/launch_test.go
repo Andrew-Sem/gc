@@ -96,4 +96,24 @@ func TestLaunch(t *testing.T) {
 			ExpectExit().
 			ExpectOutput("GC_WEBHOOK_SECRET is not set")
 	})
+
+	f.RunLaunch("start with an empty webhook secret", func(s *extensions.Launch) {
+		s.GivenEnv("GC_WEBHOOK_SECRET", "").
+			Covers("RUN-1.4.1").
+			WhenStarted().
+			Then("gc refuses to start").
+			ExpectExit().
+			ExpectOutput("GC_WEBHOOK_SECRET is not set")
+	})
+
+	f.RunLaunch("accept a webhook signed with the configured secret", func(s *extensions.Launch) {
+		s.Covers("RUN-1.4.2").
+			When(extensions.PullRequestDelivery(extensions.PullRequest{
+				Action:     "opened",
+				Repository: "acme/api",
+				Number:     7,
+			})).
+			Then("the delivery is accepted").
+			ExpectStatus(http.StatusNoContent)
+	})
 }
