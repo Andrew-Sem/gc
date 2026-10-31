@@ -19,10 +19,24 @@ type PrCreated struct {
 	Repository string
 }
 
+type Mergeable string
+
+const (
+	MergeableYes     Mergeable = "yes"
+	MergeableNo      Mergeable = "no"
+	MergeableUnknown Mergeable = "unknown"
+)
+
 type PrStateChanged struct {
 	Number     int
 	Repository string
+	HeadSHA    string
+	Base       string
+	Draft      bool
 	Open       bool
+	Mergeable  Mergeable
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type AdmissionApproved struct {

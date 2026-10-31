@@ -26,8 +26,12 @@ event.
 **Our PR** — a PR in a connected repository for which the journal has `PrCreated` with that
 repository and number.
 
-**PR snapshot** — what `PrStateChanged` carries: repository, number, head commit, target
-branch, draft, open, mergeable (yes, no, or unknown), creation date, and update date.
+**PR snapshot** — what `PrStateChanged` carries, read from these fields of GitHub's event:
+repository (`repository.full_name`), number (`pull_request.number`), head commit
+(`pull_request.head.sha`), target branch (`pull_request.base.ref`), draft
+(`pull_request.draft`), open (`pull_request.state`), mergeable (`pull_request.mergeable`: yes,
+no, or unknown), creation date (`pull_request.created_at`), and update date
+(`pull_request.updated_at`).
 
 **Known snapshot** — the snapshot in the latest `PrStateChanged` for that PR.
 
@@ -59,6 +63,10 @@ HOOK-2.1.1. A request with a valid signature but without `X-GitHub-Delivery` or
 HOOK-2.1.2. A `pull_request` request with a valid signature whose body is not JSON or lacks a
 field of the PR snapshot writes no fact (response 400).
 
+HOOK-2.1.3. A body over 25 MiB, GitHub's own limit, is refused without reading it to the end: no
+fact is written (response 413). This is the one check that comes before the signature, because
+the signature covers the whole body.
+
 #### HOOK-2.2. A repeated delivery
 
 HOOK-2.2.1. A delivery ID that was already accepted writes no fact (response 204), even if the
@@ -66,6 +74,9 @@ body differs.
 
 HOOK-2.2.2. Delivery IDs are remembered while the application runs. After a restart, a repeat
 is dropped by HOOK-3.3.
+
+HOOK-2.2.3. The ID of a request that got 400 or 401 is not remembered, so a forged request cannot
+block a real delivery, and a redelivery of a malformed one is processed.
 
 #### HOOK-2.3. Events we do not use
 

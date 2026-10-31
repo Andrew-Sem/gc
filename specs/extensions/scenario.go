@@ -41,6 +41,11 @@ func (s *Scenario) Given(facts ...contract.Fact) *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenRequest(r spec.Request) *Scenario {
+	s.Scenario.GivenRequest(r)
+	return s
+}
+
 func (s *Scenario) GivenOpenPRs(repository string, count int) *Scenario {
 	for number := 1; number <= count; number++ {
 		s.Scenario.Given(contract.PrCreated{Repository: repository, Number: number})

@@ -5,24 +5,74 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"slices"
+	"time"
 
+	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
+const webhookBodyLimit = 25 << 20
+
+var usedActions = []string{"opened", "reopened", "closed", "synchronize", "edited", "ready_for_review", "converted_to_draft"}
+
 type pullRequestEvent struct {
+	Action      string `json:"action"`
 	PullRequest struct {
-		Number int    `json:"number"`
-		State  string `json:"state"`
+		Number *int    `json:"number"`
+		State  *string `json:"state"`
+		Draft  *bool   `json:"draft"`
+		Head   struct {
+			SHA *string `json:"sha"`
+		} `json:"head"`
+		Base struct {
+			Ref *string `json:"ref"`
+		} `json:"base"`
+		Mergeable json.RawMessage `json:"mergeable"`
+		CreatedAt *time.Time      `json:"created_at"`
+		UpdatedAt *time.Time      `json:"updated_at"`
 	} `json:"pull_request"`
 	Repository struct {
-		FullName string `json:"full_name"`
+		FullName *string `json:"full_name"`
 	} `json:"repository"`
 }
 
+func (e pullRequestEvent) snapshot() (contract.PrStateChanged, bool) {
+	pr := e.PullRequest
+	if e.Repository.FullName == nil || pr.Number == nil || pr.State == nil || pr.Draft == nil || pr.Head.SHA == nil ||
+		pr.Base.Ref == nil || pr.Mergeable == nil || pr.CreatedAt == nil || pr.UpdatedAt == nil {
+		return contract.PrStateChanged{}, false
+	}
+	mergeable := contract.MergeableUnknown
+	switch string(pr.Mergeable) {
+	case "true":
+		mergeable = contract.MergeableYes
+	case "false":
+		mergeable = contract.MergeableNo
+	}
+	return contract.PrStateChanged{
+		Repository: normalize(*e.Repository.FullName),
+		Number:     *pr.Number,
+		HeadSHA:    *pr.Head.SHA,
+		Base:       *pr.Base.Ref,
+		Draft:      *pr.Draft,
+		Open:       *pr.State == "open",
+		Mergeable:  mergeable,
+		CreatedAt:  pr.CreatedAt.UTC(),
+		UpdatedAt:  pr.UpdatedAt.UTC(),
+	}, true
+}
+
 func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, webhookBodyLimit))
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		return
+	}
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -31,16 +81,37 @@ func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}
+	id, kind := r.Header.Get("X-GitHub-Delivery"), r.Header.Get("X-GitHub-Event")
+	if id == "" || kind == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	s.webhooks.Lock()
+	defer s.webhooks.Unlock()
+	if s.deliveries[id] {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if kind != "pull_request" {
+		s.deliveries[id] = true
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	var event pullRequestEvent
 	if err := json.Unmarshal(body, &event); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	s.journal.Append(contract.PrStateChanged{
-		Repository: event.Repository.FullName,
-		Number:     event.PullRequest.Number,
-		Open:       event.PullRequest.State == "open",
-	})
+	snapshot, complete := event.snapshot()
+	if !complete {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	s.deliveries[id] = true
+	facts := s.journal.Facts()
+	if slices.Contains(usedActions, event.Action) && domain.IsOurPR(facts, snapshot.Repository, snapshot.Number) && domain.IsNewSnapshot(facts, snapshot) {
+		s.journal.Append(snapshot)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

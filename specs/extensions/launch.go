@@ -170,6 +170,10 @@ func (l *Launch) Address() string {
 	return l.addr
 }
 
+func (l *Launch) WebhookSecret() string {
+	return fakeWebhookSecret
+}
+
 func (l *Launch) GitHubToken() string {
 	return fakeGitHubToken
 }

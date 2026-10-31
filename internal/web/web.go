@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
@@ -31,10 +32,12 @@ type server struct {
 	journal       contract.Journal
 	github        *github.Client
 	webhookSecret string
+	webhooks      sync.Mutex
+	deliveries    map[string]bool
 }
 
 func New(deps contract.Dependencies) http.Handler {
-	s := &server{journal: deps.Journal, github: github.New(deps.GitHub), webhookSecret: deps.WebhookSecret}
+	s := &server{journal: deps.Journal, github: github.New(deps.GitHub), webhookSecret: deps.WebhookSecret, deliveries: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
