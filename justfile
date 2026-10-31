@@ -25,4 +25,4 @@ build: generate
     go build -o gc ./cmd/gc
 
 run addr="localhost:8080": generate
-    GC_ADDR={{addr}} go run ./cmd/gc
+    set -a && . ./.env && set +a && GC_ADDR={{addr}} go run ./cmd/gc
