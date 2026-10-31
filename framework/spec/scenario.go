@@ -16,6 +16,7 @@ type Scenario[F comparable] struct {
 	action     func(*journal.Journal[F])
 	status     int
 	given      []F
+	requests   []Request
 	expected   []F
 	elements   []string
 	noElements []string
@@ -38,6 +39,11 @@ func (s *Scenario[F]) Covers(ids ...string) *Scenario[F] {
 
 func (s *Scenario[F]) Given(facts ...F) *Scenario[F] {
 	s.given = append(s.given, facts...)
+	return s
+}
+
+func (s *Scenario[F]) GivenRequest(r Request) *Scenario[F] {
+	s.requests = append(s.requests, r)
 	return s
 }
 

@@ -65,6 +65,12 @@ func (p callCountMismatch) String() string {
 	return fmt.Sprintf("expected one %s call, got %d", p.method, p.got)
 }
 
+type requestBeforeAction struct{}
+
+func (requestBeforeAction) String() string {
+	return "expected no GivenRequest: an action has no application to send it to"
+}
+
 type noResponse struct{}
 
 func (noResponse) String() string {
@@ -88,6 +94,9 @@ func (s *Scenario[F]) shapeProblems() []Problem {
 		if c.count != 1 {
 			problems = append(problems, callCountMismatch{method: c.method, got: c.count})
 		}
+	}
+	if s.action != nil && len(s.requests) > 0 {
+		problems = append(problems, requestBeforeAction{})
 	}
 	if s.action != nil && s.statusCalls+len(s.elements)+len(s.noElements)+len(s.texts)+len(s.counts)+len(s.bodyTexts)+len(s.absentText) > 0 {
 		problems = append(problems, noResponse{})
@@ -118,8 +127,14 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 		return problems
 	}
 
+	app := newApp(j)
+	for _, request := range s.requests {
+		app.ServeHTTP(httptest.NewRecorder(), request.httpRequest())
+	}
+	before = len(j.Facts())
+
 	response := httptest.NewRecorder()
-	newApp(j).ServeHTTP(response, s.request.httpRequest())
+	app.ServeHTTP(response, s.request.httpRequest())
 
 	if response.Code != s.status {
 		problems = append(problems, statusMismatch{expected: s.status, got: response.Code})

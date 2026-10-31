@@ -503,3 +503,35 @@ func TestGivenAddsFacts(t *testing.T) {
 		t.Errorf("journal = %v, want %v", got, want)
 	}
 }
+
+func TestGivenRequestReachesTheSameApplicationAndIsNotCheckedAsNewFacts(t *testing.T) {
+	var apps int
+	countsRequests := func(j *journal.Journal[string]) http.Handler {
+		apps++
+		seen := 0
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			seen++
+			j.Append(fmt.Sprintf("request %d", seen))
+		})
+	}
+	s := &Scenario[string]{}
+	s.GivenRequest(Get("/first")).
+		When(Get("/second")).
+		ExpectStatus(http.StatusOK).
+		ExpectFacts("request 2")
+	if got := s.Run(countsRequests); len(got) != 0 {
+		t.Errorf("Run() = %v, want no problems", got)
+	}
+	if apps != 1 {
+		t.Errorf("built %d applications, want 1", apps)
+	}
+}
+
+func TestActionScenarioRejectsGivenRequest(t *testing.T) {
+	s := &Scenario[string]{}
+	s.GivenRequest(Get("/first")).WhenAction(func(*journal.Journal[string]) {}).ExpectFacts()
+	want := []Problem{requestBeforeAction{}}
+	if got := s.Run(nil); !reflect.DeepEqual(got, want) {
+		t.Errorf("Run() = %v, want %v", got, want)
+	}
+}
