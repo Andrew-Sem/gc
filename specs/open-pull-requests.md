@@ -86,6 +86,12 @@ OPEN-2.1.2. A decline starts no run.
 OPEN-2.1.3. A new run does not wait for earlier ones: if a run of the same repository is still
 working, the new one works alongside it.
 
+OPEN-2.1.4. When a run starts, `AgentRunStarted` with the run's number, the repository, and the
+time is written to the journal.
+
+OPEN-2.1.5. Run numbers start at 1 and go up by one in the order runs start, across all
+repositories.
+
 #### OPEN-2.2. The agent changed code
 
 OPEN-2.2.1. If the agent changed code, `gc` asks GitHub to create a PR from its branch with its
@@ -113,3 +119,7 @@ OPEN-2.5.1. A run that reaches the run limit is stopped, `gc` does not ask GitHu
 and `AgentRunFinished` with the outcome "timed out" is written to the journal.
 
 OPEN-2.5.2. A run that finishes before the run limit is not affected by it.
+
+#### OPEN-2.6. Recording the end
+
+OPEN-2.6.1. `AgentRunFinished` carries the run's number and the time the run ended.

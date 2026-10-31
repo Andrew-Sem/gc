@@ -7,6 +7,7 @@ templ repositoriesView(repositories []string) {
 	@ui.Head()
 	<title>Repositories</title>
 	<h1>Repositories</h1>
+	<a href="/runs">Runs</a>
 	@repositoriesPanel(repositories, noProblem)
 }
 

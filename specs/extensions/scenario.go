@@ -19,6 +19,14 @@ type Scenario struct {
 	agent  *fakeAgent
 }
 
+func At(moment string) time.Time {
+	at, err := time.Parse("2006-01-02 15:04", moment)
+	if err != nil {
+		panic(err)
+	}
+	return at
+}
+
 func newScenario(core *spec.Scenario[contract.Fact]) *Scenario {
 	return &Scenario{Scenario: core, github: newFakeGitHub(), agent: &fakeAgent{}}
 }

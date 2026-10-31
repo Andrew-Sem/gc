@@ -1,0 +1,69 @@
+package web
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/specs/contract"
+	"github.com/Andrew-Sem/gc/ui"
+)
+
+templ runsView(runs []domain.Run, now time.Time) {
+	<!DOCTYPE html>
+	@ui.Head()
+	<title>Runs</title>
+	<h1>Runs</h1>
+	<a href="/repositories">Repositories</a>
+	if len(runs) == 0 {
+		<p>No runs yet</p>
+	}
+	<table id="runs">
+		<thead>
+			<tr>
+				<th>Repository</th>
+				<th>Started</th>
+				<th>Duration</th>
+				<th>Status</th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, run := range runs {
+				<tr data-run={ strconv.Itoa(run.Number) }>
+					<td data-cell="repository">{ run.Repository }</td>
+					<td data-cell="started">{ run.Started.UTC().Format("2006-01-02 15:04 UTC") }</td>
+					<td data-cell="duration">{ durationText(run.Duration(now)) }</td>
+					<td data-cell="status">
+						if run.Outcome == contract.OutcomePR {
+							<a href={ templ.SafeURL(pullRequestURL(run)) }>{ fmt.Sprintf("PR #%d", run.PR) }</a>
+						} else if run.Running() {
+							running
+						} else {
+							{ string(run.Outcome) }
+						}
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+func pullRequestURL(run domain.Run) string {
+	return fmt.Sprintf("https://github.com/%s/pull/%d", run.Repository, run.PR)
+}
+
+func durationText(d time.Duration) string {
+	minutes := int(d.Minutes())
+	hours := minutes / 60
+	minutes %= 60
+	switch {
+	case hours == 0 && minutes == 0:
+		return "under a minute"
+	case hours == 0:
+		return fmt.Sprintf("%d min", minutes)
+	case minutes == 0:
+		return fmt.Sprintf("%d h", hours)
+	}
+	return fmt.Sprintf("%d h %d min", hours, minutes)
+}

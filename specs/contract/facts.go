@@ -1,5 +1,7 @@
 package contract
 
+import "time"
+
 type Fact interface {
 	fact()
 }
@@ -42,10 +44,18 @@ const (
 	OutcomeTimedOut Outcome = "timed out"
 )
 
+type AgentRunStarted struct {
+	Run        int
+	Repository string
+	At         time.Time
+}
+
 type AgentRunFinished struct {
+	Run        int
 	Repository string
 	Outcome    Outcome
 	Number     int
+	At         time.Time
 }
 
 func (RepositoryConnected) fact()    {}
@@ -54,4 +64,5 @@ func (PrCreated) fact()              {}
 func (PrStateChanged) fact()         {}
 func (AdmissionApproved) fact()      {}
 func (AdmissionDeclined) fact()      {}
+func (AgentRunStarted) fact()        {}
 func (AgentRunFinished) fact()       {}

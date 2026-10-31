@@ -51,15 +51,17 @@ func nextWakeUp(now time.Time) time.Time {
 
 func WakeUp(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
 	for _, repository := range domain.WakeUp(deps.Journal) {
-		runs.Go(func() { run(ctx, deps, repository) })
+		number := domain.NextRunNumber(deps.Journal.Facts())
+		deps.Journal.Append(contract.AgentRunStarted{Run: number, Repository: repository, At: time.Now().UTC()})
+		runs.Go(func() { run(ctx, deps, number, repository) })
 	}
 }
 
-func run(ctx context.Context, deps contract.Dependencies, repository string) {
+func run(ctx context.Context, deps contract.Dependencies, number int, repository string) {
 	limited, cancel := context.WithTimeout(ctx, runLimit)
 	defer cancel()
 	change, err := deps.Agent.Work(limited, repository)
-	finished := contract.AgentRunFinished{Repository: repository}
+	finished := contract.AgentRunFinished{Run: number, Repository: repository}
 	switch {
 	case ctx.Err() != nil:
 		return
@@ -83,5 +85,6 @@ func run(ctx context.Context, deps contract.Dependencies, repository string) {
 		finished.Outcome, finished.Number = contract.OutcomePR, number
 		deps.Journal.Append(contract.PrCreated{Repository: repository, Number: number})
 	}
+	finished.At = time.Now().UTC()
 	deps.Journal.Append(finished)
 }

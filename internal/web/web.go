@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/internal/github"
@@ -39,6 +40,7 @@ func New(deps contract.Dependencies) http.Handler {
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
 	mux.HandleFunc("POST /repositories", s.connectRepository)
 	mux.HandleFunc("POST /repositories/{owner}/{name}/disconnect", s.disconnectRepository)
+	mux.HandleFunc("GET /runs", s.runsPage)
 	mux.HandleFunc("POST /webhooks/github", s.receiveWebhook)
 	return mux
 }
@@ -47,6 +49,13 @@ func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	repositories := domain.ConnectedRepositories(s.journal.Facts())
 	if err := repositoriesView(repositories).Render(r.Context(), w); err != nil {
+		http.Error(w, "cannot render the page", http.StatusInternalServerError)
+	}
+}
+
+func (s *server) runsPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := runsView(domain.Runs(s.journal.Facts()), time.Now()).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the page", http.StatusInternalServerError)
 	}
 }
