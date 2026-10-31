@@ -2,6 +2,7 @@ package spec
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -137,6 +138,21 @@ func TestFeatureReportsThroughGoTest(t *testing.T) {
 	}
 }
 
+func TestFilteredRunReportsOnlySelectedCoverage(t *testing.T) {
+	cmd := exec.Command(os.Args[0], "-test.run=^TestFeatureHelper$/page_opens$", "-test.v")
+	cmd.Env = append(os.Environ(), "GC_FEATURE_HELPER=filtered")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("helper failed: %v\n%s", err, out)
+	}
+	if strings.Contains(string(out), "uncovered:") {
+		t.Errorf("a filtered run reported unselected clauses as uncovered:\n%s", out)
+	}
+	if !strings.Contains(string(out), "selected coverage: [DEMO-1.1.1]") {
+		t.Errorf("output has no selected coverage:\n%s", out)
+	}
+}
+
 func TestScenarioFailureNamesTheSpecLine(t *testing.T) {
 	for _, tt := range []struct{ helper, want string }{
 		{"failing scenario", "expected status 200, got 404"},
@@ -159,6 +175,9 @@ func TestFeatureHelper(t *testing.T) {
 	helper := os.Getenv("GC_FEATURE_HELPER")
 	if helper == "" {
 		t.Skip("runs only as a subprocess of TestFeatureReportsThroughGoTest")
+	}
+	if helper != "filtered" {
+		flag.Set("test.run", "")
 	}
 	newApp := func(*journal.Journal[string]) http.Handler {
 		mux := http.NewServeMux()
@@ -188,7 +207,7 @@ func TestFeatureHelper(t *testing.T) {
 			})
 		}
 		registered.Store(true)
-	case "report":
+	case "report", "filtered":
 		f := NewFeature[string](t, "testdata/contract.md")
 		f.Run("page opens", func(s *Scenario[string]) { pageOpens(s).Covers("DEMO-1.1.1") }, newApp)
 	case "failing scenario":

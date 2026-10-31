@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -47,6 +48,11 @@ func NewFeature[F comparable](t *testing.T, contract string) *Feature[F] {
 	t.Cleanup(func() {
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		if filteredRun() {
+			t.Logf("selected coverage: %v", linked(f.clauses.leaves, f.covered))
+			t.Logf("failing: %v", linked(f.clauses.leaves, f.failed))
+			return
+		}
 		for _, line := range groupReport(f.clauses, f.covered) {
 			t.Log(line)
 		}
@@ -212,4 +218,9 @@ func (f *Feature[F]) check(t *testing.T, describe func() ([]string, func() []Pro
 	for _, problem := range problems {
 		t.Errorf("%s", problem)
 	}
+}
+
+func filteredRun() bool {
+	run := flag.Lookup("test.run")
+	return run != nil && run.Value.String() != ""
 }
