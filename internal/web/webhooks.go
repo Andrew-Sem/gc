@@ -13,7 +13,8 @@ import (
 
 type pullRequestEvent struct {
 	PullRequest struct {
-		Number int `json:"number"`
+		Number int    `json:"number"`
+		State  string `json:"state"`
 	} `json:"pull_request"`
 	Repository struct {
 		FullName string `json:"full_name"`
@@ -38,6 +39,7 @@ func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	s.journal.Append(contract.PrStateChanged{
 		Repository: event.Repository.FullName,
 		Number:     event.PullRequest.Number,
+		Open:       event.PullRequest.State == "open",
 	})
 	w.WriteHeader(http.StatusNoContent)
 }

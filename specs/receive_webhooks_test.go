@@ -17,10 +17,25 @@ func TestReceiveWebhooks(t *testing.T) {
 				Action:     "opened",
 				Repository: "acme/api",
 				Number:     7,
+				State:      "open",
 			})).
 			Then("the PR state is recorded").
 			ExpectStatus(http.StatusNoContent).
-			ExpectFacts(contract.PrStateChanged{Repository: "acme/api", Number: 7})
+			ExpectFacts(contract.PrStateChanged{Repository: "acme/api", Number: 7, Open: true})
+	})
+
+	f.Run("record that our PR was closed", func(s *extensions.Scenario) {
+		s.Covers("HOOK-3.1.5").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}, contract.PrCreated{Repository: "acme/api", Number: 7}).
+			When(extensions.PullRequestDelivery(extensions.PullRequest{
+				Action:     "closed",
+				Repository: "acme/api",
+				Number:     7,
+				State:      "closed",
+			})).
+			Then("the PR is recorded as closed").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts(contract.PrStateChanged{Repository: "acme/api", Number: 7, Open: false})
 	})
 
 	f.Run("reject a delivery without a signature", func(s *extensions.Scenario) {

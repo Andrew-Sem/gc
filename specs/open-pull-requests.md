@@ -8,17 +8,16 @@ job for now.
 
 garbage-collector keeps a steady flow of small PRs in each connected repository, as part of an
 automated pipeline that keeps cleaning up technical debt. Once an hour it decides, for each
-repository, whether to open one more. A decline is recorded too, so the operator can see why an
-hour passed with no new PR.
+repository, whether to open one more.
 
 ## Glossary
 
-**Wake-up** — the start of each clock hour, when the decision is made.
+**Wake-up** — the start of each clock hour in UTC, when the decision is made.
 
 **Connected repository** — see the [connect contract](connect-repository.md).
 
-**Open PR** — a PR of the repository with `PrCreated` in the journal and no later
-`PrStateChanged` for it that says it is closed.
+**Open PR** — a PR of the repository with `PrCreated` in the journal, unless the latest
+`PrStateChanged` for it says it is closed.
 
 **Limit** — the maximum number of open PRs in a repository: 12.
 
@@ -35,6 +34,13 @@ disconnected.
 
 OPEN-1.1.3. Starting `gc` makes no decision by itself: a wake-up missed while it was not running
 is not made up.
+
+OPEN-1.1.4. Decisions are written in the order of the repositories list (REPO-2.2.1).
+
+OPEN-1.1.5. While `gc` runs, a wake-up happens at the start of every clock hour.
+
+OPEN-1.1.6. When `gc` starts, it prints "next wake-up at" followed by the time of the next
+wake-up.
 
 #### OPEN-1.2. There is room
 
@@ -53,7 +59,11 @@ with this repository, the number of open PRs, and the limit is written to the jo
 
 OPEN-1.4.1. Only PRs of this repository count.
 
-OPEN-1.4.2. A PR that was closed, whether merged or not, no longer counts.
+OPEN-1.4.2. A PR that was closed, whether merged or not, no longer counts. A PR that was reopened
+counts again.
 
 OPEN-1.4.3. PRs opened before the repository was disconnected count again once it is connected
 again.
+
+OPEN-1.4.4. A PR without `PrCreated` is not ours: whatever `PrStateChanged` says about it, it
+neither takes nor frees a place.

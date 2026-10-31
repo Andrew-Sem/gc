@@ -89,6 +89,9 @@ HOOK-3.1.3. The repository name from the event is normalized like a submitted na
 
 HOOK-3.1.4. GitHub's `mergeable: null` is recorded as unknown.
 
+HOOK-3.1.5. GitHub's `state` decides whether the snapshot says the PR is open: `open` means
+open, and `closed`, which also covers a merged PR, means closed.
+
 #### HOOK-3.2. Not our PR
 
 HOOK-3.2.1. An event about a repository that is not connected writes no fact (response 204).

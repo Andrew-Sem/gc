@@ -489,3 +489,17 @@ func TestActionScenarioNeedsFacts(t *testing.T) {
 		t.Errorf("Run() = %v, want %v", got, want)
 	}
 }
+
+func TestGivenAddsFacts(t *testing.T) {
+	var got []string
+	s := &Scenario[string]{}
+	s.Given("first").Given("second", "third").
+		WhenAction(func(j *journal.Journal[string]) { got = j.Facts() }).
+		ExpectFacts()
+	if problems := s.Run(nil); len(problems) != 0 {
+		t.Fatalf("run returned %q, want no problems", problems)
+	}
+	if want := []string{"first", "second", "third"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("journal = %v, want %v", got, want)
+	}
+}

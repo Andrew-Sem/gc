@@ -1,8 +1,11 @@
 package extensions
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/Andrew-Sem/gc/framework/journal"
 	"github.com/Andrew-Sem/gc/framework/spec"
@@ -37,12 +40,63 @@ func (s *Scenario) WhenWokenUp() *Scenario {
 	return s
 }
 
+func (s *Scenario) WhenRunning(start string, runFor time.Duration) *Scenario {
+	clock, err := time.Parse("15:04", start)
+	if err != nil {
+		panic(err)
+	}
+	s.WhenAction(func(j *journal.Journal[contract.Fact]) {
+		now := time.Now()
+		time.Sleep(now.Truncate(24 * time.Hour).Add(time.Duration(clock.Hour())*time.Hour + time.Duration(clock.Minute())*time.Minute).Sub(now))
+		ctx, cancel := context.WithCancel(context.Background())
+		stopped := make(chan struct{})
+		go func() {
+			defer close(stopped)
+			web.Serve(ctx, newIdleListener(), s.dependencies(j))
+		}()
+		time.Sleep(runFor)
+		cancel()
+		<-stopped
+	})
+	return s
+}
+
+type idleListener struct {
+	closed chan struct{}
+}
+
+func newIdleListener() *idleListener {
+	return &idleListener{closed: make(chan struct{})}
+}
+
+func (l *idleListener) Accept() (net.Conn, error) {
+	<-l.closed
+	return nil, net.ErrClosed
+}
+
+func (l *idleListener) Close() error {
+	select {
+	case <-l.closed:
+	default:
+		close(l.closed)
+	}
+	return nil
+}
+
+func (l *idleListener) Addr() net.Addr {
+	return &net.TCPAddr{}
+}
+
 func (s *Scenario) app(newApp func(contract.Dependencies) http.Handler) func(*journal.Journal[contract.Fact]) http.Handler {
 	return func(j *journal.Journal[contract.Fact]) http.Handler {
-		return newApp(contract.Dependencies{
-			Journal:       j,
-			GitHub:        contract.GitHub{APIURL: fakeGitHubURL, Token: fakeGitHubToken, Transport: s.github.transport()},
-			WebhookSecret: fakeWebhookSecret,
-		})
+		return newApp(s.dependencies(j))
+	}
+}
+
+func (s *Scenario) dependencies(j *journal.Journal[contract.Fact]) contract.Dependencies {
+	return contract.Dependencies{
+		Journal:       j,
+		GitHub:        contract.GitHub{APIURL: fakeGitHubURL, Token: fakeGitHubToken, Transport: s.github.transport()},
+		WebhookSecret: fakeWebhookSecret,
 	}
 }

@@ -15,6 +15,7 @@ type PullRequest struct {
 	Action     string
 	Repository string
 	Number     int
+	State      string
 }
 
 type pullRequestPayload struct {
@@ -25,7 +26,8 @@ type pullRequestPayload struct {
 }
 
 type pullRequestObject struct {
-	Number int `json:"number"`
+	Number int    `json:"number"`
+	State  string `json:"state"`
 }
 
 type repositoryObject struct {
@@ -38,7 +40,7 @@ func PullRequestDelivery(pr PullRequest) spec.Request {
 	body, err := json.Marshal(pullRequestPayload{
 		Action:      pr.Action,
 		Number:      pr.Number,
-		PullRequest: pullRequestObject{Number: pr.Number},
+		PullRequest: pullRequestObject{Number: pr.Number, State: pr.State},
 		Repository:  repositoryObject{FullName: pr.Repository},
 	})
 	if err != nil {

@@ -37,7 +37,7 @@ func (s *Scenario[F]) Covers(ids ...string) *Scenario[F] {
 }
 
 func (s *Scenario[F]) Given(facts ...F) *Scenario[F] {
-	s.given = facts
+	s.given = append(s.given, facts...)
 	return s
 }
 

@@ -2,10 +2,10 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 
 	"github.com/Andrew-Sem/gc/framework/journal"
@@ -39,7 +39,7 @@ func main() {
 		WebhookSecret: webhookSecret,
 	}
 	log.Printf("admin: http://%s/repositories", addr)
-	log.Fatal(http.Serve(listener, web.New(deps)))
+	log.Fatal(web.Serve(context.Background(), listener, deps))
 }
 
 func fail(message string) {

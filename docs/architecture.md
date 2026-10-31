@@ -25,8 +25,9 @@ For this project, the factory is `web.New(contract.Dependencies) http.Handler`, 
 `specs/extensions/app.go`. Only that integration file imports the application. A scenario that
 no HTTP request starts, such as a wake-up, uses `WhenAction`: it acts on the journal directly and
 checks the new facts. The second
-entry point is the `cmd/gc` binary. It serves the same `web.New` handler, never a separate
-one, so the fast scenarios and the binary check one application. Launch scenarios in
+entry point is the `cmd/gc` binary. It runs `web.Serve`, which serves the same `web.New` handler, never a separate
+one, and wakes the system up at the start of every hour, so the fast scenarios and the binary
+check one application. Launch scenarios in
 `specs/extensions/launch.go` build it with `go build`, run it with a controlled environment,
 and check its exit, output, and HTTP answers. The environment points `HTTPS_PROXY` at a fake
 proxy that records which host `gc` asks for and refuses to forward, so the default GitHub API
