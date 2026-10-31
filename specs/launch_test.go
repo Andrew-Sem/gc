@@ -87,4 +87,13 @@ func TestLaunch(t *testing.T) {
 			Then("the repository is connected after asking the configured API").
 			ExpectStatus(http.StatusOK)
 	})
+
+	f.RunLaunch("start without a webhook secret", func(s *extensions.Launch) {
+		s.GivenUnset("GC_WEBHOOK_SECRET").
+			Covers("RUN-1.4.1").
+			WhenStarted().
+			Then("gc refuses to start").
+			ExpectExit().
+			ExpectOutput("GC_WEBHOOK_SECRET is not set")
+	})
 }

@@ -201,13 +201,14 @@ func (l *Launch) shapeProblems() []spec.Problem {
 
 func (l *Launch) environ() []string {
 	env := map[string]string{
-		"GC_ADDR":        l.addr,
-		"GITHUB_API_URL": l.apiURL,
-		"GITHUB_TOKEN":   fakeGitHubToken,
-		"HTTPS_PROXY":    l.proxy.server.URL,
-		"HTTP_PROXY":     l.proxy.server.URL,
-		"NO_PROXY":       "",
-		"no_proxy":       "",
+		"GC_ADDR":           l.addr,
+		"GC_WEBHOOK_SECRET": fakeWebhookSecret,
+		"GITHUB_API_URL":    l.apiURL,
+		"GITHUB_TOKEN":      fakeGitHubToken,
+		"HTTPS_PROXY":       l.proxy.server.URL,
+		"HTTP_PROXY":        l.proxy.server.URL,
+		"NO_PROXY":          "",
+		"no_proxy":          "",
 	}
 	maps.Copy(env, l.env)
 	var result []string

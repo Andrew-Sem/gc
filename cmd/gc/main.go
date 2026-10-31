@@ -18,6 +18,10 @@ func main() {
 	if token == "" {
 		fail("GITHUB_TOKEN is not set")
 	}
+	webhookSecret := os.Getenv("GC_WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		fail("GC_WEBHOOK_SECRET is not set")
+	}
 	addr := os.Getenv("GC_ADDR")
 	if addr == "" {
 		fail("GC_ADDR is not set")
@@ -32,6 +36,7 @@ func main() {
 			APIURL: cmp.Or(os.Getenv("GITHUB_API_URL"), "https://api.github.com"),
 			Token:  token,
 		},
+		WebhookSecret: webhookSecret,
 	}
 	log.Printf("admin: http://%s/repositories", addr)
 	log.Fatal(http.Serve(listener, web.New(deps)))
