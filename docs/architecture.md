@@ -15,7 +15,7 @@ restart persistence are planned separately.
 | `specs` | Feature contracts and executable scenarios. |
 | `ui` | Shared interface platform: the htmx file, its response rules, the `Head` component every page includes, and the static file handler. |
 | `internal/domain` | Repository-name validation, folds over project facts, and the wake-up decision. |
-| `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
+| `internal/web` | HTTP handlers, templ pages, htmx fragments, static files, and parsing PR webhooks into journal facts; the hourly scheduler starts agent runs. |
 | `internal/github` | GitHub API client: repository access, the clone URL, and creating PRs. |
 | `internal/agent` | One agent run: a throwaway clone, Codex as a subprocess in its sandbox, then `git` commit and push. `git` talks to GitHub directly, outside `contract.GitHub.Transport`. |
 | `cmd/gc` | Reads the environment, refuses to start without a token or a usable address, wires the in-memory journal, starts the server. |
@@ -23,7 +23,8 @@ restart persistence are planned separately.
 The framework imports neither the project contract nor application packages, including in its
 own checks. Each project chooses its fact type and supplies a factory to `Feature.Run`.
 For this project, the factory is `web.New(contract.Dependencies) http.Handler`, connected in
-`specs/extensions/app.go`. Only that integration file imports the application. A scenario that
+`specs/extensions/app.go`. Application imports stay in `specs/extensions`: `app.go` wires
+HTTP and wake-up scenarios, and `agent_run.go` wires agent scenarios. A scenario that
 no HTTP request starts, such as a wake-up, uses `WhenAction`: it acts on the journal directly and
 checks the new facts. The second
 entry point is the `cmd/gc` binary. It runs `web.Serve`, which serves the same `web.New` handler, never a separate
@@ -82,11 +83,20 @@ Planned, not built yet:
 | Package | Responsibility |
 |---|---|
 | `internal/domain` | `Decide` and `Evolve` on top of the fact vocabulary. |
-| `internal/github` | Parsing webhooks into commands. |
 | `internal/store` | Journal, task queue, and settings in SQLite; replaces the in-memory journal. |
 | `internal/app` | Wiring: scheduler, task executor, ports, start and stop; `cmd/gc` assembles it. |
 
+PR webhook parsing currently lives in `internal/web` and writes `PrStateChanged` with the
+repository, PR number, and open state. The full delivery and snapshot rules in
+`specs/receive-webhooks.md` are not all implemented yet.
+
 ## Flow
+
+Current: HTTP handlers append facts to the in-memory journal. The hourly scheduler in
+`internal/web` folds those facts for admission, runs the agent for each approval, creates a PR
+when the agent returns a change, and records the outcome.
+
+Planned flow with a task queue and executor:
 
 ```
 GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ executor ──▶ Codex ──▶ model API
@@ -95,6 +105,9 @@ GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ execut
 ```
 
 ## Invariants
+
+These guide the target architecture as well as the current implementation; clauses about
+transactions, queues, sweeps, and deduplication refer to planned components.
 
 - The journal is append-only and the single source of truth; domain state is its fold.
 - Secrets live only in the environment: never in the journal, tasks, HTML, or logs.
@@ -115,5 +128,5 @@ GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ execut
 | HTTP | `net/http` |
 | Templates | templ |
 | Interactivity | htmx, no frontend build |
-| Storage | SQLite |
+| Storage | In-memory journal; SQLite is planned |
 | Agent | Codex as a subprocess |
