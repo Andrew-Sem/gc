@@ -65,6 +65,12 @@ func (p callCountMismatch) String() string {
 	return fmt.Sprintf("expected one %s call, got %d", p.method, p.got)
 }
 
+type noResponse struct{}
+
+func (noResponse) String() string {
+	return "expected no ExpectStatus or body and element checks: an action has no response"
+}
+
 func (s *Scenario[F]) shapeProblems() []Problem {
 	calls := []struct {
 		method string
@@ -76,9 +82,15 @@ func (s *Scenario[F]) shapeProblems() []Problem {
 	}
 	var problems []Problem
 	for _, c := range calls {
+		if c.method == "ExpectStatus" && s.action != nil {
+			continue
+		}
 		if c.count != 1 {
 			problems = append(problems, callCountMismatch{method: c.method, got: c.count})
 		}
+	}
+	if s.action != nil && s.statusCalls+len(s.elements)+len(s.noElements)+len(s.texts)+len(s.counts)+len(s.bodyTexts)+len(s.absentText) > 0 {
+		problems = append(problems, noResponse{})
 	}
 	return problems
 }
@@ -92,6 +104,19 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 	j := &journal.Journal[F]{}
 	j.Append(s.given...)
 	before := len(j.Facts())
+
+	if s.action != nil {
+		s.action(j)
+		if written := j.Facts()[before:]; !slices.Equal(written, s.expected) {
+			problems = append(problems, factsMismatch[F]{expected: s.expected, got: written})
+		}
+		for _, check := range s.checks {
+			if p := check(); p != nil {
+				problems = append(problems, p)
+			}
+		}
+		return problems
+	}
 
 	response := httptest.NewRecorder()
 	newApp(j).ServeHTTP(response, s.request.httpRequest())

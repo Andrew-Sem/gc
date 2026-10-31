@@ -14,7 +14,7 @@ restart persistence are planned separately.
 | `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, the adapter that supplies the application factory to the framework, and the launch harness that builds and runs `cmd/gc`. |
 | `specs` | Feature contracts and executable scenarios. |
 | `ui` | Shared interface platform: the htmx file, its response rules, the `Head` component every page includes, and the static file handler. |
-| `internal/domain` | Repository-name validation and folds over project facts. |
+| `internal/domain` | Repository-name validation, folds over project facts, and the wake-up decision. |
 | `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
 | `internal/github` | GitHub API client for the repository access check. |
 | `cmd/gc` | Reads the environment, refuses to start without a token or a usable address, wires the in-memory journal, starts the server. |
@@ -22,7 +22,9 @@ restart persistence are planned separately.
 The framework imports neither the project contract nor application packages, including in its
 own checks. Each project chooses its fact type and supplies a factory to `Feature.Run`.
 For this project, the factory is `web.New(contract.Dependencies) http.Handler`, connected in
-`specs/extensions/app.go`. Only that integration file imports the application. The second
+`specs/extensions/app.go`. Only that integration file imports the application. A scenario that
+no HTTP request starts, such as a wake-up, uses `WhenAction`: it acts on the journal directly and
+checks the new facts. The second
 entry point is the `cmd/gc` binary. It serves the same `web.New` handler, never a separate
 one, so the fast scenarios and the binary check one application. Launch scenarios in
 `specs/extensions/launch.go` build it with `go build`, run it with a controlled environment,

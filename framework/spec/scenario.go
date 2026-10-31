@@ -1,5 +1,7 @@
 package spec
 
+import "github.com/Andrew-Sem/gc/framework/journal"
+
 type textExpectation struct {
 	selector, text string
 }
@@ -11,6 +13,7 @@ type countExpectation struct {
 
 type Scenario[F comparable] struct {
 	request    Request
+	action     func(*journal.Journal[F])
 	status     int
 	given      []F
 	expected   []F
@@ -40,6 +43,12 @@ func (s *Scenario[F]) Given(facts ...F) *Scenario[F] {
 
 func (s *Scenario[F]) When(r Request) *Scenario[F] {
 	s.request = r
+	s.whenCalls++
+	return s
+}
+
+func (s *Scenario[F]) WhenAction(action func(*journal.Journal[F])) *Scenario[F] {
+	s.action = action
 	s.whenCalls++
 	return s
 }

@@ -22,7 +22,12 @@ type PrStateChanged struct {
 	Repository string
 }
 
+type AdmissionApproved struct {
+	Repository string
+}
+
 func (RepositoryConnected) fact()    {}
 func (RepositoryDisconnected) fact() {}
 func (PrCreated) fact()              {}
 func (PrStateChanged) fact()         {}
+func (AdmissionApproved) fact()      {}

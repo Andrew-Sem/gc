@@ -22,6 +22,16 @@ func newScenario(core *spec.Scenario[contract.Fact]) *Scenario {
 	return &Scenario{Scenario: core, github: newFakeGitHub()}
 }
 
+func (s *Scenario) Covers(ids ...string) *Scenario {
+	s.Scenario.Covers(ids...)
+	return s
+}
+
+func (s *Scenario) Given(facts ...contract.Fact) *Scenario {
+	s.Scenario.Given(facts...)
+	return s
+}
+
 func (s *Scenario) GivenGitHubSees(fullNames ...string) *Scenario {
 	s.github.given(func(g *fakeGitHub) { g.sees = fullNames })
 	return s

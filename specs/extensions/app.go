@@ -6,6 +6,7 @@ import (
 
 	"github.com/Andrew-Sem/gc/framework/journal"
 	"github.com/Andrew-Sem/gc/framework/spec"
+	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/internal/web"
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
@@ -29,6 +30,11 @@ func (f *Feature) Run(name string, describe func(*Scenario)) {
 	}, func(j *journal.Journal[contract.Fact]) http.Handler {
 		return scenario.app(web.New)(j)
 	})
+}
+
+func (s *Scenario) WhenWokenUp() *Scenario {
+	s.WhenAction(func(j *journal.Journal[contract.Fact]) { domain.WakeUp(j) })
+	return s
 }
 
 func (s *Scenario) app(newApp func(contract.Dependencies) http.Handler) func(*journal.Journal[contract.Fact]) http.Handler {

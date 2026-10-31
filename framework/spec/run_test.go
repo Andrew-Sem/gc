@@ -424,3 +424,68 @@ func TestRunChecksBodyContaining(t *testing.T) {
 		})
 	}
 }
+
+func TestActionScenarioChecksNewFacts(t *testing.T) {
+	act := func(j *journal.Journal[string]) { j.Append("woken") }
+	tests := []struct {
+		name     string
+		expected []string
+		want     []Problem
+	}{
+		{"expected fact", []string{"woken"}, nil},
+		{"other fact", []string{"other"}, []Problem{factsMismatch[string]{expected: []string{"other"}, got: []string{"woken"}}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario[string]{}
+			s.Given("before").WhenAction(act).ExpectFacts(tt.expected...)
+			if got := s.Run(nil); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Run() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestActionScenarioRunsChecks(t *testing.T) {
+	s := &Scenario[string]{}
+	s.WhenAction(func(*journal.Journal[string]) {}).ExpectFacts().Expect(func() Problem { return customProblem("the check failed") })
+	want := []Problem{customProblem("the check failed")}
+	if got := s.Run(nil); !reflect.DeepEqual(got, want) {
+		t.Errorf("Run() = %v, want %v", got, want)
+	}
+}
+
+func TestActionScenarioRejectsResponseChecks(t *testing.T) {
+	tests := []struct {
+		name  string
+		check func(*Scenario[string])
+	}{
+		{"status", func(s *Scenario[string]) { s.ExpectStatus(200) }},
+		{"element", func(s *Scenario[string]) { s.ExpectElement("form") }},
+		{"no element", func(s *Scenario[string]) { s.ExpectNoElement("form") }},
+		{"text", func(s *Scenario[string]) { s.ExpectText("p", "yes") }},
+		{"count", func(s *Scenario[string]) { s.ExpectElementCount("li", 1) }},
+		{"body contains", func(s *Scenario[string]) { s.ExpectBodyContaining("yes") }},
+		{"body without", func(s *Scenario[string]) { s.ExpectBodyWithout("no") }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario[string]{}
+			s.WhenAction(func(*journal.Journal[string]) { t.Error("the action ran") }).ExpectFacts()
+			tt.check(s)
+			want := []Problem{noResponse{}}
+			if got := s.Run(nil); !reflect.DeepEqual(got, want) {
+				t.Errorf("Run() = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestActionScenarioNeedsFacts(t *testing.T) {
+	s := &Scenario[string]{}
+	s.WhenAction(func(*journal.Journal[string]) {})
+	want := []Problem{callCountMismatch{method: "ExpectFacts", got: 0}}
+	if got := s.Run(nil); !reflect.DeepEqual(got, want) {
+		t.Errorf("Run() = %v, want %v", got, want)
+	}
+}
