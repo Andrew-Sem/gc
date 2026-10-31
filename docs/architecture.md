@@ -115,5 +115,5 @@ GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ execut
 | HTTP | `net/http` |
 | Templates | templ |
 | Interactivity | htmx, no frontend build |
-| Storage | SQLite |
+| Storage | In-memory journal; SQLite is planned |
 | Agent | Codex as a subprocess |
