@@ -10,12 +10,12 @@ restart persistence are planned separately.
 |---|---|
 | `framework/journal` | Generic append-only journal in memory, safe for concurrent requests; knows no project event types. |
 | `framework/spec` | Generic Given/When/Then scenarios, clause reporting, HTTP and HTML assertions, exact ordered new-fact checks, and coverage for custom scenarios. |
-| `specs/contract` | Project event definitions, the Journal interface, and GitHub settings (API URL, token, and the transport every GitHub request must use) shared by specifications and application. |
-| `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, the adapter that supplies the application factory to the framework, and the launch harness that builds and runs `cmd/gc`. |
+| `specs/contract` | Project event definitions and dependency contracts: the Journal and Agent interfaces, GitHub settings (API URL, token, and the transport every GitHub request must use), and webhook configuration shared by specifications and application. |
+| `specs/extensions` | Project scenario methods, fake GitHub and agent implementations, the adapter that supplies the application factory to the framework, the launch harness that builds and runs `cmd/gc`, and the agent-run harness. |
 | `specs` | Feature contracts and executable scenarios. |
 | `ui` | Shared interface platform: the htmx file, its response rules, the `Head` component every page includes, and the static file handler. |
 | `internal/domain` | Repository-name validation, folds over project facts, and the wake-up decision. |
-| `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
+| `internal/web` | HTTP handlers, templ pages, htmx fragments, hourly wake-ups, and agent-run orchestration; mounts the static handler from `ui`. |
 | `internal/github` | GitHub API client: repository access, the clone URL, and creating PRs. |
 | `internal/agent` | One agent run: a throwaway clone, Codex as a subprocess in its sandbox, then `git` commit and push. `git` talks to GitHub directly, outside `contract.GitHub.Transport`. |
 | `cmd/gc` | Reads the environment, refuses to start without a token or a usable address, wires the in-memory journal, starts the server. |
