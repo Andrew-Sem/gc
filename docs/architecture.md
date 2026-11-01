@@ -15,7 +15,7 @@ restart persistence are planned separately.
 | `specs` | Feature contracts and executable scenarios. |
 | `ui` | Shared interface platform: the htmx file, its response rules, the `Head` component every page includes, and the static file handler. |
 | `internal/domain` | Repository-name validation, folds over project facts, and the wake-up decision. |
-| `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
+| `internal/web` | HTTP handlers, templ pages, htmx fragments, and mounting `ui.Static`. |
 | `internal/github` | GitHub API client: repository access, the clone URL, and creating PRs. |
 | `internal/agent` | One agent run: a throwaway clone, Codex as a subprocess in its sandbox, then `git` commit and push. `git` talks to GitHub directly, outside `contract.GitHub.Transport`. |
 | `cmd/gc` | Reads the environment, refuses to start without a token or a usable address, wires the in-memory journal, starts the server. |
