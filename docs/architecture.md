@@ -88,6 +88,12 @@ Planned, not built yet:
 
 ## Flow
 
+Currently, HTTP handlers append facts to the in-memory journal. The hourly scheduler in
+`internal/web/serve.go` calls `domain.WakeUp`, then starts an agent run directly for each
+approved repository. Each run records its result in the journal; there is no task queue.
+
+Planned flow with a task queue:
+
 ```
 GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ executor ──▶ Codex ──▶ model API
                       ▲          │  ▲               │
@@ -95,6 +101,10 @@ GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ execut
 ```
 
 ## Invariants
+
+These are target design invariants, including requirements for the planned scheduler, sweep,
+and transactional task queue. They are not a list of guarantees already implemented by the
+current in-memory application.
 
 - The journal is append-only and the single source of truth; domain state is its fold.
 - Secrets live only in the environment: never in the journal, tasks, HTML, or logs.
@@ -115,5 +125,5 @@ GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ execut
 | HTTP | `net/http` |
 | Templates | templ |
 | Interactivity | htmx, no frontend build |
-| Storage | SQLite |
+| Storage | In-memory journal; SQLite is planned |
 | Agent | Codex as a subprocess |
