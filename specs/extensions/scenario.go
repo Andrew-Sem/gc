@@ -24,6 +24,7 @@ type Scenario struct {
 
 type timedRequest struct {
 	repository, clock string
+	sweep             bool
 }
 
 func At(moment string) time.Time {
@@ -55,6 +56,11 @@ func (s *Scenario) GivenRequest(r spec.Request) *Scenario {
 
 func (s *Scenario) GivenRunRequestedAt(repository, clock string) *Scenario {
 	s.requests = append(s.requests, timedRequest{repository: repository, clock: clock})
+	return s
+}
+
+func (s *Scenario) GivenSweepRequestedAt(repository, clock string) *Scenario {
+	s.requests = append(s.requests, timedRequest{repository: repository, clock: clock, sweep: true})
 	return s
 }
 

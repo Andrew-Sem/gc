@@ -47,6 +47,10 @@ type RepositorySettingsChanged struct {
 	At         time.Time
 }
 
+type SweepRequested struct {
+	Repository string
+}
+
 type RunRequested struct {
 	Repository string
 }
@@ -119,3 +123,4 @@ func (AgentRunFinished) fact()          {}
 func (MergeApproved) fact()             {}
 func (MergeDeclined) fact()             {}
 func (MergeFailed) fact()               {}
+func (SweepRequested) fact()            {}

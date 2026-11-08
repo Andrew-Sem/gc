@@ -25,6 +25,7 @@ var kinds = map[string]func([]byte) (contract.Fact, error){
 	"RepositoryDisconnected":    decode[contract.RepositoryDisconnected],
 	"PrCreated":                 decode[contract.PrCreated],
 	"PrStateChanged":            decode[contract.PrStateChanged],
+	"SweepRequested":            decode[contract.SweepRequested],
 	"RunRequested":              decode[contract.RunRequested],
 	"RepositorySettingsChanged": decode[contract.RepositorySettingsChanged],
 	"AdmissionApproved":         decode[contract.AdmissionApproved],

@@ -295,8 +295,8 @@ func TestRepositorySettings(t *testing.T) {
 			Then("acme/api has its own settings, acme/web the defaults").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
-			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api every 24 h, at most 3 open Run now Disconnect Settings").
-			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Disconnect Settings")
+			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api every 24 h, at most 3 open Run now Sweep now Disconnect Settings").
+			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Sweep now Disconnect Settings")
 	})
 }
 

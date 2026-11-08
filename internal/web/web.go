@@ -30,6 +30,7 @@ const (
 	runRequested
 	notConnected
 	noRoom
+	sweepRequested
 )
 
 type server struct {
@@ -49,6 +50,7 @@ func New(deps contract.Dependencies) http.Handler {
 	mux.Handle("POST /repositories", sameSite.Handler(http.HandlerFunc(s.connectRepository)))
 	mux.Handle("POST /repositories/{owner}/{name}/disconnect", sameSite.Handler(http.HandlerFunc(s.disconnectRepository)))
 	mux.Handle("POST /repositories/{owner}/{name}/run", sameSite.Handler(http.HandlerFunc(s.requestRun)))
+	mux.Handle("POST /repositories/{owner}/{name}/sweep", sameSite.Handler(http.HandlerFunc(s.requestSweep)))
 	mux.HandleFunc("GET /repositories/{owner}/{name}/settings", s.settingsPage)
 	mux.Handle("POST /repositories/{owner}/{name}/settings", sameSite.Handler(http.HandlerFunc(s.saveSettings)))
 	mux.HandleFunc("GET /runs", s.runsPage)
@@ -162,6 +164,16 @@ func (s *server) requestRun(w http.ResponseWriter, r *http.Request) {
 	s.renderPanel(w, r, http.StatusOK, runRequested)
 }
 
+func (s *server) requestSweep(w http.ResponseWriter, r *http.Request) {
+	fullName := normalize(r.PathValue("owner") + "/" + r.PathValue("name"))
+	if !domain.IsConnected(s.journal.Facts(), fullName) {
+		s.renderPanel(w, r, http.StatusUnprocessableEntity, notConnected)
+		return
+	}
+	s.journal.Append(contract.SweepRequested{Repository: fullName})
+	s.renderPanel(w, r, http.StatusOK, sweepRequested)
+}
+
 func normalize(fullName string) string {
 	return strings.ToLower(strings.TrimSpace(fullName))
 }
@@ -207,6 +219,10 @@ func disconnectPath(fullName string) string {
 
 func settingsPath(fullName string) string {
 	return repositoryPath(fullName) + "/settings"
+}
+
+func sweepPath(fullName string) string {
+	return repositoryPath(fullName) + "/sweep"
 }
 
 func runPath(fullName string) string {

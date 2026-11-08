@@ -63,7 +63,11 @@ func (s *Scenario) WhenRunning(start string, runFor time.Duration) *Scenario {
 			web.Serve(ctx, newIdleListener(), s.dependencies(j))
 		}()
 		for _, r := range s.requests {
-			time.AfterFunc(untilClock(r.clock), func() { j.Append(contract.RunRequested{Repository: r.repository}) })
+			var request contract.Fact = contract.RunRequested{Repository: r.repository}
+			if r.sweep {
+				request = contract.SweepRequested{Repository: r.repository}
+			}
+			time.AfterFunc(untilClock(r.clock), func() { j.Append(request) })
 		}
 		time.Sleep(runFor)
 		cancel()

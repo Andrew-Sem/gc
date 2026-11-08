@@ -115,3 +115,29 @@ MERGE-3.2.3. When GitHub answers anything else, or does not answer within 60 sec
 
 MERGE-3.2.4. A reason is only one of the texts of this contract, with at most GitHub's status in
 it: nothing GitHub writes in an answer, credentials included, reaches the journal.
+
+### MERGE-4. Sweeping now
+
+#### MERGE-4.1. The button
+
+MERGE-4.1.1. Each repository in the list on the repositories page has a "Sweep now" button, right
+after its "Run now" button, which sends `POST /repositories/<owner>/<name>/sweep`.
+
+MERGE-4.1.2. For a connected repository, the request writes `SweepRequested` with the repository
+and answers 200 with the updated block of the repositories page and the text "Sweep requested.
+Merged PRs show on GitHub.".
+
+MERGE-4.1.3. For a repository that is not connected, no fact is written, and the block shows the
+error "This repository is not connected" (response 422).
+
+MERGE-4.1.4. The repository name in the request is normalized like a submitted name (REPO-1.7.1).
+
+MERGE-4.1.5. A sweep request from another site is refused like a connect request (REPO-5.1).
+
+#### MERGE-4.2. The sweep
+
+MERGE-4.2.1. Right after `SweepRequested`, `gc` sweeps that repository alone, as at a sweep hour
+(MERGE-2.2, MERGE-3), and makes no decision about opening a PR.
+
+MERGE-4.2.2. A `SweepRequested` written before `gc` started sweeps nothing.
+

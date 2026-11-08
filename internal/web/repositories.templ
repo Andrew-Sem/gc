@@ -42,6 +42,8 @@ templ repositoriesPanel(repositories []repositoryRow, state panelState) {
 				<p role="alert">This repository is not connected</p>
 			case noRoom:
 				<p role="status">{ fmt.Sprintf("No room: %d of %d PRs are open. Merge or close some, or raise the limit in the ", state.open, state.limit) }<a href={ templ.SafeURL(settingsPath(state.repository)) }>settings</a>.</p>
+			case sweepRequested:
+				<p role="status">Sweep requested. Merged PRs show on GitHub.</p>
 			case runRequested:
 				<p role="status">Run requested. Follow it on the <a href="/runs">runs page</a>.</p>
 		}
@@ -56,6 +58,7 @@ templ repositoryList(repositories []repositoryRow) {
 				{ row.Name }
 				{ settingsSummary(row.Settings) }
 				<button hx-post={ runPath(row.Name) }>Run now</button>
+				<button hx-post={ sweepPath(row.Name) }>Sweep now</button>
 				<button hx-post={ disconnectPath(row.Name) }>Disconnect</button>
 				<a href={ templ.SafeURL(settingsPath(row.Name)) }>Settings</a>
 			</li>

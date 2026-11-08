@@ -54,7 +54,7 @@ func TestConnectRepository(t *testing.T) {
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 			ExpectElement(extensions.UpdatedBlock).
 			ExpectNoElement(extensions.WholePage).
-			ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open Run now Disconnect Settings").
+			ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open Run now Sweep now Disconnect Settings").
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"] button[hx-post="/repositories/acme/api/disconnect"]`).
 			ExpectNoElement(`#repositories-panel [role="alert"]`)
 	})
@@ -144,7 +144,7 @@ func TestConnectRepository(t *testing.T) {
 				ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 				ExpectElement(extensions.UpdatedBlock).
 				ExpectNoElement(extensions.WholePage).
-				ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open Run now Disconnect Settings").
+				ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open Run now Sweep now Disconnect Settings").
 				ExpectNoElement(`#repositories-panel [role="alert"]`)
 		})
 	}
@@ -305,8 +305,8 @@ func TestConnectRepository(t *testing.T) {
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
 			ExpectElementCount(`#repositories li`, 2).
-			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Disconnect Settings").
-			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open Run now Disconnect Settings").
+			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Sweep now Disconnect Settings").
+			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open Run now Sweep now Disconnect Settings").
 			ExpectNoElement(`#repositories li[data-repository="acme/old"]`)
 	})
 

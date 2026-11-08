@@ -167,6 +167,7 @@ func EveryKindOfFact() []contract.Fact {
 		contract.RepositoryConnected{FullName: "acme/api"},
 		contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, Merge: true, At: at},
 		contract.RunRequested{Repository: "acme/api"},
+		contract.SweepRequested{Repository: "acme/api"},
 		contract.MergeApproved{Repository: "acme/api", Number: 7, HeadSHA: "abc123"},
 		contract.MergeDeclined{Repository: "acme/api", Number: 7, Reason: "draft"},
 		contract.MergeFailed{Repository: "acme/api", Number: 7, Reason: "GitHub answered 405"},

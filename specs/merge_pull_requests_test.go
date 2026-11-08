@@ -82,8 +82,8 @@ func TestMergePullRequests(t *testing.T) {
 			Then("acme/api merges, acme/web does not").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
-			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open, merges green PRs Run now Disconnect Settings").
-			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Disconnect Settings")
+			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api every 1 h, at most 12 open, merges green PRs Run now Sweep now Disconnect Settings").
+			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Sweep now Disconnect Settings")
 	})
 
 	f.Run("a sweep comes at 06:00 before the decision", func(s *extensions.Scenario) {
@@ -175,6 +175,76 @@ func TestMergePullRequests(t *testing.T) {
 			WhenRunning("05:59", 8*time.Minute).
 			Then("the request is decided after the sweep, with the closed PR's place free").
 			ExpectFacts(facts...)
+	})
+
+	f.Run("sweep a connected repository now", func(s *extensions.Scenario) {
+		s.Given(connected).
+			Covers("MERGE-4.1.1", "MERGE-4.1.2").
+			When(spec.Post("/repositories/acme/api/sweep")).
+			Then("the sweep is requested and the block says so").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.SweepRequested{Repository: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectElement(`#repositories-panel li[data-repository="acme/api"] button[hx-post="/repositories/acme/api/run"] + button[hx-post="/repositories/acme/api/sweep"]`).
+			ExpectText(`#repositories-panel li[data-repository="acme/api"] button[hx-post="/repositories/acme/api/sweep"]`, "Sweep now").
+			ExpectText(`#repositories-panel [role="status"]`, "Sweep requested. Merged PRs show on GitHub.")
+	})
+
+	f.Run("sweep a repository that is not connected now", func(s *extensions.Scenario) {
+		s.Given(connected, contract.RepositoryDisconnected{FullName: "acme/api"}).
+			Covers("MERGE-4.1.3").
+			When(spec.Post("/repositories/acme/api/sweep")).
+			Then("the request is rejected and nothing is requested").
+			ExpectStatus(http.StatusUnprocessableEntity).
+			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectText(`#repositories-panel [role="alert"]`, "This repository is not connected")
+	})
+
+	f.Run("sweep a repository named in another casing now", func(s *extensions.Scenario) {
+		s.Given(connected).
+			Covers("MERGE-4.1.4").
+			When(spec.Post("/repositories/Acme/API/sweep")).
+			Then("the sweep of acme/api is requested").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.SweepRequested{Repository: "acme/api"})
+	})
+
+	f.Run("refuse a sweep request from another site", func(s *extensions.Scenario) {
+		s.Given(connected).
+			Covers("MERGE-4.1.5").
+			When(spec.Post("/repositories/acme/api/sweep").WithHeader("Sec-Fetch-Site", "cross-site")).
+			Then("the request is rejected and nothing is requested").
+			ExpectStatus(http.StatusForbidden).
+			ExpectFacts()
+	})
+
+	f.Run("a sweep request sweeps that repository at once", func(s *extensions.Scenario) {
+		s.Covers("MERGE-4.2.1").
+			Given(connected, mergeOn, created, contract.RepositoryConnected{FullName: "acme/web"}, contract.PrCreated{Repository: "acme/web", Number: 8}).
+			GivenPullOnGitHub("acme/api", 7, open).
+			GivenPullOnGitHub("acme/web", 8, open).
+			GivenSweepRequestedAt("acme/api", "10:30").
+			WhenRunning("10:29", 2*time.Minute).
+			Then("acme/api is merged at 10:30, acme/web is not read, and no PR is decided").
+			ExpectFacts(
+				contract.SweepRequested{Repository: "acme/api"},
+				open.Snapshot("acme/api", 7),
+				contract.MergeApproved{Repository: "acme/api", Number: 7, HeadSHA: "abc123"},
+				merged.Snapshot("acme/api", 7),
+			).
+			Expect(s.GitHubMerged("acme/api", 7, "abc123"))
+	})
+
+	f.Run("a sweep request from before the start sweeps nothing", func(s *extensions.Scenario) {
+		s.Covers("MERGE-4.2.2").
+			Given(connected, mergeOn, created, contract.SweepRequested{Repository: "acme/api"}).
+			GivenPullOnGitHub("acme/api", 7, open).
+			GivenSweepRequestedAt("acme/web", "10:30").
+			WhenRunning("10:29", 2*time.Minute).
+			Then("a later request for another repository does not bring the old one back").
+			ExpectFacts(contract.SweepRequested{Repository: "acme/web"}).
+			Expect(s.GitHubMergedNothing())
 	})
 
 	f.Run("a sweep reads the PRs with merging off", func(s *extensions.Scenario) {

@@ -117,8 +117,11 @@ func runOnRequest(ctx context.Context, deps contract.Dependencies, runs *sync.Wa
 		}
 		facts := deps.Journal.Facts()
 		for _, f := range facts[seen:] {
-			if requested, ok := f.(contract.RunRequested); ok {
+			switch requested := f.(type) {
+			case contract.RunRequested:
 				runNow(ctx, deps, runs, turn, requested.Repository)
+			case contract.SweepRequested:
+				sweepNow(ctx, deps, turn, requested.Repository)
 			}
 		}
 		seen = len(facts)
@@ -130,6 +133,14 @@ func runNow(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGrou
 	defer turn.give()
 	if domain.Admit(deps.Journal, repository) {
 		start(ctx, deps, runs, repository)
+	}
+}
+
+func sweepNow(ctx context.Context, deps contract.Dependencies, turn turn, repository string) {
+	turn.take()
+	defer turn.give()
+	if domain.IsConnected(deps.Journal.Facts(), repository) {
+		sweepRepository(ctx, deps.Journal, github.New(deps.GitHub), repository)
 	}
 }
 

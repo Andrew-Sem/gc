@@ -136,8 +136,8 @@ REPO-2.1.2. Disconnected repositories are not shown.
 
 REPO-2.1.3. Each row of the list reads as the repository name, its settings (SET-2.3.2 of the
 [repository settings contract](repository-settings.md)), its "Run now" button (OPEN-3.1.1 of the
-[open pull requests contract](open-pull-requests.md)), its "Disconnect" button, and its
-"Settings" link.
+[open pull requests contract](open-pull-requests.md)), its "Sweep now" button (MERGE-4.1.1 of the
+[merge contract](merge-pull-requests.md)), its "Disconnect" button, and its "Settings" link.
 
 #### REPO-2.2. Order
 
