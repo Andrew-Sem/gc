@@ -75,6 +75,7 @@ type AgentRun struct {
 	appUnknown    bool
 	openPRs       []fakeOpenPR
 	prsUnlisted   bool
+	prsListedIn   time.Duration
 	tokensIssued  []string
 	tokenRequests []string
 	tokensMu      sync.Mutex
@@ -144,6 +145,11 @@ func (a *AgentRun) GivenOpenPR(title, branch string, files ...string) *AgentRun 
 	return a
 }
 
+func (a *AgentRun) GivenGitHubListsPRsAfter(wait time.Duration) *AgentRun {
+	a.prsListedIn = wait
+	return a
+}
+
 func (a *AgentRun) GivenGitHubCannotListPRs() *AgentRun {
 	a.prsUnlisted = true
 	return a
@@ -167,6 +173,7 @@ func (a *AgentRun) servePulls(w http.ResponseWriter, path string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	time.Sleep(a.prsListedIn)
 	pulls := "/repos/" + agentRepository + "/pulls"
 	if path == pulls {
 		var list []map[string]any

@@ -56,16 +56,12 @@ func (p Pull) Snapshot(repository string) (contract.PrStateChanged, bool) {
 }
 
 func (c *Client) Pull(ctx context.Context, fullName, token string, number int) (Pull, error) {
-	ctx, cancel := context.WithTimeout(ctx, lookupLimit)
-	defer cancel()
 	var pull Pull
 	err := c.get(ctx, fmt.Sprintf("%s/pulls/%d", c.repositoryURL(fullName), number), token, &pull)
 	return pull, err
 }
 
 func (c *Client) RequiredChecks(ctx context.Context, fullName, token, branch string) (int, error) {
-	ctx, cancel := context.WithTimeout(ctx, lookupLimit)
-	defer cancel()
 	var answer struct {
 		Protection struct {
 			RequiredStatusChecks struct {

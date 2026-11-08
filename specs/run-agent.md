@@ -84,6 +84,9 @@ are not listed, and with none of ours open the prompt has no such list.
 
 AGENT-2.1.8. If GitHub cannot list the open PRs, the run fails and Codex does not start.
 
+AGENT-2.1.9. Each request of that listing, the list itself and the files of each PR, waits up to
+5 seconds for GitHub on its own, so a repository with many of our PRs open does not fail the run.
+
 #### AGENT-2.2. Secrets
 
 AGENT-2.2.1. The agent's environment has no `GITHUB_APP_PRIVATE_KEY_FILE` and no

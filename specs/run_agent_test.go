@@ -342,6 +342,18 @@ func TestRunAgent(t *testing.T) {
 			ExpectAgentSaw(extensions.AgentSaw{Prompt: true})
 	})
 
+	f.RunAgent("many open PRs, each slow to list, still reach the prompt", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.9").
+			GivenRepositoryWithCommits(1).
+			GivenOpenPR("Fix one", "gc/01", "one.md").
+			GivenOpenPR("Fix two", "gc/02", "two.md").
+			GivenOpenPR("Fix three", "gc/03", "three.md").
+			GivenGitHubListsPRsAfter(2*time.Second).
+			WhenAgentRuns().
+			Then("eight seconds of listing in all, under five each, and every PR is in the prompt").
+			ExpectPromptWith(`"Fix one", changing one.md`, `"Fix two", changing two.md`, `"Fix three", changing three.md`)
+	})
+
 	f.RunAgent("no run when GitHub cannot list the open PRs", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.1.8").
 			GivenRepositoryWithCommits(1).

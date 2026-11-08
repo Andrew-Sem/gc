@@ -153,8 +153,6 @@ type OpenPR struct {
 }
 
 func (c *Client) OpenPRs(ctx context.Context, fullName, token, branchPrefix string) ([]OpenPR, error) {
-	ctx, cancel := context.WithTimeout(ctx, lookupLimit)
-	defer cancel()
 	var pulls []struct {
 		Number int    `json:"number"`
 		Title  string `json:"title"`
@@ -186,6 +184,8 @@ func (c *Client) OpenPRs(ctx context.Context, fullName, token, branchPrefix stri
 }
 
 func (c *Client) get(ctx context.Context, endpoint, token string, into any) error {
+	ctx, cancel := context.WithTimeout(ctx, lookupLimit)
+	defer cancel()
 	resp, err := c.send(ctx, http.MethodGet, endpoint, token, nil)
 	if err != nil {
 		return err
