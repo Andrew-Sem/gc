@@ -39,6 +39,13 @@ type PrStateChanged struct {
 	UpdatedAt  time.Time
 }
 
+type RepositorySettingsChanged struct {
+	Repository string
+	Pace       int
+	Limit      int
+	At         time.Time
+}
+
 type RunRequested struct {
 	Repository string
 }
@@ -79,12 +86,13 @@ type AgentRunFinished struct {
 	At          time.Time
 }
 
-func (RepositoryConnected) fact()    {}
-func (RepositoryDisconnected) fact() {}
-func (PrCreated) fact()              {}
-func (RunRequested) fact()           {}
-func (PrStateChanged) fact()         {}
-func (AdmissionApproved) fact()      {}
-func (AdmissionDeclined) fact()      {}
-func (AgentRunStarted) fact()        {}
-func (AgentRunFinished) fact()       {}
+func (RepositoryConnected) fact()       {}
+func (RepositoryDisconnected) fact()    {}
+func (PrCreated) fact()                 {}
+func (RunRequested) fact()              {}
+func (RepositorySettingsChanged) fact() {}
+func (PrStateChanged) fact()            {}
+func (AdmissionApproved) fact()         {}
+func (AdmissionDeclined) fact()         {}
+func (AgentRunStarted) fact()           {}
+func (AgentRunFinished) fact()          {}

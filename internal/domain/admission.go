@@ -1,12 +1,17 @@
 package domain
 
-import "github.com/Andrew-Sem/gc/specs/contract"
+import (
+	"time"
 
-const openPRLimit = 12
+	"github.com/Andrew-Sem/gc/specs/contract"
+)
 
-func WakeUp(journal contract.Journal) []string {
+func WakeUp(journal contract.Journal, now time.Time) []string {
 	var approved []string
 	for _, repository := range ConnectedRepositories(journal.Facts()) {
+		if !RepositorySettings(journal.Facts(), repository).Due(now) {
+			continue
+		}
 		if Admit(journal, repository) {
 			approved = append(approved, repository)
 		}
@@ -15,8 +20,9 @@ func WakeUp(journal contract.Journal) []string {
 }
 
 func Admit(journal contract.Journal, repository string) bool {
-	if open := openPRs(journal.Facts(), repository); open >= openPRLimit {
-		journal.Append(contract.AdmissionDeclined{Repository: repository, Open: open, Limit: openPRLimit})
+	limit := RepositorySettings(journal.Facts(), repository).Limit
+	if open := openPRs(journal.Facts(), repository); open >= limit {
+		journal.Append(contract.AdmissionDeclined{Repository: repository, Open: open, Limit: limit})
 		return false
 	}
 	journal.Append(contract.AdmissionApproved{Repository: repository})

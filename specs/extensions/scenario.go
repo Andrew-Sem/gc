@@ -18,6 +18,12 @@ type Scenario struct {
 	github  *fakeGitHub
 	agent   *fakeAgent
 	streams []*openStream
+
+	requests []timedRequest
+}
+
+type timedRequest struct {
+	repository, clock string
 }
 
 func At(moment string) time.Time {
@@ -44,6 +50,11 @@ func (s *Scenario) Given(facts ...contract.Fact) *Scenario {
 
 func (s *Scenario) GivenRequest(r spec.Request) *Scenario {
 	s.Scenario.GivenRequest(r)
+	return s
+}
+
+func (s *Scenario) GivenRunRequestedAt(repository, clock string) *Scenario {
+	s.requests = append(s.requests, timedRequest{repository: repository, clock: clock})
 	return s
 }
 

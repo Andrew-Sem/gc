@@ -1,0 +1,28 @@
+package web
+
+import "github.com/Andrew-Sem/gc/ui"
+
+templ settingsView(form settingsForm) {
+	<!DOCTYPE html>
+	@ui.Head()
+	<title>Settings of { form.Repository }</title>
+	<h1>{ form.Repository }</h1>
+	<a href="/repositories">Repositories</a>
+	@settingsPanel(form)
+}
+
+templ settingsPanel(form settingsForm) {
+	<section id="settings-panel" hx-target="#settings-panel" hx-swap="outerHTML">
+		<form hx-post={ settingsPath(form.Repository) }>
+			<label>Every <input name="pace" value={ form.Pace } inputmode="numeric" required/> hours</label>
+			<label>At most <input name="limit" value={ form.Limit } inputmode="numeric" required/> open PRs</label>
+			<button>Save</button>
+		</form>
+		if form.Problem != "" {
+			<p role="alert">{ form.Problem }</p>
+		}
+		if form.Saved {
+			<p role="status">Saved</p>
+		}
+	</section>
+}

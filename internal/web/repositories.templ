@@ -1,8 +1,12 @@
 package web
 
-import "github.com/Andrew-Sem/gc/ui"
+import (
+	"fmt"
 
-templ repositoriesView(repositories []string) {
+	"github.com/Andrew-Sem/gc/ui"
+)
+
+templ repositoriesView(repositories []repositoryRow) {
 	<!DOCTYPE html>
 	@ui.Head()
 	<title>Repositories</title>
@@ -11,7 +15,7 @@ templ repositoriesView(repositories []string) {
 	@repositoriesPanel(repositories, noProblem)
 }
 
-templ repositoriesPanel(repositories []string, p problem) {
+templ repositoriesPanel(repositories []repositoryRow, p problem) {
 	<section id="repositories-panel" hx-target="#repositories-panel" hx-swap="outerHTML">
 		<form hx-post="/repositories">
 			<label>Repository <input name="repo" placeholder="owner/name" required/></label>
@@ -41,13 +45,15 @@ templ repositoriesPanel(repositories []string, p problem) {
 	</section>
 }
 
-templ repositoryList(repositories []string) {
+templ repositoryList(repositories []repositoryRow) {
 	<ul id="repositories">
-		for _, name := range repositories {
-			<li data-repository={ name }>
-				{ name }
-				<button hx-post={ runPath(name) }>Run now</button>
-				<button hx-post={ disconnectPath(name) }>Disconnect</button>
+		for _, row := range repositories {
+			<li data-repository={ row.Name }>
+				{ row.Name }
+				{ fmt.Sprintf("every %d h, at most %d open", row.Settings.Pace, row.Settings.Limit) }
+				<button hx-post={ runPath(row.Name) }>Run now</button>
+				<button hx-post={ disconnectPath(row.Name) }>Disconnect</button>
+				<a href={ templ.SafeURL(settingsPath(row.Name)) }>Settings</a>
 			</li>
 		}
 	</ul>

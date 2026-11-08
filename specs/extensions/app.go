@@ -37,7 +37,7 @@ func (f *Feature) Run(name string, describe func(*Scenario)) {
 }
 
 func (s *Scenario) WhenWokenUp() *Scenario {
-	s.WhenAction(func(j *journal.Journal[contract.Fact]) { domain.WakeUp(j) })
+	s.WhenAction(func(j *journal.Journal[contract.Fact]) { domain.WakeUp(j, time.Now()) })
 	return s
 }
 
@@ -54,24 +54,31 @@ func (s *Scenario) WhenWokenUpFor(wait time.Duration) *Scenario {
 }
 
 func (s *Scenario) WhenRunning(start string, runFor time.Duration) *Scenario {
-	clock, err := time.Parse("15:04", start)
-	if err != nil {
-		panic(err)
-	}
 	s.WhenAction(func(j *journal.Journal[contract.Fact]) {
-		now := time.Now()
-		time.Sleep(now.Truncate(24 * time.Hour).Add(time.Duration(clock.Hour())*time.Hour + time.Duration(clock.Minute())*time.Minute).Sub(now))
+		time.Sleep(untilClock(start))
 		ctx, cancel := context.WithCancel(context.Background())
 		stopped := make(chan struct{})
 		go func() {
 			defer close(stopped)
 			web.Serve(ctx, newIdleListener(), s.dependencies(j))
 		}()
+		for _, r := range s.requests {
+			time.AfterFunc(untilClock(r.clock), func() { j.Append(contract.RunRequested{Repository: r.repository}) })
+		}
 		time.Sleep(runFor)
 		cancel()
 		<-stopped
 	})
 	return s
+}
+
+func untilClock(clock string) time.Duration {
+	at, err := time.Parse("15:04", clock)
+	if err != nil {
+		panic(err)
+	}
+	now := time.Now()
+	return now.Truncate(24 * time.Hour).Add(time.Duration(at.Hour())*time.Hour + time.Duration(at.Minute())*time.Minute).Sub(now)
 }
 
 type idleListener struct {

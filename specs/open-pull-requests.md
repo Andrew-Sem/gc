@@ -18,7 +18,8 @@ repository, whether to open one more.
 **Open PR** — a PR of the repository with `PrCreated` in the journal, unless the latest
 `PrStateChanged` for it says it is closed.
 
-**Limit** — the maximum number of open PRs in a repository: 12.
+**Limit** — the maximum number of open PRs in a repository: its maximum open from the
+[repository settings contract](repository-settings.md), 12 by default.
 
 **Agent** — the program that looks for technical debt in one repository and changes its code.
 It edits files only: `gc` opens the PR. When it changed something, it also gives the PR's title
@@ -37,7 +38,9 @@ for the wake-up.
 
 #### OPEN-1.1. Which repositories
 
-OPEN-1.1.1. At a wake-up, each connected repository gets exactly one decision.
+OPEN-1.1.1. At a wake-up, each connected repository that is due (SET-2.1.1 of the
+[repository settings contract](repository-settings.md)) gets exactly one decision. With the
+default pace, every connected repository is due.
 
 OPEN-1.1.2. A repository that is not connected gets no decision. This includes one that was
 disconnected.

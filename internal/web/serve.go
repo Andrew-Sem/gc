@@ -67,7 +67,7 @@ var deciding sync.Mutex
 func WakeUp(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
 	deciding.Lock()
 	defer deciding.Unlock()
-	for _, repository := range domain.WakeUp(deps.Journal) {
+	for _, repository := range domain.WakeUp(deps.Journal, time.Now()) {
 		start(ctx, deps, runs, repository)
 	}
 }

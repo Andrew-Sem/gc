@@ -48,6 +48,8 @@ func New(deps contract.Dependencies) http.Handler {
 	mux.Handle("POST /repositories", sameSite.Handler(http.HandlerFunc(s.connectRepository)))
 	mux.Handle("POST /repositories/{owner}/{name}/disconnect", sameSite.Handler(http.HandlerFunc(s.disconnectRepository)))
 	mux.Handle("POST /repositories/{owner}/{name}/run", sameSite.Handler(http.HandlerFunc(s.requestRun)))
+	mux.HandleFunc("GET /repositories/{owner}/{name}/settings", s.settingsPage)
+	mux.Handle("POST /repositories/{owner}/{name}/settings", sameSite.Handler(http.HandlerFunc(s.saveSettings)))
 	mux.HandleFunc("GET /runs", s.runsPage)
 	mux.HandleFunc("GET /runs/panel", s.runsPanel)
 	mux.HandleFunc("GET /runs/events", s.runsEvents)
@@ -57,8 +59,7 @@ func New(deps contract.Dependencies) http.Handler {
 
 func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	repositories := domain.ConnectedRepositories(s.journal.Facts())
-	if err := repositoriesView(repositories).Render(r.Context(), w); err != nil {
+	if err := repositoriesView(s.repositoryRows()).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the page", http.StatusInternalServerError)
 	}
 }
@@ -160,9 +161,8 @@ func normalize(fullName string) string {
 }
 
 func (s *server) renderPanel(w http.ResponseWriter, r *http.Request, status int, p problem) {
-	repositories := domain.ConnectedRepositories(s.journal.Facts())
 	var panel bytes.Buffer
-	if err := repositoriesPanel(repositories, p).Render(r.Context(), &panel); err != nil {
+	if err := repositoriesPanel(s.repositoryRows(), p).Render(r.Context(), &panel); err != nil {
 		http.Error(w, "cannot render the panel", http.StatusInternalServerError)
 		return
 	}
@@ -171,8 +171,26 @@ func (s *server) renderPanel(w http.ResponseWriter, r *http.Request, status int,
 	panel.WriteTo(w)
 }
 
+type repositoryRow struct {
+	Name     string
+	Settings domain.Settings
+}
+
+func (s *server) repositoryRows() []repositoryRow {
+	facts := s.journal.Facts()
+	var rows []repositoryRow
+	for _, name := range domain.ConnectedRepositories(facts) {
+		rows = append(rows, repositoryRow{Name: name, Settings: domain.RepositorySettings(facts, name)})
+	}
+	return rows
+}
+
 func disconnectPath(fullName string) string {
 	return repositoryPath(fullName) + "/disconnect"
+}
+
+func settingsPath(fullName string) string {
+	return repositoryPath(fullName) + "/settings"
 }
 
 func runPath(fullName string) string {

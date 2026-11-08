@@ -164,6 +164,7 @@ func EveryKindOfFact() []contract.Fact {
 	at := At("1999-12-31 22:00")
 	return []contract.Fact{
 		contract.RepositoryConnected{FullName: "acme/api"},
+		contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, At: at},
 		contract.RunRequested{Repository: "acme/api"},
 		contract.AdmissionApproved{Repository: "acme/api"},
 		contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12},

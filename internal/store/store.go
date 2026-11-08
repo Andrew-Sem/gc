@@ -21,15 +21,16 @@ var ErrUnreadable = errors.New("unreadable journal")
 var sqliteHeader = []byte("SQLite format 3\x00")
 
 var kinds = map[string]func([]byte) (contract.Fact, error){
-	"RepositoryConnected":    decode[contract.RepositoryConnected],
-	"RepositoryDisconnected": decode[contract.RepositoryDisconnected],
-	"PrCreated":              decode[contract.PrCreated],
-	"PrStateChanged":         decode[contract.PrStateChanged],
-	"RunRequested":           decode[contract.RunRequested],
-	"AdmissionApproved":      decode[contract.AdmissionApproved],
-	"AdmissionDeclined":      decode[contract.AdmissionDeclined],
-	"AgentRunStarted":        decode[contract.AgentRunStarted],
-	"AgentRunFinished":       decode[contract.AgentRunFinished],
+	"RepositoryConnected":       decode[contract.RepositoryConnected],
+	"RepositoryDisconnected":    decode[contract.RepositoryDisconnected],
+	"PrCreated":                 decode[contract.PrCreated],
+	"PrStateChanged":            decode[contract.PrStateChanged],
+	"RunRequested":              decode[contract.RunRequested],
+	"RepositorySettingsChanged": decode[contract.RepositorySettingsChanged],
+	"AdmissionApproved":         decode[contract.AdmissionApproved],
+	"AdmissionDeclined":         decode[contract.AdmissionDeclined],
+	"AgentRunStarted":           decode[contract.AgentRunStarted],
+	"AgentRunFinished":          decode[contract.AgentRunFinished],
 }
 
 func decode[F contract.Fact](data []byte) (contract.Fact, error) {
