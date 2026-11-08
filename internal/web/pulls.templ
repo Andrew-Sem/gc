@@ -1,0 +1,40 @@
+package web
+
+import (
+	"fmt"
+
+	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/ui"
+)
+
+templ pullsView(pulls []domain.OpenPull) {
+	<!DOCTYPE html>
+	@ui.Head()
+	<title>Pull requests</title>
+	<h1>Pull requests</h1>
+	<a href="/repositories">Repositories</a>
+	<a href="/runs">Runs</a>
+	if len(pulls) == 0 {
+		<p>No open PRs</p>
+	}
+	<table id="pulls">
+		<thead>
+			<tr>
+				<th>Repository</th>
+				<th>PR</th>
+				<th>Decision</th>
+				<th>Reason</th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, pull := range pulls {
+				<tr data-pull={ fmt.Sprintf("%s#%d", pull.Repository, pull.Number) }>
+					<td data-cell="repository">{ pull.Repository }</td>
+					<td data-cell="number"><a href={ templ.SafeURL(fmt.Sprintf("https://github.com/%s/pull/%d", pull.Repository, pull.Number)) }>{ fmt.Sprintf("#%d", pull.Number) }</a></td>
+					<td data-cell="decision">{ pull.Decision }</td>
+					<td data-cell="reason">{ pull.Reason }</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}

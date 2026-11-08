@@ -45,7 +45,7 @@ func repositoriesView(repositories []repositoryRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<title>Repositories</title><h1>Repositories</h1><a href=\"/runs\">Runs</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<title>Repositories</title><h1>Repositories</h1><a href=\"/runs\">Runs</a> <a href=\"/pulls\">Pull requests</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -131,7 +131,7 @@ func repositoriesPanel(repositories []repositoryRow, state panelState) templ.Com
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("No room: %d of %d PRs are open. Merge or close some, or raise the limit in the ", state.open, state.limit))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 44, Col: 142}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 45, Col: 142}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -144,7 +144,7 @@ func repositoriesPanel(repositories []repositoryRow, state panelState) templ.Com
 			var templ_7745c5c3_Var4 templ.SafeURL
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(settingsPath(state.repository)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 44, Col: 199}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 45, Col: 199}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -210,7 +210,7 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(row.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 57, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 58, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -223,7 +223,7 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(row.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 58, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 59, Col: 14}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -236,7 +236,7 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(settingsSummary(row.Settings))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 59, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 60, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -249,7 +249,7 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(runPath(row.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 60, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 61, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -262,7 +262,7 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(sweepPath(row.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 61, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 62, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -275,7 +275,7 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(disconnectPath(row.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 62, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 63, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -288,7 +288,7 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 			var templ_7745c5c3_Var12 templ.SafeURL
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(settingsPath(row.Name)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 63, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/repositories.templ`, Line: 64, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {

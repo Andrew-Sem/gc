@@ -16,6 +16,7 @@ templ runsView(runs []domain.Run, now time.Time) {
 	<title>Runs</title>
 	<h1>Runs</h1>
 	<a href="/repositories">Repositories</a>
+	<a href="/pulls">Pull requests</a>
 	@runsPanel(runs, now)
 	<script>
 		const runsChanged = () => document.body.dispatchEvent(new Event("runs-changed"));
