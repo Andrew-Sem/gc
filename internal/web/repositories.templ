@@ -14,16 +14,16 @@ templ repositoriesView(repositories []repositoryRow) {
 	<title>Repositories</title>
 	<h1>Repositories</h1>
 	<a href="/runs">Runs</a>
-	@repositoriesPanel(repositories, noProblem)
+	@repositoriesPanel(repositories, panelState{})
 }
 
-templ repositoriesPanel(repositories []repositoryRow, p problem) {
+templ repositoriesPanel(repositories []repositoryRow, state panelState) {
 	<section id="repositories-panel" hx-target="#repositories-panel" hx-swap="outerHTML">
 		<form hx-post="/repositories">
 			<label>Repository <input name="repo" placeholder="owner/name" required/></label>
 			<button>Connect</button>
 		</form>
-		switch p {
+		switch state.problem {
 			case noAccess:
 				<p role="alert">The app is not installed on this repository</p>
 			case malformedName:
@@ -40,6 +40,8 @@ templ repositoriesPanel(repositories []repositoryRow, p problem) {
 				<p role="alert">GitHub moved this repository. Enter its current name.</p>
 			case notConnected:
 				<p role="alert">This repository is not connected</p>
+			case noRoom:
+				<p role="status">{ fmt.Sprintf("No room: %d of %d PRs are open. Merge or close some, or raise the limit in the ", state.open, state.limit) }<a href={ templ.SafeURL(settingsPath(state.repository)) }>settings</a>.</p>
 			case runRequested:
 				<p role="status">Run requested. Follow it on the <a href="/runs">runs page</a>.</p>
 		}

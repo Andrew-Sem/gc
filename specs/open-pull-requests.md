@@ -167,6 +167,11 @@ OPEN-3.1.4. The repository name in the request is normalized like a submitted na
 
 OPEN-3.1.5. A run request from another site is refused like a connect request (REPO-5.1).
 
+OPEN-3.1.6. If the repository has as many open PRs as its limit or more, the request still writes
+`RunRequested`, but the block shows instead "No room: <open> of <limit> PRs are open. Merge or
+close some, or raise the limit in the settings.", where "settings" links to the repository's
+settings page, so the operator knows at once why no run will start.
+
 #### OPEN-3.2. The decision
 
 OPEN-3.2.1. Right after `RunRequested`, `gc` makes the decision of OPEN-1.2 and OPEN-1.3 for that

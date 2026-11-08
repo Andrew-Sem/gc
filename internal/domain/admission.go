@@ -19,9 +19,13 @@ func WakeUp(journal contract.Journal, now time.Time) []string {
 	return approved
 }
 
+func HasRoom(facts []contract.Fact, repository string) (open, limit int, room bool) {
+	open, limit = openPRs(facts, repository), RepositorySettings(facts, repository).Limit
+	return open, limit, open < limit
+}
+
 func Admit(journal contract.Journal, repository string) bool {
-	limit := RepositorySettings(journal.Facts(), repository).Limit
-	if open := openPRs(journal.Facts(), repository); open >= limit {
+	if open, limit, room := HasRoom(journal.Facts(), repository); !room {
 		journal.Append(contract.AdmissionDeclined{Repository: repository, Open: open, Limit: limit})
 		return false
 	}

@@ -29,6 +29,7 @@ const (
 	moved
 	runRequested
 	notConnected
+	noRoom
 )
 
 type server struct {
@@ -152,7 +153,12 @@ func (s *server) requestRun(w http.ResponseWriter, r *http.Request) {
 		s.renderPanel(w, r, http.StatusUnprocessableEntity, notConnected)
 		return
 	}
+	open, limit, room := domain.HasRoom(s.journal.Facts(), fullName)
 	s.journal.Append(contract.RunRequested{Repository: fullName})
+	if !room {
+		s.renderPanelWith(w, r, http.StatusOK, panelState{problem: noRoom, repository: fullName, open: open, limit: limit})
+		return
+	}
 	s.renderPanel(w, r, http.StatusOK, runRequested)
 }
 
@@ -160,9 +166,19 @@ func normalize(fullName string) string {
 	return strings.ToLower(strings.TrimSpace(fullName))
 }
 
+type panelState struct {
+	problem     problem
+	repository  string
+	open, limit int
+}
+
 func (s *server) renderPanel(w http.ResponseWriter, r *http.Request, status int, p problem) {
+	s.renderPanelWith(w, r, status, panelState{problem: p})
+}
+
+func (s *server) renderPanelWith(w http.ResponseWriter, r *http.Request, status int, state panelState) {
 	var panel bytes.Buffer
-	if err := repositoriesPanel(s.repositoryRows(), p).Render(r.Context(), &panel); err != nil {
+	if err := repositoriesPanel(s.repositoryRows(), state).Render(r.Context(), &panel); err != nil {
 		http.Error(w, "cannot render the panel", http.StatusInternalServerError)
 		return
 	}

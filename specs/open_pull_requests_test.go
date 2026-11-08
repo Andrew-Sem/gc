@@ -539,6 +539,33 @@ func TestOpenPullRequests(t *testing.T) {
 			ExpectElement(`#repositories-panel [role="status"] a[href="/runs"]`)
 	})
 
+	f.Run("run a repository with no room now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenOpenPRs("acme/api", 3).
+			Given(contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 3, At: at("00:00")}).
+			Covers("OPEN-3.1.6").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the run is requested, and the block says there is no room").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectText(`#repositories-panel [role="status"]`, "No room: 3 of 3 PRs are open. Merge or close some, or raise the limit in the settings.").
+			ExpectElement(`#repositories-panel [role="status"] a[href="/repositories/acme/api/settings"]`).
+			ExpectNoElement(`#repositories-panel [role="status"] a[href="/runs"]`)
+	})
+
+	f.Run("run a repository with one place left now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenOpenPRs("acme/api", 2).
+			Given(contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 3, At: at("00:00")}).
+			Covers("OPEN-3.1.6").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the run is requested as usual").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+			ExpectText(`#repositories-panel [role="status"]`, "Run requested. Follow it on the runs page.")
+	})
+
 	f.Run("run a repository that is not connected now", func(s *extensions.Scenario) {
 		s.Given(contract.RepositoryConnected{FullName: "acme/api"}, contract.RepositoryDisconnected{FullName: "acme/api"}).
 			Covers("OPEN-3.1.3").
