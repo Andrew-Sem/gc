@@ -1,7 +1,7 @@
 # Merge pull requests
 
-This contract details the merging half of scenario 2 of the [PRD](prd.md). Closing PRs by age is
-not here yet.
+This contract details scenario 2 of the [PRD](prd.md). `gc` never closes a PR: one that cannot be
+merged waits for a human.
 
 ## Why
 

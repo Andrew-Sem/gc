@@ -1,8 +1,7 @@
 # Repository settings
 
 This contract details the repository level of scenario 5 of the [PRD](prd.md): how often
-garbage-collector opens PRs in a repository and how many may be open at once. Closing by age
-belongs to the merge sweep and is not here yet.
+garbage-collector opens PRs in a repository and how many may be open at once.
 
 ## Why
 

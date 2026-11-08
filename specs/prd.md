@@ -16,18 +16,15 @@ is right.
 1. **Hourly wake-up** — for repositories whose configured pace has come due: if there are fewer
    open PRs than the limit, open one PR.
 2. **Every 6 hours** — for each open PR: if it can be merged, merge it; if not, record the
-   reason; if it is older than the configured age, close it, by default after 24 hours.
+   reason.
 
-**We do not fix PRs.** By default a failed PR waits a day — enough time for a human to step in
-and fix it — and is then closed. We do not rerun CI: a flaky test will sometimes eat good work,
-but a new PR will be opened within the hour, and reruns would bring attempt counters into the
-system.
+**We do not fix or close PRs.** A PR that cannot be merged waits for a human: they fix it, merge
+it, or close it, and the screen shows why it is stuck. We do not rerun CI: a flaky test will
+sometimes eat good work, and reruns would bring attempt counters into the system.
 
-<!-- FLAG: the 24-hour default is stated three times — here as "a day", in rule 2 above, and in scenario 2 next to `CloseApproved`. Numbers are not trimmed; decide which place is canonical. -->
-
-The volume threshold is the only limit on production. There is deliberately no age threshold in
-admission: it would duplicate closing by age and create an idle window between "the PR has
-reached a day" and "the sweep has closed it".
+The volume threshold is the only limit on production. A stuck PR keeps its place until a human
+closes it, so a repository full of stuck PRs gets no new ones: the system becomes quieter, not
+noisier.
 
 ---
 
@@ -90,8 +87,8 @@ and all check-run attempts of the current head. For each identity, the latest at
 conclusions fail; incomplete statuses and a missing attempt wait.
 
 If branch protection is not configured and there are no required checks, we do not merge.
-Partial pagination is never treated as a full snapshot. `LookupIncomplete` blocks merging and
-closing for the current sweep only; the next sweep obtains its own evidence afresh. A new sweep
+Partial pagination is never treated as a full snapshot. `LookupIncomplete` blocks merging for
+the current sweep only; the next sweep obtains its own evidence afresh. A new sweep
 does not replace the old snapshot.
 
 <!-- FLAG: "the next sweep obtains its own evidence afresh" and "A new sweep does not replace the old snapshot" say almost the same thing. Not merged: check whether the second sentence carries a separate meaning. -->
@@ -99,10 +96,6 @@ does not replace the old snapshot.
 **If everything checks out:** `MergeApproved`, the effect calls GitHub. Success will arrive as an
 observation. Failure — `MergeFailed`.
 **If not:** `MergeDeclined` with the reason.
-**If the PR has reached the configured `closeAfterHours`:** `CloseApproved`. 24 hours by default.
-
-The actual close will happen between `closeAfterHours` and `closeAfterHours + 6` hours — the
-precision is limited by the sweep step.
 
 ## 3. Connect a repository
 
@@ -143,7 +136,7 @@ Settings live on two levels:
 | Level | What is configured |
 |---|---|
 | Instance | model and reasoning, agent prompt, optional OpenAI Base URL |
-| Repository | how often we open PRs, maximum open, how long until we close |
+| Repository | how often we open PRs, maximum open, whether we merge |
 
 Changes take effect **from the next wake-up or sweep**; nothing is recalculated retroactively.
 Every domain tick carries the repository settings snapshot it used. Lowered the threshold from 12
@@ -203,7 +196,6 @@ complete. Merging is allowed only on the current sweep's `RequiredChecksObserved
 | `RunRequested` | The operator pressed "Run now" for a repository; its decision is made at once instead of at the wake-up. |
 | `AdmissionApproved` | Admission allowed starting new work. |
 | `MergeApproved` | The merge gate of the current `sweepId` allowed the merge. This is a decision, not an accomplished fact. |
-| `CloseApproved` | The sweep decided to close the PR by age. |
 
 A successful merge is not written as a separate fact: it will arrive as an observation. A human
 closed our PR by hand — that is also `PrStateChanged` with `open: false`.
@@ -219,8 +211,6 @@ attempt, not a reference to the mutable current settings.
 | `AdmissionDeclined` | The due tick passed, no PR was opened. Carries the reason and the numbers. |
 | `MergeDeclined` | The sweep passed, the PR was not merged. Carries `sweepId` and the reason. |
 
-We do not add a separate fact for a failed close: closing practically never fails.
-
 ### Connections and settings
 
 | Fact | When it occurs |
@@ -228,7 +218,7 @@ We do not add a separate fact for a failed close: closing practically never fail
 | `RepositoryConnected` | The operator added `owner/name` in the admin, and the token access check passed. |
 | `RepositoryDisconnected` | The operator removed a repository. No new ticks run for it; past facts remain. |
 | `SettingsChanged` | Model, reasoning, prompt, and optional OpenAI Base URL were saved. |
-| `RepositorySettingsChanged` | Production pace, maximum open, and close age were saved. |
+| `RepositorySettingsChanged` | Production pace, maximum open, and merging were saved. |
 
 Every report command and its corresponding fact carry a `reportId`. Repeating the same
 `type + reportId` produces nothing. Different report IDs mean different real attempts, even if the
