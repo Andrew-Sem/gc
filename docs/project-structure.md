@@ -10,6 +10,7 @@ framework/            Reusable across projects
   spec/               Scenario runner and HTTP, HTML, and fact assertions
 internal/             Application implementation
   domain/             Business logic
+  store/              The journal in a SQLite file
   web/                HTTP handlers, templates, and static files
 specs/                Project requirements and executable scenarios
   contract/           Fact types and dependency interfaces

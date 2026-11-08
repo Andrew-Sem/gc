@@ -1,7 +1,11 @@
 package extensions
 
 import (
-	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"maps"
 	"net"
@@ -34,6 +38,8 @@ type Launch struct {
 	unset   []string
 	taken   bool
 	request *spec.Request
+	waitRun bool
+	pause   time.Duration
 
 	whenCalls     int
 	expectExit    bool
@@ -42,17 +48,23 @@ type Launch struct {
 	outputs       []string
 	absentOutputs []string
 	proxyAsked    []string
+	stream        *launchStream
+	asked         []string
+	requests      []spec.Request
+
+	journalFile
 }
 
 func newLaunch(binary string) *Launch {
 	github := newFakeGitHub()
 	return &Launch{
-		binary: binary,
-		github: github,
-		apiURL: github.listen(),
-		proxy:  newFakeProxy(),
-		addr:   freeAddress(),
-		env:    map[string]string{},
+		binary:      binary,
+		github:      github,
+		apiURL:      github.listen(),
+		proxy:       newFakeProxy(),
+		addr:        freeAddress(),
+		env:         map[string]string{},
+		journalFile: newJournalFile(),
 	}
 }
 
@@ -116,6 +128,26 @@ func (l *Launch) GivenGitHubAnswers(status int, header ...string) *Launch {
 	return l
 }
 
+func (l *Launch) GivenGitHubQuotesTokenInMalformedAnswer() *Launch {
+	l.github.given(func(g *fakeGitHub) { g.quotesToken = QuotedInStatus })
+	return l
+}
+
+func (l *Launch) GivenGitHubDropsConnectionFor(fullName string) *Launch {
+	l.github.given(func(g *fakeGitHub) { g.dropsFor = fullName })
+	return l
+}
+
+func (l *Launch) GivenRequest(r spec.Request) *Launch {
+	l.requests = append(l.requests, r)
+	return l
+}
+
+func (l *Launch) ExpectGitHubAsked(fullNames ...string) *Launch {
+	l.asked = fullNames
+	return l
+}
+
 func (l *Launch) GivenGitHubEchoesToken() *Launch {
 	l.github.given(func(g *fakeGitHub) { g.echoesToken = true })
 	return l
@@ -174,6 +206,27 @@ func (l *Launch) WebhookSecret() string {
 	return fakeWebhookSecret
 }
 
+func (l *Launch) keyFile() string {
+	path := filepath.Join(l.dir, "gc-app.pem")
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	block := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(fakeAppKey())}
+	if err := os.WriteFile(path, pem.EncodeToMemory(block), 0o600); err != nil {
+		panic(err)
+	}
+	return path
+}
+
+func (l *Launch) PrivateKeyFile() string {
+	return l.keyFile()
+}
+
+func (l *Launch) PrivateKeyText() string {
+	block := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(fakeAppKey())}
+	return strings.Split(string(pem.EncodeToMemory(block)), "\n")[2]
+}
+
 func (l *Launch) GitHubToken() string {
 	return fakeGitHubToken
 }
@@ -200,20 +253,28 @@ func (l *Launch) shapeProblems() []spec.Problem {
 	if l.request != nil && l.status == 0 {
 		problems = append(problems, launchProblem("expected ExpectStatus for the request"))
 	}
+	if l.request == nil && len(l.elements)+len(l.noElements) > 0 {
+		problems = append(problems, launchProblem("expected a request for ExpectElement or ExpectNoElement"))
+	}
+	if l.failingWrite != nil && !l.expectExit {
+		problems = append(problems, launchProblem("expected ExpectExit for a failing write"))
+	}
 	return problems
 }
 
 func (l *Launch) environ() []string {
 	env := map[string]string{
-		"GC_ADDR":           l.addr,
-		"GC_WEBHOOK_SECRET": fakeWebhookSecret,
-		"GITHUB_API_URL":    l.apiURL,
-		"GITHUB_TOKEN":      fakeGitHubToken,
-		"HTTPS_PROXY":       l.proxy.server.URL,
-		"HTTP_PROXY":        l.proxy.server.URL,
-		"NO_PROXY":          "",
-		"OPENAI_API_KEY":    fakeOpenAIKey,
-		"no_proxy":          "",
+		"GC_ADDR":                     l.addr,
+		"GC_DB":                       l.path,
+		"GC_WEBHOOK_SECRET":           fakeWebhookSecret,
+		"GITHUB_API_URL":              l.apiURL,
+		"GITHUB_APP_ID":               fakeAppID,
+		"GITHUB_APP_PRIVATE_KEY_FILE": l.keyFile(),
+		"HTTPS_PROXY":                 l.proxy.server.URL,
+		"HTTP_PROXY":                  l.proxy.server.URL,
+		"NO_PROXY":                    "",
+		"OPENAI_API_KEY":              fakeOpenAIKey,
+		"no_proxy":                    "",
 	}
 	maps.Copy(env, l.env)
 	var result []string
@@ -234,8 +295,26 @@ func (l *Launch) environ() []string {
 func (l *Launch) Run() []spec.Problem {
 	defer l.github.server.Close()
 	defer l.proxy.server.Close()
+	defer l.removeJournalFile()
+	defer l.closeStream()
 	if problems := l.shapeProblems(); len(problems) > 0 {
 		return problems
+	}
+	if err := l.prepareJournalFile(); err != nil {
+		return []spec.Problem{launchProblem(fmt.Sprintf("cannot prepare the journal file: %v", err))}
+	}
+	for _, earlier := range l.earlier {
+		if problem := l.startEarlier(earlier); problem != nil {
+			return []spec.Problem{problem}
+		}
+	}
+	var other *process
+	if l.otherRunning {
+		var problem spec.Problem
+		if other, problem = l.startOther(); problem != nil {
+			return []spec.Problem{problem}
+		}
+		defer other.stop()
 	}
 	if l.taken {
 		taken, err := net.Listen("tcp", l.addr)
@@ -245,20 +324,18 @@ func (l *Launch) Run() []spec.Problem {
 		defer taken.Close()
 	}
 
-	var output bytes.Buffer
-	cmd := exec.Command(l.binary)
-	cmd.Env = l.environ()
-	cmd.Stdout = &output
-	cmd.Stderr = &output
-	if err := cmd.Start(); err != nil {
+	main, err := l.start()
+	if err != nil {
 		return []spec.Problem{launchProblem(fmt.Sprintf("cannot start gc: %v", err))}
 	}
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
+	output, cmd, exited := &main.output, main.cmd, main.exited
 
 	var problems []spec.Problem
 	running := true
 	if l.expectExit {
+		if l.failingWrite != nil {
+			problems = append(problems, l.breakWrites(exited)...)
+		}
 		select {
 		case err := <-exited:
 			running = false
@@ -270,11 +347,22 @@ func (l *Launch) Run() []spec.Problem {
 		}
 	} else {
 		var ready bool
-		ready, running = l.waitServing(exited)
+		ready, running = waitServing(l.addr, exited)
 		if !ready {
 			problems = append(problems, launchProblem(fmt.Sprintf("expected gc to serve /repositories at %s within %s", l.addr, startupLimit)))
 		} else if l.request != nil {
+			for _, request := range l.requests {
+				if _, err := l.do(l.addr, request); err != nil {
+					problems = append(problems, launchProblem(fmt.Sprintf("cannot send the earlier request: %v", err)))
+				}
+			}
 			problems = append(problems, l.send()...)
+			if l.waitRun {
+				problems = append(problems, l.waitRunEnd()...)
+			}
+			time.Sleep(l.pause)
+		} else if l.stream != nil {
+			problems = append(problems, l.watchStream()...)
 		}
 	}
 
@@ -285,12 +373,20 @@ func (l *Launch) Run() []spec.Problem {
 		case <-time.After(startupLimit):
 			cmd.Process.Kill()
 			<-exited
+			if l.stream != nil {
+				problems = append(problems, launchProblem(fmt.Sprintf("expected gc to stop within %s with a stream open", startupLimit)))
+			}
 		}
 	}
 
 	for _, text := range l.outputs {
 		if !strings.Contains(output.String(), text) {
 			problems = append(problems, launchProblem(fmt.Sprintf("expected output to contain %q, got %q", text, output.String())))
+		}
+	}
+	if l.asked != nil {
+		if got := l.github.askedSoFar(); !slices.Equal(got, l.asked) {
+			problems = append(problems, launchProblem(fmt.Sprintf("expected GitHub to be asked about %v, got %v", l.asked, got)))
 		}
 	}
 	if l.proxyAsked != nil {
@@ -303,10 +399,13 @@ func (l *Launch) Run() []spec.Problem {
 			problems = append(problems, launchProblem(fmt.Sprintf("expected output not to contain %q", text)))
 		}
 	}
-	return problems
+	if other != nil {
+		problems = append(problems, l.otherStillWorks(other)...)
+	}
+	return append(problems, l.journalFileProblems()...)
 }
 
-func (l *Launch) waitServing(exited <-chan error) (ready, running bool) {
+func waitServing(addr string, exited <-chan error) (ready, running bool) {
 	deadline := time.Now().Add(startupLimit)
 	for time.Now().Before(deadline) {
 		select {
@@ -314,7 +413,7 @@ func (l *Launch) waitServing(exited <-chan error) (ready, running bool) {
 			return false, false
 		default:
 		}
-		if resp, err := http.Get("http://" + l.addr + "/repositories"); err == nil {
+		if resp, err := http.Get("http://" + addr + "/repositories"); err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return true, true
@@ -335,11 +434,11 @@ func (l *Launch) send() []spec.Problem {
 	if err != nil {
 		return []spec.Problem{launchProblem(fmt.Sprintf("cannot send the request: %v", err))}
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 	if resp.StatusCode != l.status {
 		return []spec.Problem{launchProblem(fmt.Sprintf("expected status %d, got %d", l.status, resp.StatusCode))}
 	}
-	return nil
+	return l.pageProblems(resp.Body)
 }
 
 type fakeProxy struct {
@@ -364,3 +463,16 @@ func (p *fakeProxy) askedSoFar() []string {
 	defer p.mu.Unlock()
 	return slices.Clone(p.asked)
 }
+
+var ECPrivateKey, ECPrivateKeyLine = func() (string, string) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		panic(err)
+	}
+	text := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	return text, strings.Split(text, "\n")[1]
+}()

@@ -2,6 +2,11 @@ package extensions
 
 import (
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,9 +23,11 @@ const (
 	movedRepositoryPath  = "/repositories/42"
 	fakeGitHubURL        = "http://127.0.0.1:9"
 	fakeGitHubToken      = "spec-github-token"
+	fakeAppID            = "4242"
+	fakeInstallationPath = "/app/installations/7/access_tokens"
 	fakeWebhookSecret    = "spec-webhook-secret"
 	fakeOpenAIKey        = "spec-openai-key"
-	longerThanAnyTimeout = 10 * time.Second
+	longerThanAnyTimeout = 2 * time.Minute
 )
 
 type fakeGitHub struct {
@@ -38,7 +45,53 @@ type fakeGitHub struct {
 	unreachable   bool
 	moves         int
 	createsPR     int
+	createsAfter  time.Duration
 	created       []createdPR
+	quotesToken   string
+	dropsFor      string
+}
+
+var fakeAppKey = sync.OnceValue(func() *rsa.PrivateKey {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+	return key
+})
+
+func validAppToken(auth string) bool {
+	token, found := strings.CutPrefix(auth, "Bearer ")
+	parts := strings.Split(token, ".")
+	if !found || len(parts) != 3 {
+		return false
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return false
+	}
+	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+	if rsa.VerifyPKCS1v15(&fakeAppKey().PublicKey, crypto.SHA256, digest[:], signature) != nil {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	var claims struct {
+		Issuer    any   `json:"iss"`
+		IssuedAt  int64 `json:"iat"`
+		ExpiresAt int64 `json:"exp"`
+	}
+	if json.Unmarshal(raw, &claims) != nil || fmt.Sprint(claims.Issuer) != fakeAppID {
+		return false
+	}
+	now := time.Now().Unix()
+	return claims.IssuedAt <= now && now < claims.ExpiresAt && claims.ExpiresAt-claims.IssuedAt <= 600
+}
+
+func askedAbout(path string) (string, bool) {
+	fullName, found := strings.CutPrefix(path, "/repos/")
+	return strings.TrimSuffix(fullName, "/installation"), found
 }
 
 type createdPR struct {
@@ -75,8 +128,8 @@ func (t inMemory) RoundTrip(req *http.Request) (*http.Response, error) {
 	g := t.github
 	g.mu.Lock()
 	unreachable := g.unreachable
-	if unreachable {
-		g.asked = append(g.asked, strings.TrimPrefix(req.URL.Path, "/repos/"))
+	if fullName, found := askedAbout(req.URL.Path); unreachable && found {
+		g.asked = append(g.asked, fullName)
 	}
 	g.mu.Unlock()
 	if unreachable {
@@ -111,13 +164,23 @@ func (g *fakeGitHub) given(change func(*fakeGitHub)) {
 }
 
 func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
-	fullName := strings.TrimPrefix(r.URL.Path, "/repos/")
+	fullName, aboutRepository := askedAbout(r.URL.Path)
 	g.mu.Lock()
-	g.asked = append(g.asked, fullName)
+	if aboutRepository {
+		g.asked = append(g.asked, fullName)
+	}
 	sees := slices.Contains(g.sees, fullName)
 	doesNotAnswer, rejectsToken, answer, hangs, echoesToken, moves, createsPR := g.doesNotAnswer, g.rejectsToken, g.answer, g.hangs, g.echoesToken, g.moves, g.createsPR
+	quotesToken, dropsFor, createsAfter := g.quotesToken, g.dropsFor, g.createsAfter
 	g.mu.Unlock()
 
+	if quotesToken != "" {
+		g.quoteToken(w, quotesToken)
+		return
+	}
+	if dropsFor == fullName {
+		panic(http.ErrAbortHandler)
+	}
 	if hangs {
 		g.hang(r)
 	}
@@ -130,7 +193,7 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	fail := func(status int, message string) {
 		w.WriteHeader(status)
 		if echoesToken {
-			message += " for " + auth
+			message += " for Bearer " + fakeGitHubToken
 		}
 		fmt.Fprintf(w, `{"message":%q}`, message)
 	}
@@ -147,12 +210,21 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 		fail(answer.status, http.StatusText(answer.status))
 	case auth == "":
 		fail(http.StatusNotFound, "Not Found")
-	case auth != "Bearer "+fakeGitHubToken || rejectsToken:
+	case rejectsToken:
+		fail(http.StatusUnauthorized, "Bad credentials")
+	case strings.HasSuffix(r.URL.Path, "/installation") || strings.HasPrefix(r.URL.Path, "/app/"):
+		g.serveApp(w, r, fail, validAppToken(auth), sees || createsPR != 0)
+	case auth != "Bearer "+fakeGitHubToken:
 		fail(http.StatusUnauthorized, "Bad credentials")
 	case r.Method == http.MethodPost && strings.HasSuffix(fullName, "/pulls") && createsPR != 0:
 		var pr createdPR
 		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil || pr.Head == "" || pr.Base == "" || pr.Title == "" {
 			fail(http.StatusUnprocessableEntity, "Validation Failed")
+			return
+		}
+		select {
+		case <-time.After(createsAfter):
+		case <-r.Context().Done():
 			return
 		}
 		pr.Repository = strings.TrimSuffix(fullName, "/pulls")
@@ -166,6 +238,29 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	default:
 		fmt.Fprintf(w, `{"full_name":%q}`, canonicalCasing(fullName))
 	}
+}
+
+func (g *fakeGitHub) serveApp(w http.ResponseWriter, r *http.Request, fail func(int, string), signed, installed bool) {
+	switch {
+	case !signed:
+		fail(http.StatusUnauthorized, "A JSON web token could not be decoded")
+	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/installation") && installed:
+		fmt.Fprint(w, `{"id":7}`)
+	case r.Method == http.MethodPost && r.URL.Path == fakeInstallationPath:
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"token":%q,"expires_at":%q}`, fakeGitHubToken, time.Now().Add(time.Hour).UTC().Format(time.RFC3339))
+	default:
+		fail(http.StatusNotFound, "Not Found")
+	}
+}
+
+func (g *fakeGitHub) quoteToken(w http.ResponseWriter, form string) {
+	conn, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+	fmt.Fprintf(conn, form, fakeGitHubToken)
 }
 
 func (g *fakeGitHub) hang(r *http.Request) {

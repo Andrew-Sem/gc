@@ -106,21 +106,26 @@ precision is limited by the sweep step.
 
 ## 3. Connect a repository
 
-The operator chooses which repositories garbage-collector works with: a form checks access with
-the instance's PAT and writes `RepositoryConnected`; a button next to each repository writes
-`RepositoryDisconnected`. Past facts stay in the journal; nobody touches or closes open PRs. The
-operator sets the PAT as `GITHUB_TOKEN`; it needs permissions to read the repository and branch
-protection, and to write contents and pull requests. Details: the
-[connect contract](connect-repository.md) and the [launch contract](launch.md).
+garbage-collector acts on GitHub as a GitHub App, so its PRs and commits come from the app, not
+from a person. The operator registers the app, installs it on the repositories it may work on,
+and gives `gc` the app's ID and private key. The app needs to write contents and pull requests and
+to read metadata; the merge sweep will also need to read checks and branch protection. It is not
+given the workflows permission, so it cannot push workflow files even by mistake.
 
-The operator points each repository's webhooks for `pull_request` and `check_run` events at one
-path, signed with the instance's webhook secret. Webhooks keep the "why is the PR stuck" screen fresh; a missing webhook does not break
+The operator chooses which of those repositories garbage-collector works with: a form checks that
+the app is installed on the repository and writes `RepositoryConnected`; a button next to each
+repository writes `RepositoryDisconnected`. Past facts stay in the journal; nobody touches or
+closes open PRs. Details: the [connect contract](connect-repository.md) and the
+[launch contract](launch.md).
+
+The app's webhook, for `pull_request` and `check_run` events, points at one path and is signed
+with the instance's webhook secret, so a repository needs no webhook of its own. Webhooks keep the "why is the PR stuck" screen fresh; a missing webhook does not break
 merging, since the sweep requests evidence itself. Details: the
 [webhook contract](receive-webhooks.md).
 
 ## 4. Configure the model and key
 
-The OpenAI key comes from the environment, like the GitHub token: it is not entered or shown in
+The OpenAI key comes from the environment, like the app's private key: it is not entered or shown in
 the admin. Codex runs as a process with the key in its own environment and its own `CODEX_HOME`.
 
 Only the fact that settings changed goes into the journal, never the key or the contents of
@@ -195,6 +200,7 @@ complete. Merging is allowed only on the current sweep's `RequiredChecksObserved
 |---|---|
 | `PrCreated` | The agent opened a PR. Carries `reportId`, repository, number, branch, and first commit. Triggers reconciliation. |
 | `AgentRunFinished` | An agent run ended. Carries `reportId`, repository, optional PR, outcome, and token usage. A failure before the PR was created does not invent a number. |
+| `RunRequested` | The operator pressed "Run now" for a repository; its decision is made at once instead of at the wake-up. |
 | `AdmissionApproved` | Admission allowed starting new work. |
 | `MergeApproved` | The merge gate of the current `sweepId` allowed the merge. This is a decision, not an accomplished fact. |
 | `CloseApproved` | The sweep decided to close the PR by age. |
@@ -232,7 +238,8 @@ again.
 
 <!-- FLAG: "There are no secrets in the journal" is fully covered by the next sentence ("never reach the journal, tasks, the interface, or logs"). Not cut: it may be a deliberate emphasis. -->
 
-There are no secrets in the journal. The GitHub PAT, the OpenAI key, and the webhook secret come
+There are no secrets in the journal. The app's private key and the tokens made from it, the
+OpenAI key, and the webhook secret come
 from the environment, belong to the operator, and never reach the journal, tasks, the interface,
 or logs. The OpenAI Base URL is not a secret: it goes into the task's immutable snapshot and into
 `SettingsChanged`.

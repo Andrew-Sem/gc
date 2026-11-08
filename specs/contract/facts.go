@@ -39,6 +39,10 @@ type PrStateChanged struct {
 	UpdatedAt  time.Time
 }
 
+type RunRequested struct {
+	Repository string
+}
+
 type AdmissionApproved struct {
 	Repository string
 }
@@ -56,6 +60,8 @@ const (
 	OutcomeNoPR     Outcome = "no PR"
 	OutcomeFailed   Outcome = "failed"
 	OutcomeTimedOut Outcome = "timed out"
+
+	OutcomeInterrupted Outcome = "interrupted"
 )
 
 type AgentRunStarted struct {
@@ -75,6 +81,7 @@ type AgentRunFinished struct {
 func (RepositoryConnected) fact()    {}
 func (RepositoryDisconnected) fact() {}
 func (PrCreated) fact()              {}
+func (RunRequested) fact()           {}
 func (PrStateChanged) fact()         {}
 func (AdmissionApproved) fact()      {}
 func (AdmissionDeclined) fact()      {}

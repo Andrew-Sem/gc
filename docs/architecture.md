@@ -1,14 +1,14 @@
 # Architecture
 
 Event-driven control plane over the PR lifecycle. One Go process with server-rendered HTML.
-The current repository feature stores facts in memory for one process lifetime. SQLite and
-restart persistence are planned separately.
+The journal is kept in a SQLite file, so it outlives the process; see
+`specs/journal-storage.md`.
 
 ## Packages
 
 | Package | Responsibility |
 |---|---|
-| `framework/journal` | Generic append-only journal in memory, safe for concurrent requests; knows no project event types. |
+| `framework/journal` | Generic append-only journal in memory, safe for concurrent requests, with subscriptions that say a fact was written; knows no project event types. Fast scenarios use it directly; `internal/store` keeps its in-memory copy in one. |
 | `framework/spec` | Generic Given/When/Then scenarios, clause reporting, HTTP and HTML assertions, exact ordered new-fact checks, and coverage for custom scenarios. |
 | `specs/contract` | Project event definitions, the Journal interface, and GitHub settings (API URL, token, and the transport every GitHub request must use) shared by specifications and application. |
 | `specs/extensions` | Project scenario methods, a fake GitHub HTTP server, the adapter that supplies the application factory to the framework, and the launch harness that builds and runs `cmd/gc`. |
@@ -16,9 +16,10 @@ restart persistence are planned separately.
 | `ui` | Shared interface platform: the htmx file, its response rules, the `Head` component every page includes, and the static file handler. |
 | `internal/domain` | Repository-name validation, folds over project facts, and the wake-up decision. |
 | `internal/web` | HTTP handlers, templ pages, htmx fragments, and static files. |
-| `internal/github` | GitHub API client: repository access, the clone URL, and creating PRs. |
-| `internal/agent` | One agent run: a throwaway clone, Codex as a subprocess in its sandbox, then `git` commit and push. `git` talks to GitHub directly, outside `contract.GitHub.Transport`. |
-| `cmd/gc` | Reads the environment, refuses to start without a token or a usable address, wires the in-memory journal, starts the server. |
+| `internal/github` | GitHub API client acting as a GitHub App: signs a short JWT with the app's private key, checks that the app is installed on a repository, asks for an installation token limited to one repository before each use, finds the clone URL, and creates PRs. |
+| `internal/agent` | One agent run: a throwaway clone, a private copy of its `.git` made before Codex starts, Codex as a subprocess in its sandbox, then `git` commit and push from that copy, so nothing the agent left in the working copy's `.git` applies. It refuses a clone URL with credentials, puts the end of Codex's error output without secrets into a failed run's reason, and removes the run's folders even where the agent locked them. `git` talks to GitHub directly, outside `contract.GitHub.Transport`. |
+| `internal/store` | The journal in a SQLite file: writes each fact before `Append` returns, serves reads from memory, and holds an exclusive lock on the file while the process runs. It refuses a file that is not a SQLite database and a fact it cannot parse, and treats a write as failed if the file it opened was removed or replaced. |
+| `cmd/gc` | Reads the environment, refuses to start without the GitHub App's ID and readable private key, a webhook secret, an OpenAI key, a usable address, or a usable journal file, wires the store, starts the server, and exits when a fact cannot be written. |
 
 The framework imports neither the project contract nor application packages, including in its
 own checks. Each project chooses its fact type and supplies a factory to `Feature.Run`.
@@ -69,7 +70,11 @@ of the fixed application entry point before project specs can compile, and a `cm
 builds before launch scenarios can run; the framework's own checks can run without the
 application.
 
-Agent scenarios in `specs/extensions/agent_run.go` run `internal/agent` outside the bubble against a fake `codex` shell script that records what it was given, and a local `git http-backend` that requires the GitHub token, so clone, commit, and push are real.
+Launch scenarios give each `gc` its own temporary journal file. `specs/extensions/journal_file.go` seeds that file, starts `gc` more than once on it, and checks it after `gc` exits, so restarts, kills, and a failing write are checked on the real binary.
+
+The runs page stays live through `/runs/events`, a stream of server-sent events that says only that the journal changed; the page then asks for `/runs/panel` with an ordinary request, so the panel is checked like any other response. `specs/extensions/event_stream.go` checks the stream in virtual time and over the network; what the page's script does in a browser is checked at acceptance.
+
+Agent scenarios in `specs/extensions/agent_run.go` run `internal/agent` outside the bubble against a fake `codex` shell script that records what it was given, and a local `git http-backend` that requires an installation token from the fake app, so clone, commit, and push are real.
 
 Application behavior specifications live under `specs`. Repository-name validation is checked
 through POST scenarios, including empty and malformed names. The scenarios also check HTML
@@ -82,30 +87,32 @@ Planned, not built yet:
 | Package | Responsibility |
 |---|---|
 | `internal/domain` | `Decide` and `Evolve` on top of the fact vocabulary. |
-| `internal/github` | Parsing webhooks into commands. |
-| `internal/store` | Journal, task queue, and settings in SQLite; replaces the in-memory journal. |
+| `internal/store` | Task queue and settings in SQLite. |
 | `internal/app` | Wiring: scheduler, task executor, ports, start and stop; `cmd/gc` assembles it. |
 
 ## Flow
 
 ```
-GitHub ──webhooks──▶ HTTP ──▶ journal ──task──▶ executor ──▶ Codex ──▶ model API
-                      ▲          │  ▲               │
-                   admin ────────┘  └────result─────┘
+admin ──────────▶ HTTP ──▶ journal ◀── PR state ── HTTP ◀── webhooks ── GitHub
+                              │                                           ▲
+                   every hour: wake-up ──▶ run ──▶ Codex ──▶ push, PR ────┘
 ```
 
 ## Invariants
 
 - The journal is append-only and the single source of truth; domain state is its fold.
-- Secrets live only in the environment: never in the journal, tasks, HTML, or logs.
-- The domain does not read the clock: time arrives with the `TickProduction` or `TickSweep`
-  command.
+- Secrets live only in the environment: never in the journal, HTML, or logs.
+- The domain does not read the clock: the caller passes the time in.
+- The webhook signature is checked before dedupe and parsing; only the body size check comes
+  first.
+
+Planned with the task queue, not true yet:
+
 - `Decide` does not return a "wake me up at time T" effect; the scheduler owns the schedule.
 - Facts and the task they produce are written in one transaction.
 - The queue is read through an interface; the task executor does not go to the database
   directly.
 - Evidence completeness belongs to the sweep: a full snapshot or `LookupIncomplete`, not both.
-- The webhook signature is checked before dedupe and parsing.
 
 ## Stack
 

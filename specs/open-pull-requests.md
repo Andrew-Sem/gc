@@ -26,6 +26,9 @@ and description and the branch its work was pushed to.
 
 **Run** — one launch of the agent for one approval.
 
+**Run request** — the operator asking for a decision about one repository now, without waiting
+for the wake-up.
+
 **Run limit** — the longest a run may last: 2 hours.
 
 ## Clauses
@@ -100,6 +103,9 @@ title and description. Then `PrCreated` with the repository and the PR's number 
 
 OPEN-2.2.2. A PR created by a run takes a place from the next wake-up on.
 
+OPEN-2.2.3. `gc` waits up to 60 seconds for GitHub's answer to creating a PR, because a PR that
+GitHub creates after `gc` gave up would never be counted.
+
 #### OPEN-2.3. The agent changed nothing
 
 OPEN-2.3.1. If the agent changed nothing, `gc` does not ask GitHub to create a PR, and
@@ -113,6 +119,12 @@ with the outcome "failed" is written to the journal.
 OPEN-2.4.2. If GitHub does not create the PR, no `PrCreated` is written, and `AgentRunFinished`
 with the outcome "failed" is written to the journal.
 
+OPEN-2.4.3. If the agent fails, the log has a line with the repository and the reason the agent
+gave.
+
+OPEN-2.4.4. If GitHub does not create the PR, the log has a line with the repository and the status
+GitHub answered.
+
 #### OPEN-2.5. The run limit
 
 OPEN-2.5.1. A run that reaches the run limit is stopped, `gc` does not ask GitHub to create a PR,
@@ -123,3 +135,33 @@ OPEN-2.5.2. A run that finishes before the run limit is not affected by it.
 #### OPEN-2.6. Recording the end
 
 OPEN-2.6.1. `AgentRunFinished` carries the run's number and the time the run ended.
+
+#### OPEN-2.7. Secrets in the log
+
+OPEN-2.7.1. No GitHub credential reaches the log during a run, on the way to the clone URL or to
+creating the PR, even if GitHub quotes one in a malformed answer or a broken redirect.
+
+### OPEN-3. Running now
+
+#### OPEN-3.1. The button
+
+OPEN-3.1.1. Each repository in the list on the repositories page has a "Run now" button, which
+sends `POST /repositories/<owner>/<name>/run`.
+
+OPEN-3.1.2. For a connected repository, the request writes `RunRequested` with the repository
+and answers 200 with the updated block of the repositories page and the text "Run requested.
+Follow it on the runs page.", where "runs page" links to `/runs`.
+
+OPEN-3.1.3. For a repository that is not connected, no fact is written, and the block shows the
+error "This repository is not connected" (response 422).
+
+OPEN-3.1.4. The repository name in the request is normalized like a submitted name (REPO-1.7.1).
+
+OPEN-3.1.5. A run request from another site is refused like a connect request (REPO-5.1).
+
+#### OPEN-3.2. The decision
+
+OPEN-3.2.1. Right after `RunRequested`, `gc` makes the decision of OPEN-1.2 and OPEN-1.3 for that
+repository alone, and an approval starts a run as at a wake-up (OPEN-2).
+
+OPEN-3.2.2. A `RunRequested` written before `gc` started makes no decision.

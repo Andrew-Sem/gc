@@ -24,5 +24,5 @@ fmt:
 build: generate
     go build -o gc ./cmd/gc
 
-run addr="localhost:8080": generate
-    set -a && . ./.env && set +a && GC_ADDR={{addr}} go run ./cmd/gc
+run addr="localhost:8080" db="gc.db": generate
+    set -a && . ./.env && set +a && GC_ADDR={{addr}} GC_DB={{db}} go run ./cmd/gc

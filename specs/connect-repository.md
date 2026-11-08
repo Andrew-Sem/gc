@@ -12,8 +12,8 @@ described in their own features.
 
 **Repository** — an `owner/name` string, as in its GitHub URL.
 
-**Access check** — a request to GitHub with the PAT from the environment: the repository exists
-and the token can see it.
+**Access check** — a request to GitHub signed with the app's private key: the app is installed
+on the repository.
 
 **Connected repository** — one whose latest journal fact about that repository is
 `RepositoryConnected`, not `RepositoryDisconnected`.
@@ -40,12 +40,13 @@ to the journal (response 200).
 
 REPO-1.2.2. If the access check passes, the response shows the repository in the list.
 
-#### REPO-1.3. The repository is inaccessible
+#### REPO-1.3. The app is not installed
 
-REPO-1.3.1. If the repository is inaccessible or does not exist, no fact is written, and the
-page shows the error "No access to this repository" (response 422).
+REPO-1.3.1. If the app is not installed on the repository or the repository does not exist, no
+fact is written, and the page shows the error "The app is not installed on this repository"
+(response 422).
 
-REPO-1.3.2. GitHub reports a repository as inaccessible when it answers 404, or 403 that is not
+REPO-1.3.2. GitHub reports that the app is not installed when it answers 404, or 403 that is not
 a rate limit (REPO-1.10.2).
 
 #### REPO-1.12. GitHub moved the repository
@@ -97,12 +98,13 @@ displayed repository name.
 REPO-1.7.3. Submitting another casing or surrounding spaces for an already connected
 repository follows REPO-1.4.
 
-#### REPO-1.8. GitHub rejects the token
+#### REPO-1.8. GitHub rejects the app
 
-REPO-1.8.1. If GitHub rejects the token, no fact is written, and the page shows the error
-"GitHub rejected the token. Check GITHUB_TOKEN." (response 502).
+REPO-1.8.1. If GitHub rejects the app's credentials, no fact is written, and the page shows the
+error "GitHub rejected the app. Check GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY_FILE."
+(response 502).
 
-REPO-1.8.2. GitHub rejects the token when it answers 401.
+REPO-1.8.2. GitHub rejects the app's credentials when it answers 401.
 
 #### REPO-1.9. GitHub fails
 
@@ -120,9 +122,9 @@ REPO-1.10.2. GitHub limits requests when it answers 429, or 403 with the header
 
 #### REPO-1.11. One attempt
 
-REPO-1.11.1. A connect request asks GitHub at most once. When GitHub rejects the token, fails,
+REPO-1.11.1. A connect request asks GitHub at most once. When GitHub rejects the app, fails,
 limits requests, moves the repository, or does not respond, the error is shown without
-retrying.
+retrying. This includes the repeat an HTTP client makes by itself when a reused connection breaks.
 
 ### REPO-2. Repository list
 
@@ -132,7 +134,8 @@ REPO-2.1.1. Connected repositories are shown on the page as a list.
 
 REPO-2.1.2. Disconnected repositories are not shown.
 
-REPO-2.1.3. Each row of the list reads as the repository name followed by its "Disconnect"
+REPO-2.1.3. Each row of the list reads as the repository name followed by its "Run now" button
+(OPEN-3.1.1 of the [open pull requests contract](open-pull-requests.md)) and its "Disconnect"
 button.
 
 #### REPO-2.2. Order
@@ -178,10 +181,30 @@ after the old ones.
 
 ### REPO-4. Secrets
 
-#### REPO-4.1. The PAT is never disclosed
+#### REPO-4.1. GitHub credentials are never disclosed
 
-REPO-4.1.1. The PAT never reaches the journal, even if GitHub returns it in an error response.
+GitHub credentials here are the app's private key and every token made from it.
 
-REPO-4.1.2. The PAT never reaches the HTML, even if GitHub returns it in an error response.
+REPO-4.1.1. GitHub credentials never reach the journal, even if GitHub returns them in an error
+response.
 
-REPO-4.1.3. The PAT never reaches the logs, even if GitHub returns it in an error response.
+REPO-4.1.2. GitHub credentials never reach the HTML, even if GitHub returns them in an error
+response.
+
+REPO-4.1.3. GitHub credentials never reach the logs, even if GitHub returns them in an error
+response or quotes them in a malformed answer.
+
+### REPO-5. Requests from other sites
+
+#### REPO-5.1. Connecting and disconnecting
+
+REPO-5.1.1. A connect or disconnect request with `Sec-Fetch-Site` other than `same-origin` or
+`none` is refused (response 403). It writes no fact and does not ask GitHub, because a page the
+operator visits could otherwise connect a repository and have the agent run on it.
+
+REPO-5.1.2. A connect or disconnect request with no `Sec-Fetch-Site` and an `Origin` whose host is
+not the request's host is refused the same way.
+
+REPO-5.1.3. A connect request is handled as usual if its `Sec-Fetch-Site` is `same-origin` or
+`none`, if it has no `Sec-Fetch-Site` and its `Origin` host is the request's host, or if it has
+neither header.

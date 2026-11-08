@@ -3,7 +3,9 @@ package specs
 import (
 	"encoding/json"
 	"maps"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/Andrew-Sem/gc/specs/extensions"
 )
@@ -157,15 +159,59 @@ func TestRunAgent(t *testing.T) {
 			ExpectBranches(0, "gc/")
 	})
 
-	f.RunAgent("clone and push with the GitHub token", func(s *extensions.AgentRun) {
+	f.RunAgent("clone and push with an installation token", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-1.1.3", "AGENT-3.1.4").
-			GivenEnv("GITHUB_TOKEN", "another-github-token").
+			GivenInstallationToken("another-github-token").
 			GivenRepositoryWithCommits(1).
 			GivenAgentChanges("cleaned.txt", "clean").
 			GivenAgentAnswers(answer).
 			WhenAgentRuns().
 			Then("the repository saw that token on the clone and on the push").
 			ExpectGitAuthenticated("another-github-token")
+	})
+
+	f.RunAgent("each token is limited to the run's repository", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-1.1.4").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the clone and the push used tokens for that repository alone").
+			ExpectBranches(1, "gc/").
+			ExpectTokensLimitedToTheRepository()
+	})
+
+	f.RunAgent("the commit comes from the app's bot user", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.1.6").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("GitHub shows the app as the author").
+			ExpectCommittedBy("gc-spec[bot] <4711+gc-spec[bot]@users.noreply.github.com>")
+	})
+
+	f.RunAgent("no commit when GitHub cannot name the app", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.1.6").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			GivenGitHubCannotNameTheApp().
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("push after the clone's token has expired", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.1.5").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			GivenTokensExpireWhileTheAgentWorks().
+			WhenAgentRuns().
+			Then("gc pushes with a new token").
+			ExpectChange("main", "Remove dead code", "cleaned.txt", "clean")
 	})
 
 	f.RunAgent("each run gets its own branch", func(s *extensions.AgentRun) {
@@ -215,6 +261,27 @@ func TestRunAgent(t *testing.T) {
 			ExpectAgentLeftNothing()
 	})
 
+	f.RunAgent("remove a read-only folder the agent left in the working copy", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-1.2.1", "AGENT-1.2.2").
+			GivenRepositoryWithCommits(1).
+			GivenAgentRuns(`mkdir -p stuck/inner; echo x > stuck/inner/file; chmod 555 stuck/inner stuck`).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the change is pushed and the folder is gone").
+			ExpectBranches(1, "gc/").
+			ExpectAgentLeftNothing()
+	})
+
+	f.RunAgent("remove closed folders the agent left in its home and temporary folder", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-1.2.2", "AGENT-2.1.5", "AGENT-2.2.5").
+			GivenRepositoryWithCommits(1).
+			GivenAgentRuns(`for d in "$CODEX_HOME" "$TMPDIR"; do mkdir -p "$d/stuck"; echo x > "$d/stuck/file"; chmod 000 "$d/stuck"; done`).
+			WhenAgentRuns().
+			Then("both are gone").
+			ExpectNoChange().
+			ExpectAgentLeftNothing()
+	})
+
 	f.RunAgent("start the agent in the sandbox", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.1.1", "AGENT-2.1.2").
 			GivenRepositoryWithCommits(1).
@@ -229,15 +296,70 @@ func TestRunAgent(t *testing.T) {
 			ExpectAgentSaw(extensions.AgentSaw{Prompt: true, InWorkingCopy: true})
 	})
 
+	for _, c := range []struct{ name, credentials string }{
+		{"the token as a password", "x-access-token:spec-github-token"},
+		{"other credentials", "someone:other-password"},
+	} {
+		f.RunAgent("a clone URL with "+c.name+" fails the run", func(s *extensions.AgentRun) {
+			s.Covers("AGENT-2.2.6").
+				GivenInstallationToken("spec-github-token").
+				GivenRepositoryWithCommits(1).
+				GivenCloneURLHolds(c.credentials).
+				WhenAgentRuns().
+				Then("the run fails before Codex starts, and the reason has no secret").
+				ExpectFailure().
+				ExpectAgentNotStarted().
+				ExpectFailureReasonWithout("spec-github-token", "other-password")
+		})
+	}
+
+	f.RunAgent("the prompt warns about what fails the run", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.6").
+			GivenRepositoryWithCommits(1).
+			WhenAgentRuns().
+			Then("the agent is told what it must not touch or create").
+			ExpectPromptWith("anything in .github, or .gitmodules", "do not create a git repository inside this one")
+	})
+
+	f.RunAgent("the prompt lists our open PRs", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.7").
+			GivenRepositoryWithCommits(1).
+			GivenOpenPR("Fix stale README commands", "gc/0123456789abcdef", "README.md", "docs/gc-reviews/x.md").
+			GivenOpenPR("Add a feature", "feature/x", "main.go").
+			WhenAgentRuns().
+			Then("the agent knows what is already proposed, and only ours").
+			ExpectPromptWith(`"Fix stale README commands", changing README.md, docs/gc-reviews/x.md`, "Do not repeat their fix").
+			ExpectPromptWithout("Add a feature", "main.go")
+	})
+
+	f.RunAgent("with none of our PRs open the prompt has no list", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.7").
+			GivenRepositoryWithCommits(1).
+			GivenOpenPR("Add a feature", "feature/x", "main.go").
+			WhenAgentRuns().
+			Then("the prompt is the plain prompt").
+			ExpectAgentSaw(extensions.AgentSaw{Prompt: true})
+	})
+
+	f.RunAgent("no run when GitHub cannot list the open PRs", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.8").
+			GivenRepositoryWithCommits(1).
+			GivenGitHubCannotListPRs().
+			WhenAgentRuns().
+			Then("the run fails before Codex starts").
+			ExpectFailure().
+			ExpectAgentNotStarted()
+	})
+
 	f.RunAgent("keep secrets away from the agent", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.2.1", "AGENT-2.2.3").
-			GivenEnv("GITHUB_TOKEN", "spec-github-token").
+			GivenInstallationToken("spec-github-token").
 			GivenEnv("GC_WEBHOOK_SECRET", "spec-webhook-secret").
 			GivenEnv("OPENAI_API_KEY", "spec-openai-key").
 			GivenRepositoryWithCommits(1).
 			WhenAgentRuns().
 			Then("only the OpenAI key reaches the agent").
-			ExpectAgentEnvWithout("GITHUB_TOKEN", "GC_WEBHOOK_SECRET").
+			ExpectAgentEnvWithout("GITHUB_APP_PRIVATE_KEY_FILE", "GC_WEBHOOK_SECRET").
 			ExpectAgentEnv("CODEX_API_KEY", "spec-openai-key")
 	})
 
@@ -303,7 +425,7 @@ func TestRunAgent(t *testing.T) {
 
 	f.RunAgent("no token in the working copy", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.2.2").
-			GivenEnv("GITHUB_TOKEN", "spec-github-token").
+			GivenInstallationToken("spec-github-token").
 			GivenRepositoryWithCommits(1).
 			WhenAgentRuns().
 			Then("the token is nowhere in the folder the agent sees").
@@ -330,6 +452,62 @@ func TestRunAgent(t *testing.T) {
 			Then("the run fails and nothing is pushed").
 			ExpectFailure().
 			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("a failed agent gives the reason from its error output", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.3.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentFailsWith("ERROR: quota exceeded").
+			WhenAgentRuns().
+			Then("the run fails with that reason").
+			ExpectFailure().
+			ExpectFailureReason("ERROR: quota exceeded")
+	})
+
+	f.RunAgent("a reason of several lines stays on one line", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.3.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentFailsWith("ERROR: quota exceeded\nin the second line\n").
+			WhenAgentRuns().
+			Then("the line breaks are spaces").
+			ExpectFailure().
+			ExpectFailureReason("ERROR: quota exceeded in the second line")
+	})
+
+	f.RunAgent("a long reason keeps its end", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.3.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentFailsWith("the start " + strings.Repeat("x", 1000) + " the end").
+			WhenAgentRuns().
+			Then("only the last 1000 bytes are in the reason").
+			ExpectFailure().
+			ExpectFailureReason(" the end").
+			ExpectFailureReasonWithout("the start")
+	})
+
+	f.RunAgent("a reason keeps the secrets out", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.3.4").
+			GivenInstallationToken("spec-github-token").
+			GivenEnv("OPENAI_API_KEY", "spec-openai-key").
+			GivenRepositoryWithCommits(1).
+			GivenAgentFailsWith("bad spec-github-token and spec-openai-key").
+			WhenAgentRuns().
+			Then("the reason stays, the secrets do not").
+			ExpectFailure().
+			ExpectFailureReason("bad ").
+			ExpectFailureReasonWithout("spec-github-token", "spec-openai-key")
+	})
+
+	f.RunAgent("a secret at the cut leaves no piece in the reason", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.3.3", "AGENT-3.3.4").
+			GivenEnv("OPENAI_API_KEY", "spec-openai-key").
+			GivenRepositoryWithCommits(1).
+			GivenAgentFailsWith("spec-openai-key"+strings.Repeat("x", 995)).
+			WhenAgentRuns().
+			Then("the end of the output stays, and no part of the key does").
+			ExpectFailure().
+			ExpectFailureReason("xxxxxxxxxx").
+			ExpectFailureReasonWithout("key", "spec")
 	})
 
 	f.RunAgent("fail when the answer is not JSON", func(s *extensions.AgentRun) {
@@ -362,5 +540,231 @@ func TestRunAgent(t *testing.T) {
 			Then("no process is left and the folder is gone").
 			ExpectFailure().
 			ExpectAgentLeftNothing()
+	})
+
+	f.RunAgent("a stalled clone does not hold a stopped run", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.4.2").
+			GivenRepositoryWithCommits(1).
+			GivenCloneStalls().
+			WhenRunIsStoppedAfter(time.Second).
+			Then("the run ends without an answer from the remote").
+			ExpectFailure().
+			ExpectAgentNotStarted()
+	})
+
+	f.RunAgent("fail when the answer is null", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.5").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers("null").
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed, with no panic").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("the report reaches the branch when the repository ignores it", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.7").
+			GivenRepositoryFile(".gitignore", "docs/\n").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the report is committed with the change").
+			ExpectReport("dead-code", report)
+	})
+
+	f.RunAgent("line breaks at the end of an answer field are dropped", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.2", "AGENT-3.5.8").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answerWith(map[string]string{
+				"finding":   answerFields["finding"] + "\n",
+				"follow_up": answerFields["follow_up"] + "\n\n",
+			})).
+			WhenAgentRuns().
+			Then("the report is laid out as usual").
+			ExpectReport("dead-code", report)
+	})
+
+	f.RunAgent("a link in place of the report does not reach git settings", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.9", "AGENT-4.1.1").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentLinksReportPathsTo("../../.git/config").
+			GivenAgentAnswers(answerWith(map[string]string{
+				"finding":             "\n[core]\n\tfsmonitor = " + s.CommandPath() + "\n",
+				"evidence":            "none",
+				"selected_candidate":  "none",
+				"rejected_candidates": "none",
+				"change":              "none",
+				"validation":          "none",
+				"risk":                "none",
+				"rollback":            "none",
+			})).
+			WhenAgentRuns().
+			Then("the run fails, and nothing the agent chose runs").
+			ExpectFailure().
+			ExpectBranches(0, "gc/").
+			ExpectNoCommandFromTheAgentRan()
+	})
+
+	for _, tt := range []struct {
+		name  string
+		given func(s *extensions.AgentRun)
+	}{
+		{"a link to a file of the repository", func(s *extensions.AgentRun) { s.GivenAgentLinksReportPathsTo("../../commit-1.txt") }},
+		{"a file", func(s *extensions.AgentRun) { s.GivenAgentWritesToReportPaths() }},
+		{"a report folder linked inside the working copy", func(s *extensions.AgentRun) {
+			s.GivenAgentRuns("mkdir -p elsewhere docs; ln -s ../elsewhere docs/gc-reviews")
+		}},
+		{"a parent folder linked inside the working copy", func(s *extensions.AgentRun) {
+			s.GivenAgentRuns("mkdir -p elsewhere/gc-reviews; ln -s elsewhere docs")
+		}},
+	} {
+		f.RunAgent("something already at the report's path fails the run: "+tt.name, func(s *extensions.AgentRun) {
+			s.Covers("AGENT-3.5.9").
+				GivenRepositoryWithCommits(1).
+				GivenAgentChanges("cleaned.txt", "clean")
+			tt.given(s)
+			s.GivenAgentAnswers(answer).
+				WhenAgentRuns().
+				Then("the run fails and nothing is pushed").
+				ExpectFailure().
+				ExpectBranches(0, "gc/")
+		})
+	}
+
+	f.RunAgent("a report folder linked outside is not written through", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.9").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentRuns("mkdir -p docs; ln -s "+s.OutsidePath()+" docs/gc-reviews").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run fails and nothing lands outside the working copy").
+			ExpectFailure().
+			ExpectBranches(0, "gc/").
+			ExpectFolderEmpty("outside")
+	})
+
+	const everyHook = "pre-commit prepare-commit-msg commit-msg post-commit post-index-change reference-transaction pre-push"
+	for _, tt := range []struct {
+		name   string
+		script func(s *extensions.AgentRun) string
+	}{
+		{"core.fsmonitor", func(s *extensions.AgentRun) string { return "git config core.fsmonitor " + s.CommandPath() }},
+		{"core.sshCommand with an ssh push address", func(s *extensions.AgentRun) string {
+			return "git config core.sshCommand " + s.CommandPath() + "; git config remote.origin.pushurl ssh://git@example.test/x.git"
+		}},
+		{"an ext push address", func(s *extensions.AgentRun) string {
+			return "git config protocol.ext.allow always; git config remote.origin.pushurl ext::" + s.CommandPath()
+		}},
+		{"a filter", func(s *extensions.AgentRun) string {
+			return "git config filter.spec.clean " + s.CommandPath() + "; echo '* filter=spec' > .gitattributes"
+		}},
+		{"hooks", func(s *extensions.AgentRun) string {
+			return "for hook in " + everyHook + "; do cp " + s.CommandPath() + " .git/hooks/$hook; done"
+		}},
+		{"a hooks folder", func(s *extensions.AgentRun) string {
+			return "mkdir .git/agent-hooks; for hook in " + everyHook + "; do cp " + s.CommandPath() + " .git/agent-hooks/$hook; done; git config core.hooksPath .git/agent-hooks"
+		}},
+	} {
+		f.RunAgent("git settings from the agent have no effect: "+tt.name, func(s *extensions.AgentRun) {
+			s.Covers("AGENT-4.1.1").
+				GivenRepositoryWithCommits(1).
+				GivenAgentChanges("cleaned.txt", "clean").
+				GivenAgentRuns(tt.script(s)).
+				GivenAgentAnswers(answer).
+				WhenAgentRuns().
+				Then("the change is pushed as usual, and nothing the agent chose runs").
+				ExpectChange("main", "Remove dead code", "cleaned.txt", "clean").
+				ExpectNoCommandFromTheAgentRan()
+		})
+	}
+
+	f.RunAgent("a push address from the agent has no effect", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-4.1.1").
+			GivenRepositoryWithCommits(1).
+			GivenAnotherRepositoryOnTheRemote().
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentRuns(`git config remote.origin.pushurl "$(git config remote.origin.url | sed 's#acme/api.git#acme/other.git#')"`).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the branch goes to the cloned repository and nowhere else").
+			ExpectChange("main", "Remove dead code", "cleaned.txt", "clean").
+			ExpectNothingPushedToOtherRepository()
+	})
+
+	f.RunAgent("a nested repository fails the run", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-4.2.1").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentRuns("git init -q vendor/nested && git -C vendor/nested -c user.name=agent -c user.email=agent@example.test commit -q --allow-empty --message nested").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("settings of a nested repository run nothing", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-4.2.1", "AGENT-4.2.2").
+			GivenRepositoryWithCommits(1).
+			GivenRepositoryWithGitlink().
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentRuns("rm -rf sub; git init -q sub; git -C sub config core.fsmonitor "+s.CommandPath()).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run fails, and nothing the agent chose runs").
+			ExpectFailure().
+			ExpectBranches(0, "gc/").
+			ExpectNoCommandFromTheAgentRan()
+	})
+
+	f.RunAgent("a workflow file fails the run", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-4.3.1").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges(".github/workflows/steal.yml", "on: push").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("a change to an existing workflow fails the run", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-4.3.1").
+			GivenRepositoryFile(".github/workflows/build.yml", "on: pull_request").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges(".github/workflows/build.yml", "on: push").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("a workflow moved out of .github fails the run", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-4.3.1").
+			GivenRepositoryFile(".github/workflows/build.yml", "on: pull_request").
+			GivenRepositoryWithCommits(1).
+			GivenAgentRuns(`mkdir ci; mv .github/workflows/build.yml ci/build.yml`).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
+	})
+
+	f.RunAgent("a change to .gitmodules fails the run", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-4.3.2").
+			GivenRepositoryWithCommits(1).
+			GivenAgentChanges(".gitmodules", "[submodule \"x\"]\n\tpath = x\n\turl = http://example.test/x.git\n").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run fails and nothing is pushed").
+			ExpectFailure().
+			ExpectBranches(0, "gc/")
 	})
 }

@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -26,6 +27,8 @@ const (
 	githubFailed
 	rateLimited
 	moved
+	runRequested
+	notConnected
 )
 
 type server struct {
@@ -41,9 +44,13 @@ func New(deps contract.Dependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
-	mux.HandleFunc("POST /repositories", s.connectRepository)
-	mux.HandleFunc("POST /repositories/{owner}/{name}/disconnect", s.disconnectRepository)
+	sameSite := http.NewCrossOriginProtection()
+	mux.Handle("POST /repositories", sameSite.Handler(http.HandlerFunc(s.connectRepository)))
+	mux.Handle("POST /repositories/{owner}/{name}/disconnect", sameSite.Handler(http.HandlerFunc(s.disconnectRepository)))
+	mux.Handle("POST /repositories/{owner}/{name}/run", sameSite.Handler(http.HandlerFunc(s.requestRun)))
 	mux.HandleFunc("GET /runs", s.runsPage)
+	mux.HandleFunc("GET /runs/panel", s.runsPanel)
+	mux.HandleFunc("GET /runs/events", s.runsEvents)
 	mux.HandleFunc("POST /webhooks/github", s.receiveWebhook)
 	return mux
 }
@@ -60,6 +67,37 @@ func (s *server) runsPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := runsView(domain.Runs(s.journal.Facts()), time.Now()).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the page", http.StatusInternalServerError)
+	}
+}
+
+func (s *server) runsPanel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := runsPanel(domain.Runs(s.journal.Facts()), time.Now()).Render(r.Context(), w); err != nil {
+		http.Error(w, "cannot render the panel", http.StatusInternalServerError)
+	}
+}
+
+func (s *server) runsEvents(w http.ResponseWriter, r *http.Request) {
+	changes, cancel := s.journal.Subscribe()
+	defer cancel()
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	stream := http.NewResponseController(w)
+	if err := stream.Flush(); err != nil {
+		return
+	}
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-changes:
+			if _, err := io.WriteString(w, "data: changed\n\n"); err != nil {
+				return
+			}
+			if err := stream.Flush(); err != nil {
+				return
+			}
+		}
 	}
 }
 
@@ -107,6 +145,16 @@ func (s *server) disconnectRepository(w http.ResponseWriter, r *http.Request) {
 	s.renderPanel(w, r, http.StatusOK, noProblem)
 }
 
+func (s *server) requestRun(w http.ResponseWriter, r *http.Request) {
+	fullName := normalize(r.PathValue("owner") + "/" + r.PathValue("name"))
+	if !domain.IsConnected(s.journal.Facts(), fullName) {
+		s.renderPanel(w, r, http.StatusUnprocessableEntity, notConnected)
+		return
+	}
+	s.journal.Append(contract.RunRequested{Repository: fullName})
+	s.renderPanel(w, r, http.StatusOK, runRequested)
+}
+
 func normalize(fullName string) string {
 	return strings.ToLower(strings.TrimSpace(fullName))
 }
@@ -124,6 +172,14 @@ func (s *server) renderPanel(w http.ResponseWriter, r *http.Request, status int,
 }
 
 func disconnectPath(fullName string) string {
+	return repositoryPath(fullName) + "/disconnect"
+}
+
+func runPath(fullName string) string {
+	return repositoryPath(fullName) + "/run"
+}
+
+func repositoryPath(fullName string) string {
 	owner, name, _ := strings.Cut(fullName, "/")
-	return "/repositories/" + url.PathEscape(owner) + "/" + url.PathEscape(name) + "/disconnect"
+	return "/repositories/" + url.PathEscape(owner) + "/" + url.PathEscape(name)
 }

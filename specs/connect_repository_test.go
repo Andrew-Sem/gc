@@ -54,7 +54,7 @@ func TestConnectRepository(t *testing.T) {
 			ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 			ExpectElement(extensions.UpdatedBlock).
 			ExpectNoElement(extensions.WholePage).
-			ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api Disconnect").
+			ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api Run now Disconnect").
 			ExpectElement(`#repositories-panel li[data-repository="acme/api"] button[hx-post="/repositories/acme/api/disconnect"]`).
 			ExpectNoElement(`#repositories-panel [role="alert"]`)
 	})
@@ -71,7 +71,7 @@ func TestConnectRepository(t *testing.T) {
 			Expect(s.GitHubAsked("acme-co/api_v2.js"))
 	})
 
-	f.Run("connect a repository the token cannot see", func(s *extensions.Scenario) {
+	f.Run("connect a repository the app is not installed on", func(s *extensions.Scenario) {
 		s.Covers("REPO-1.3.1", "REPO-1.3.2", "REPO-2.3.1").
 			Given(contract.RepositoryConnected{FullName: "acme/web"}).
 			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
@@ -81,7 +81,7 @@ func TestConnectRepository(t *testing.T) {
 			ExpectElement(extensions.UpdatedBlock).
 			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories-panel li[data-repository="acme/web"]`).
-			ExpectText(`#repositories-panel [role="alert"]`, "No access to this repository")
+			ExpectText(`#repositories-panel [role="alert"]`, "The app is not installed on this repository")
 	})
 
 	f.Run("connect a repository GitHub forbids", func(s *extensions.Scenario) {
@@ -95,7 +95,7 @@ func TestConnectRepository(t *testing.T) {
 			ExpectElement(extensions.UpdatedBlock).
 			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories-panel li[data-repository="acme/web"]`).
-			ExpectText(`#repositories-panel [role="alert"]`, "No access to this repository")
+			ExpectText(`#repositories-panel [role="alert"]`, "The app is not installed on this repository")
 	})
 
 	for _, status := range []int{
@@ -144,7 +144,7 @@ func TestConnectRepository(t *testing.T) {
 				ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"}).
 				ExpectElement(extensions.UpdatedBlock).
 				ExpectNoElement(extensions.WholePage).
-				ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api Disconnect").
+				ExpectText(`#repositories-panel li[data-repository="acme/api"]`, "acme/api Run now Disconnect").
 				ExpectNoElement(`#repositories-panel [role="alert"]`)
 		})
 	}
@@ -241,7 +241,7 @@ func TestConnectRepository(t *testing.T) {
 			ExpectElement(extensions.UpdatedBlock).
 			ExpectNoElement(extensions.WholePage).
 			ExpectElement(`#repositories-panel li[data-repository="acme/web"]`).
-			ExpectText(`#repositories-panel [role="alert"]`, "GitHub rejected the token. Check GITHUB_TOKEN.").
+			ExpectText(`#repositories-panel [role="alert"]`, "GitHub rejected the app. Check GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY_FILE.").
 			Expect(s.GitHubAsked("acme/api"))
 	})
 
@@ -305,8 +305,8 @@ func TestConnectRepository(t *testing.T) {
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
 			ExpectElementCount(`#repositories li`, 2).
-			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web Disconnect").
-			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api Disconnect").
+			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web Run now Disconnect").
+			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api Run now Disconnect").
 			ExpectNoElement(`#repositories li[data-repository="acme/old"]`)
 	})
 
@@ -508,6 +508,85 @@ func TestConnectRepository(t *testing.T) {
 				Then("the token does not reach the output").
 				ExpectStatus(answer.page).
 				ExpectOutputWithout(s.GitHubToken())
+		})
+	}
+
+	f.RunLaunch("keep the token out of the output when GitHub quotes it in a malformed answer", func(s *extensions.Launch) {
+		s.GivenGitHubQuotesTokenInMalformedAnswer().
+			Covers("REPO-4.1.3").
+			When(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Then("the token does not reach the output").
+			ExpectStatus(http.StatusBadGateway).
+			ExpectOutputWithout(s.GitHubToken())
+	})
+
+	f.RunLaunch("a broken reused connection does not repeat the question to GitHub", func(s *extensions.Launch) {
+		s.GivenGitHubSees("acme/api").
+			GivenGitHubDropsConnectionFor("acme/web").
+			GivenRequest(spec.Post("/repositories").WithForm("repo", "acme/api")).
+			Covers("REPO-1.11.1").
+			When(spec.Post("/repositories").WithForm("repo", "acme/web")).
+			Then("GitHub is asked once about each").
+			ExpectStatus(http.StatusBadGateway).
+			ExpectGitHubAsked("acme/api", "acme/web")
+	})
+
+	for _, site := range []string{"cross-site", "same-site"} {
+		f.Run("refuse a connect from another site: "+site, func(s *extensions.Scenario) {
+			s.GivenGitHubSees("attacker/evil").
+				Covers("REPO-5.1.1").
+				When(spec.Post("/repositories").WithForm("repo", "attacker/evil").WithHeader("Sec-Fetch-Site", site)).
+				Then("the request is rejected and nothing is connected").
+				ExpectStatus(http.StatusForbidden).
+				ExpectFacts().
+				Expect(s.GitHubNotAsked())
+		})
+	}
+
+	f.Run("refuse a disconnect from another site", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			Covers("REPO-5.1.1").
+			When(spec.Post("/repositories/acme/api/disconnect").WithHeader("Sec-Fetch-Site", "cross-site")).
+			Then("the request is rejected and the repository stays connected").
+			ExpectStatus(http.StatusForbidden).
+			ExpectFacts()
+	})
+
+	f.Run("refuse a connect with an Origin of another host", func(s *extensions.Scenario) {
+		s.GivenGitHubSees("attacker/evil").
+			Covers("REPO-5.1.2").
+			When(spec.Post("/repositories").WithForm("repo", "attacker/evil").WithHeader("Origin", "https://evil.example")).
+			Then("the request is rejected and nothing is connected").
+			ExpectStatus(http.StatusForbidden).
+			ExpectFacts().
+			Expect(s.GitHubNotAsked())
+	})
+
+	f.Run("refuse a disconnect with an Origin of another host", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			Covers("REPO-5.1.2").
+			When(spec.Post("/repositories/acme/api/disconnect").WithHeader("Origin", "https://evil.example")).
+			Then("the request is rejected and the repository stays connected").
+			ExpectStatus(http.StatusForbidden).
+			ExpectFacts()
+	})
+
+	for _, tt := range []struct {
+		name    string
+		request spec.Request
+	}{
+		{"the same site", spec.Post("/repositories").WithForm("repo", "acme/api").WithHeader("Sec-Fetch-Site", "same-origin")},
+		{"the browser itself", spec.Post("/repositories").WithForm("repo", "acme/api").WithHeader("Sec-Fetch-Site", "none")},
+		{"an Origin of the same host", spec.Post("/repositories").WithForm("repo", "acme/api").WithHeader("Origin", "http://example.com")},
+		{"no browser headers", spec.Post("/repositories").WithForm("repo", "acme/api")},
+	} {
+		f.Run("accept a connect from "+tt.name, func(s *extensions.Scenario) {
+			s.GivenGitHubSees("acme/api").
+				Covers("REPO-5.1.3").
+				When(tt.request).
+				Then("the repository is connected").
+				ExpectStatus(http.StatusOK).
+				ExpectFacts(contract.RepositoryConnected{FullName: "acme/api"})
 		})
 	}
 }

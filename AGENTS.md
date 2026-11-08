@@ -15,10 +15,9 @@ Reach the outside world only through `contract.Dependencies`; every GitHub reque
 
 ## Specs
 
-- Tests are executable specifications. Create, change, or delete them only with explicit user
-  permission and user review. Keep application behavior checks in `specs`, not `internal`;
-  framework checks belong beside the framework. Implement against approved specs; never change
-  them to fit the implementation.
+- Tests are executable specifications. Keep application behavior checks in `specs`, not
+  `internal`; framework checks belong beside the framework. Never change specs to fit the
+  implementation.
 - Contract clauses have three levels: an area heading (`REPO-1`), a requirement heading
   (`REPO-1.6`), and clauses (`REPO-1.6.1`). Each clause is one promise; headings promise
   nothing. `Covers` names clauses only, never headings. A new promise gets the next free number

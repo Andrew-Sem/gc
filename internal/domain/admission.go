@@ -5,17 +5,22 @@ import "github.com/Andrew-Sem/gc/specs/contract"
 const openPRLimit = 12
 
 func WakeUp(journal contract.Journal) []string {
-	facts := journal.Facts()
 	var approved []string
-	for _, repository := range ConnectedRepositories(facts) {
-		if open := openPRs(facts, repository); open < openPRLimit {
-			journal.Append(contract.AdmissionApproved{Repository: repository})
+	for _, repository := range ConnectedRepositories(journal.Facts()) {
+		if Admit(journal, repository) {
 			approved = append(approved, repository)
-		} else {
-			journal.Append(contract.AdmissionDeclined{Repository: repository, Open: open, Limit: openPRLimit})
 		}
 	}
 	return approved
+}
+
+func Admit(journal contract.Journal, repository string) bool {
+	if open := openPRs(journal.Facts(), repository); open >= openPRLimit {
+		journal.Append(contract.AdmissionDeclined{Repository: repository, Open: open, Limit: openPRLimit})
+		return false
+	}
+	journal.Append(contract.AdmissionApproved{Repository: repository})
+	return true
 }
 
 func openPRs(facts []contract.Fact, repository string) int {

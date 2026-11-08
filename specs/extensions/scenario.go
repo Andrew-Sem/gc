@@ -15,8 +15,9 @@ const (
 
 type Scenario struct {
 	*spec.Scenario[contract.Fact]
-	github *fakeGitHub
-	agent  *fakeAgent
+	github  *fakeGitHub
+	agent   *fakeAgent
+	streams []*openStream
 }
 
 func At(moment string) time.Time {
@@ -95,6 +96,11 @@ func (s *Scenario) GivenGitHubMovedRepository(status int) *Scenario {
 
 func (s *Scenario) GivenGitHubCreatesPR(number int) *Scenario {
 	s.github.given(func(g *fakeGitHub) { g.createsPR = number })
+	return s
+}
+
+func (s *Scenario) GivenGitHubCreatesPRAfter(number int, wait time.Duration) *Scenario {
+	s.github.given(func(g *fakeGitHub) { g.createsPR, g.createsAfter = number, wait })
 	return s
 }
 

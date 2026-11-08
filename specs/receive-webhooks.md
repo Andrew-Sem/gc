@@ -44,6 +44,9 @@ no, or unknown), creation date (`pull_request.created_at`), and update date
 HOOK-1.1.1. A request with a valid signature is accepted (response 204), whatever happens to the
 event afterwards.
 
+HOOK-1.1.2. A signed request is handled whatever its `Sec-Fetch-Site` and `Origin` say: the
+signature is what proves where it came from.
+
 #### HOOK-1.2. A missing or wrong signature
 
 HOOK-1.2.1. A request without `X-Hub-Signature-256`, or with a value that is not a valid
@@ -117,7 +120,8 @@ HOOK-3.3.1. A snapshot with an update date earlier than the known one writes no 
 204).
 
 HOOK-3.3.2. A snapshot that matches the known one in everything except the update date writes
-no fact (response 204).
+no fact (response 204). Dates are compared as moments, so the same moment written with another
+time zone offset matches.
 
 ### HOOK-4. Secrets
 

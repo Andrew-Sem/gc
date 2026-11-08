@@ -16,41 +16,60 @@ templ runsView(runs []domain.Run, now time.Time) {
 	<title>Runs</title>
 	<h1>Runs</h1>
 	<a href="/repositories">Repositories</a>
-	if len(runs) == 0 {
-		<p>No runs yet</p>
-	}
-	<table id="runs">
-		<thead>
-			<tr>
-				<th>Repository</th>
-				<th>Started</th>
-				<th>Duration</th>
-				<th>Status</th>
-			</tr>
-		</thead>
-		<tbody>
-			for _, run := range runs {
-				<tr data-run={ strconv.Itoa(run.Number) }>
-					<td data-cell="repository">{ run.Repository }</td>
-					<td data-cell="started">{ run.Started.UTC().Format("2006-01-02 15:04 UTC") }</td>
-					<td data-cell="duration">{ durationText(run.Duration(now)) }</td>
-					<td data-cell="status">
-						if run.Outcome == contract.OutcomePR {
-							<a href={ templ.SafeURL(pullRequestURL(run)) }>{ fmt.Sprintf("PR #%d", run.PR) }</a>
-						} else if run.Running() {
-							running
-						} else {
-							{ string(run.Outcome) }
-						}
-					</td>
+	@runsPanel(runs, now)
+	<script>
+		const runsChanged = () => document.body.dispatchEvent(new Event("runs-changed"));
+		const runsEvents = new EventSource("/runs/events");
+		runsEvents.onopen = runsChanged;
+		runsEvents.onmessage = runsChanged;
+	</script>
+}
+
+templ runsPanel(runs []domain.Run, now time.Time) {
+	<div id="runs-panel" hx-get="/runs/panel" hx-trigger="runs-changed from:body, every 60s" hx-swap="outerHTML">
+		if len(runs) == 0 {
+			<p>No runs yet</p>
+		}
+		<table id="runs">
+			<thead>
+				<tr>
+					<th>Repository</th>
+					<th>Started</th>
+					<th>Duration</th>
+					<th>Status</th>
 				</tr>
-			}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				for _, run := range runs {
+					<tr data-run={ strconv.Itoa(run.Number) }>
+						<td data-cell="repository">{ run.Repository }</td>
+						<td data-cell="started">{ run.Started.UTC().Format("2006-01-02 15:04 UTC") }</td>
+						<td data-cell="duration">{ runDuration(run, now) }</td>
+						<td data-cell="status">
+							if run.Outcome == contract.OutcomePR {
+								<a href={ templ.SafeURL(pullRequestURL(run)) }>{ fmt.Sprintf("PR #%d", run.PR) }</a>
+							} else if run.Running() {
+								running
+							} else {
+								{ string(run.Outcome) }
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
 }
 
 func pullRequestURL(run domain.Run) string {
 	return fmt.Sprintf("https://github.com/%s/pull/%d", run.Repository, run.PR)
+}
+
+func runDuration(run domain.Run, now time.Time) string {
+	if run.Outcome == contract.OutcomeInterrupted {
+		return "unknown"
+	}
+	return durationText(run.Duration(now))
 }
 
 func durationText(d time.Duration) string {

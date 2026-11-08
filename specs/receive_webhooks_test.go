@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Andrew-Sem/gc/framework/spec"
 	"github.com/Andrew-Sem/gc/specs/contract"
@@ -380,6 +381,29 @@ func TestReceiveWebhooks(t *testing.T) {
 			Then("it is accepted and nothing is recorded").
 			ExpectStatus(http.StatusNoContent).
 			ExpectFacts()
+	})
+
+	f.Run("an identical snapshot with another time zone offset", func(s *extensions.Scenario) {
+		offset := time.FixedZone("", 5*60*60+30*60)
+		s.Covers("HOOK-3.3.2").
+			Given(ourPR...).
+			Given(snapshot(nil)).
+			When(delivery(func(pr *extensions.PullRequest) {
+				pr.CreatedAt = snapshot(nil).CreatedAt.In(offset)
+				pr.UpdatedAt = snapshot(nil).UpdatedAt.In(offset)
+			})).
+			Then("it is the same moment, so nothing is recorded").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts()
+	})
+
+	f.Run("a signed delivery with browser headers", func(s *extensions.Scenario) {
+		s.Covers("HOOK-1.1.2").
+			Given(ourPR...).
+			When(delivery(nil).WithHeader("Sec-Fetch-Site", "cross-site").WithHeader("Origin", "https://evil.example")).
+			Then("it is handled as usual").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts(snapshot(nil))
 	})
 
 	f.RunLaunch("the webhook secret stays out of the logs", func(s *extensions.Launch) {

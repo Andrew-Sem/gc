@@ -109,7 +109,7 @@ func (s *Scenario) app(newApp func(contract.Dependencies) http.Handler) func(*jo
 func (s *Scenario) dependencies(j *journal.Journal[contract.Fact]) contract.Dependencies {
 	return contract.Dependencies{
 		Journal:       j,
-		GitHub:        contract.GitHub{APIURL: fakeGitHubURL, Token: fakeGitHubToken, Transport: s.github.transport()},
+		GitHub:        contract.GitHub{APIURL: fakeGitHubURL, AppID: fakeAppID, PrivateKey: fakeAppKey(), Transport: s.github.transport()},
 		Agent:         s.agent,
 		WebhookSecret: fakeWebhookSecret,
 	}

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -19,9 +20,11 @@ const runLimit = 2 * time.Hour
 func Serve(ctx context.Context, listener net.Listener, deps contract.Dependencies) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	closeInterruptedRuns(deps.Journal)
 	log.Printf("next wake-up at %s", nextWakeUp(time.Now()).UTC().Format(time.RFC3339))
 	var runs sync.WaitGroup
 	runs.Go(func() { wakeUpEveryHour(ctx, deps, &runs) })
+	runs.Go(func() { runOnRequest(ctx, deps, &runs) })
 	server := &http.Server{Handler: New(deps)}
 	stop := context.AfterFunc(ctx, func() { server.Close() })
 	defer stop()
@@ -29,6 +32,16 @@ func Serve(ctx context.Context, listener net.Listener, deps contract.Dependencie
 	cancel()
 	runs.Wait()
 	return err
+}
+
+func closeInterruptedRuns(journal contract.Journal) {
+	runs := domain.Runs(journal.Facts())
+	slices.Reverse(runs)
+	for _, run := range runs {
+		if run.Running() {
+			journal.Append(contract.AgentRunFinished{Run: run.Number, Repository: run.Repository, Outcome: contract.OutcomeInterrupted, At: time.Now().UTC()})
+		}
+	}
 }
 
 func wakeUpEveryHour(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
@@ -49,12 +62,48 @@ func nextWakeUp(now time.Time) time.Time {
 	return now.Truncate(time.Hour).Add(time.Hour)
 }
 
+var deciding sync.Mutex
+
 func WakeUp(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
+	deciding.Lock()
+	defer deciding.Unlock()
 	for _, repository := range domain.WakeUp(deps.Journal) {
-		number := domain.NextRunNumber(deps.Journal.Facts())
-		deps.Journal.Append(contract.AgentRunStarted{Run: number, Repository: repository, At: time.Now().UTC()})
-		runs.Go(func() { run(ctx, deps, number, repository) })
+		start(ctx, deps, runs, repository)
 	}
+}
+
+func runOnRequest(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
+	changes, stop := deps.Journal.Subscribe()
+	defer stop()
+	seen := len(deps.Journal.Facts())
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-changes:
+		}
+		facts := deps.Journal.Facts()
+		for _, f := range facts[seen:] {
+			if requested, ok := f.(contract.RunRequested); ok {
+				runNow(ctx, deps, runs, requested.Repository)
+			}
+		}
+		seen = len(facts)
+	}
+}
+
+func runNow(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, repository string) {
+	deciding.Lock()
+	defer deciding.Unlock()
+	if domain.Admit(deps.Journal, repository) {
+		start(ctx, deps, runs, repository)
+	}
+}
+
+func start(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, repository string) {
+	number := domain.NextRunNumber(deps.Journal.Facts())
+	deps.Journal.Append(contract.AgentRunStarted{Run: number, Repository: repository, At: time.Now().UTC()})
+	runs.Go(func() { run(ctx, deps, number, repository) })
 }
 
 func run(ctx context.Context, deps contract.Dependencies, number int, repository string) {

@@ -6,7 +6,8 @@ This contract details what the operator sees about agent runs. The
 ## Why
 
 The operator should see whether the agent is working right now and how earlier runs ended,
-without reading logs. The journal lives in memory for now, so the history lasts until `gc` stops.
+without reading logs. The history outlives `gc`: see the
+[journal storage contract](journal-storage.md).
 
 ## Glossary
 
@@ -17,6 +18,12 @@ without reading logs. The journal lives in memory for now, so the history lasts 
 **Runs page** — `/runs`: a table in `#runs` with one `tr[data-run="<number>"]` per run. Its cells
 are `td[data-cell="repository"]`, `td[data-cell="started"]`, `td[data-cell="duration"]`, and
 `td[data-cell="status"]`.
+
+**Runs panel** — `#runs-panel`: the part of the runs page that holds the table in `#runs` and the
+"No runs yet" text.
+
+**Event stream** — `/runs/events`: a stream of server-sent events that tells the page the journal
+has changed. It says only that, and the page then asks for the panel with an ordinary request.
 
 ## Clauses
 
@@ -33,8 +40,6 @@ HISTORY-1.1.3. With no runs, the page shows "No runs yet" and no rows.
 HISTORY-1.1.4. The runs page includes the shared interface head `ui.Head`.
 
 HISTORY-1.1.5. Opening the page writes no facts.
-
-HISTORY-1.1.6. The page does not refresh itself: the operator reloads it.
 
 #### HISTORY-1.2. What a row shows
 
@@ -59,7 +64,10 @@ HISTORY-1.3.4. The status of a run with the outcome "failed" is "failed".
 
 HISTORY-1.3.5. The status of a run with the outcome "timed out" is "timed out".
 
-HISTORY-1.3.6. The page shows no reason for a failure: the reason stays in the log.
+HISTORY-1.3.6. The page shows no reason for a failure. The
+[open pull requests contract](open-pull-requests.md) puts the reason in the log.
+
+HISTORY-1.3.7. The status of a run with the outcome "interrupted" is "interrupted".
 
 #### HISTORY-1.4. The duration
 
@@ -71,6 +79,9 @@ opened.
 HISTORY-1.4.3. A duration is rounded down to whole minutes. Under a minute it reads "under a
 minute"; under an hour, "41 min"; on a whole hour, "2 h"; otherwise, "2 h 5 min".
 
+HISTORY-1.4.4. The duration of a run with the outcome "interrupted" reads "unknown": `gc` learns
+about the end only at its next start, which can be much later.
+
 ### HISTORY-2. Getting there
 
 #### HISTORY-2.1. Links
@@ -78,3 +89,54 @@ minute"; under an hour, "41 min"; on a whole hour, "2 h"; otherwise, "2 h 5 min"
 HISTORY-2.1.1. The repositories page links to the runs page.
 
 HISTORY-2.1.2. The runs page links to the repositories page.
+
+### HISTORY-3. Live updates
+
+#### HISTORY-3.1. The panel
+
+HISTORY-3.1.1. `GET /runs/panel` answers 200 with the runs panel alone, without `ui.Head`, showing
+the same rows or the same "No runs yet" as the page.
+
+HISTORY-3.1.2. On the page and in the `GET /runs/panel` answer, the panel has
+`hx-get="/runs/panel"`, `hx-trigger="runs-changed from:body, every 60s"`, and
+`hx-swap="outerHTML"`.
+
+HISTORY-3.1.3. The panel asks for itself once a minute even with no new facts, because the duration
+of a running run grows without any. This is the `every 60s` in HISTORY-3.1.2.
+
+HISTORY-3.1.4. `GET /runs/panel` writes no facts.
+
+#### HISTORY-3.2. The event stream
+
+HISTORY-3.2.1. `GET /runs/events` answers 200 with `Content-Type: text/event-stream` and
+`Cache-Control: no-store`, and sends its headers at once, before any fact is written.
+
+HISTORY-3.2.2. After a fact of any kind is written to the journal, the stream sends
+`data: changed` followed by an empty line.
+
+HISTORY-3.2.3. Facts written close together may share one signal, but a signal always follows the
+last of them.
+
+HISTORY-3.2.4. Facts written before the stream was opened send nothing.
+
+HISTORY-3.2.5. The stream sends nothing except that signal: no fact, no repository, no number.
+
+HISTORY-3.2.6. Every open stream gets the signal.
+
+HISTORY-3.2.7. Opening the stream writes no facts.
+
+HISTORY-3.2.8. When the client disconnects, the stream ends and leaves nothing running.
+
+HISTORY-3.2.9. An open stream does not hold `gc` back: on a stop signal `gc` exits without waiting
+for the client to disconnect.
+
+#### HISTORY-3.3. The page
+
+HISTORY-3.3.1. The runs page opens `new EventSource("/runs/events")`.
+
+HISTORY-3.3.2. On each signal, the page fires `runs-changed` on `body`.
+
+HISTORY-3.3.3. Each time the stream connects, including when the browser reconnects it by itself,
+the page also fires `runs-changed`, so a phone that slept catches up at once.
+
+HISTORY-3.3.4. Only the runs page opens the stream: the repositories page does not.

@@ -1,6 +1,9 @@
 package extensions
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"reflect"
 	"slices"
 	"strings"
@@ -10,11 +13,12 @@ import (
 )
 
 func TestLaunchEnvironment(t *testing.T) {
-	t.Setenv("GITHUB_TOKEN", "real-token")
+	t.Setenv("GITHUB_APP_ID", "real-app")
 	t.Setenv("GC_SPEC_KEPT", "kept")
 	l := newLaunch("gc")
 	defer l.github.server.Close()
-	l.GivenEnv("GC_ADDR", "no-port").GivenUnset("GITHUB_TOKEN")
+	defer l.removeJournalFile()
+	l.GivenEnv("GC_ADDR", "no-port").GivenUnset("GITHUB_APP_ID")
 
 	env := l.environ()
 	for _, want := range []string{"GC_ADDR=no-port", "GC_WEBHOOK_SECRET=" + fakeWebhookSecret, "GITHUB_API_URL=" + l.apiURL, "GC_SPEC_KEPT=kept"} {
@@ -22,8 +26,30 @@ func TestLaunchEnvironment(t *testing.T) {
 			t.Errorf("environment has no %s", want)
 		}
 	}
-	if i := slices.IndexFunc(env, func(pair string) bool { return strings.HasPrefix(pair, "GITHUB_TOKEN=") }); i >= 0 {
-		t.Errorf("environment has %s, want GITHUB_TOKEN unset", env[i])
+	if i := slices.IndexFunc(env, func(pair string) bool { return strings.HasPrefix(pair, "GITHUB_APP_ID=") }); i >= 0 {
+		t.Errorf("environment has %s, want GITHUB_APP_ID unset", env[i])
+	}
+}
+
+func TestEveryKindOfFactIsChecked(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "../contract/facts.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want []string
+	for _, decl := range file.Decls {
+		if method, ok := decl.(*ast.FuncDecl); ok && method.Name.Name == "fact" && method.Recv != nil {
+			want = append(want, method.Recv.List[0].Type.(*ast.Ident).Name)
+		}
+	}
+	var got []string
+	for _, fact := range EveryKindOfFact() {
+		got = append(got, reflect.TypeOf(fact).Name())
+	}
+	slices.Sort(want)
+	slices.Sort(got)
+	if !slices.Equal(got, want) {
+		t.Errorf("EveryKindOfFact has %v, the contract has %v", got, want)
 	}
 }
 
@@ -41,6 +67,12 @@ func TestLaunchRejectsMalformedScenario(t *testing.T) {
 		}},
 		{"request without status", func(l *Launch) { l.When(spec.Get("/repositories")).ExpectServing() }, []spec.Problem{
 			launchProblem("expected ExpectStatus for the request"),
+		}},
+		{"element without a request", func(l *Launch) { l.WhenStarted().ExpectServing().ExpectElement("a") }, []spec.Problem{
+			launchProblem("expected a request for ExpectElement or ExpectNoElement"),
+		}},
+		{"failing write without an exit", func(l *Launch) { l.WhenWriteFails(spec.Get("/repositories")).ExpectServing() }, []spec.Problem{
+			launchProblem("expected ExpectExit for a failing write"),
 		}},
 	}
 	for _, tt := range tests {

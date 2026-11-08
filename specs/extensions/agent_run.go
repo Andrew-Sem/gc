@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
+	"net"
 	"net/http"
 	"net/http/cgi"
 	"net/http/httptest"
@@ -32,6 +34,9 @@ const (
 	agentRepository = "acme/api"
 	agentRunLimit   = 30 * time.Second
 	processGoneWait = 5 * time.Second
+
+	reportLinkWindow   = 30
+	recordsPlaceholder = "RECORDS_FOLDER"
 )
 
 var answerFields = []string{
@@ -65,6 +70,27 @@ type AgentRun struct {
 
 	gitAuthenticated map[string]string
 
+	token         string
+	tokensExpire  bool
+	appUnknown    bool
+	openPRs       []fakeOpenPR
+	prsUnlisted   bool
+	tokensIssued  []string
+	tokenRequests []string
+	tokensMu      sync.Mutex
+
+	seedFiles   map[string]string
+	gitlink     bool
+	cloneStalls bool
+	stopAfter   time.Duration
+	panicked    any
+	otherRemote bool
+
+	cloneCredentials string
+
+	gitServer *httptest.Server
+	cleanups  []func()
+
 	remote  string
 	records string
 	change  *contract.AgentChange
@@ -75,10 +101,11 @@ func (f *Feature) RunAgent(name string, describe func(*AgentRun)) {
 	f.t.Helper()
 	f.core.RunCustom(name, func() spec.Custom {
 		a := &AgentRun{env: map[string]string{
-			"GITHUB_TOKEN":      fakeGitHubToken,
-			"GC_WEBHOOK_SECRET": fakeWebhookSecret,
-			"OPENAI_API_KEY":    fakeOpenAIKey,
-		}}
+			"GITHUB_APP_ID":               fakeAppID,
+			"GITHUB_APP_PRIVATE_KEY_FILE": "/operator/gc-app.pem",
+			"GC_WEBHOOK_SECRET":           fakeWebhookSecret,
+			"OPENAI_API_KEY":              fakeOpenAIKey,
+		}, token: fakeGitHubToken}
 		describe(a)
 		return a
 	})
@@ -98,6 +125,79 @@ func (a *AgentRun) GivenEnv(name, value string) *AgentRun {
 	return a
 }
 
+func (a *AgentRun) GivenInstallationToken(token string) *AgentRun {
+	a.token = token
+	return a
+}
+
+type fakeOpenPR struct {
+	Number int
+	Title  string
+	Branch string
+	Files  []string
+}
+
+func (a *AgentRun) GivenOpenPR(title, branch string, files ...string) *AgentRun {
+	a.openPRs = append(a.openPRs, fakeOpenPR{Number: len(a.openPRs) + 1, Title: title, Branch: branch, Files: files})
+	return a
+}
+
+func (a *AgentRun) GivenGitHubCannotListPRs() *AgentRun {
+	a.prsUnlisted = true
+	return a
+}
+
+func (a *AgentRun) ExpectPromptWithout(texts ...string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		args := a.agentArgs()
+		var problems []spec.Problem
+		for _, text := range texts {
+			if len(args) > 0 && strings.Contains(args[len(args)-1], text) {
+				problems = append(problems, agentProblems("expected the prompt not to say %q", text)...)
+			}
+		}
+		return problems
+	})
+}
+
+func (a *AgentRun) servePulls(w http.ResponseWriter, path string) {
+	if a.prsUnlisted {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	pulls := "/repos/" + agentRepository + "/pulls"
+	if path == pulls {
+		var list []map[string]any
+		for _, pr := range a.openPRs {
+			list = append(list, map[string]any{"number": pr.Number, "title": pr.Title, "head": map[string]string{"ref": pr.Branch}})
+		}
+		json.NewEncoder(w).Encode(append([]map[string]any{}, list...))
+		return
+	}
+	for _, pr := range a.openPRs {
+		if path == fmt.Sprintf("%s/%d/files", pulls, pr.Number) {
+			var files []map[string]string
+			for _, file := range pr.Files {
+				files = append(files, map[string]string{"filename": file})
+			}
+			json.NewEncoder(w).Encode(append([]map[string]string{}, files...))
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNotFound)
+}
+
+func (a *AgentRun) GivenGitHubCannotNameTheApp() *AgentRun {
+	a.appUnknown = true
+	return a
+}
+
+func (a *AgentRun) GivenTokensExpireWhileTheAgentWorks() *AgentRun {
+	a.tokensExpire = true
+	a.script = append(a.script, `touch "RECORDS_FOLDER/tokens-expired"`)
+	return a
+}
+
 func (a *AgentRun) GivenUnset(name string) *AgentRun {
 	a.unset = append(a.unset, name)
 	return a
@@ -113,8 +213,70 @@ func (a *AgentRun) GivenNoRepository() *AgentRun {
 	return a
 }
 
+func (a *AgentRun) GivenRepositoryFile(file, content string) *AgentRun {
+	if a.seedFiles == nil {
+		a.seedFiles = map[string]string{}
+	}
+	a.seedFiles[file] = content
+	return a
+}
+
+func (a *AgentRun) GivenRepositoryWithGitlink() *AgentRun {
+	a.gitlink = true
+	return a
+}
+
+func (a *AgentRun) GivenCloneStalls() *AgentRun {
+	a.cloneStalls = true
+	return a
+}
+
 func (a *AgentRun) GivenAgentChanges(file, content string) *AgentRun {
-	a.script = append(a.script, fmt.Sprintf("printf '%%s' %s > %s", shellQuote(content), shellQuote(file)))
+	a.script = append(a.script, fmt.Sprintf(`mkdir -p "$(dirname %[1]s)"; printf '%%s' %[2]s > %[1]s`, shellQuote(file), shellQuote(content)))
+	return a
+}
+
+func (a *AgentRun) GivenAgentRuns(script string) *AgentRun {
+	a.script = append(a.script, script)
+	return a
+}
+
+func (a *AgentRun) CommandPath() string {
+	return a.prepared("command.sh")
+}
+
+func (a *AgentRun) OutsidePath() string {
+	return a.prepared("outside")
+}
+
+func (a *AgentRun) prepared(name string) string {
+	return recordsPlaceholder + "/" + name
+}
+
+func (a *AgentRun) GivenAnotherRepositoryOnTheRemote() *AgentRun {
+	a.otherRemote = true
+	return a
+}
+
+func (a *AgentRun) GivenAgentLinksReportPathsTo(target string) *AgentRun {
+	return a.occupyReportPaths(func(path string) string {
+		return fmt.Sprintf("ln -s %s %s", shellQuote(target), path)
+	})
+}
+
+func (a *AgentRun) GivenAgentWritesToReportPaths() *AgentRun {
+	return a.occupyReportPaths(func(path string) string {
+		return "echo mine > " + path
+	})
+}
+
+func (a *AgentRun) occupyReportPaths(occupy func(path string) string) *AgentRun {
+	lines := []string{"mkdir -p docs/gc-reviews"}
+	for i := range reportLinkWindow {
+		name := time.Now().UTC().Add(time.Duration(i) * time.Second).Format("20060102-150405Z")
+		lines = append(lines, occupy("docs/gc-reviews/"+name+"-dead-code.md"))
+	}
+	a.script = append(a.script, strings.Join(lines, "\n"))
 	return a
 }
 
@@ -130,6 +292,16 @@ func (a *AgentRun) GivenAgentReadsInput() *AgentRun {
 
 func (a *AgentRun) GivenAgentExitsWithError() *AgentRun {
 	a.finalScript = append(a.finalScript, "exit 3")
+	return a
+}
+
+func (a *AgentRun) GivenAgentFailsWith(reason string) *AgentRun {
+	a.finalScript = append(a.finalScript, fmt.Sprintf(`printf %s >&2; exit 3`, shellQuote(reason)))
+	return a
+}
+
+func (a *AgentRun) GivenCloneURLHolds(credentials string) *AgentRun {
+	a.cloneCredentials = credentials
 	return a
 }
 
@@ -160,6 +332,13 @@ func (a *AgentRun) WhenAgentRunIsStopped() *AgentRun {
 	return a
 }
 
+func (a *AgentRun) WhenRunIsStoppedAfter(wait time.Duration) *AgentRun {
+	a.whens++
+	a.runs = 1
+	a.stopAfter = wait
+	return a
+}
+
 func (a *AgentRun) Then(description string) *AgentRun {
 	return a
 }
@@ -172,6 +351,27 @@ func (a *AgentRun) expect(check func() []spec.Problem) *AgentRun {
 func (a *AgentRun) ExpectFailure() *AgentRun {
 	a.expectFails = true
 	return a
+}
+
+func (a *AgentRun) ExpectFailureReason(text string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		if a.err == nil || !strings.Contains(a.err.Error(), text) {
+			return agentProblems("expected the failure to give the reason %q, got: %v", text, a.err)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectFailureReasonWithout(texts ...string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		var problems []spec.Problem
+		for _, text := range texts {
+			if a.err != nil && strings.Contains(a.err.Error(), text) {
+				problems = append(problems, agentProblems("expected the failure not to mention %q, got: %v", text, a.err)...)
+			}
+		}
+		return problems
+	})
 }
 
 func (a *AgentRun) ExpectNoChange() *AgentRun {
@@ -246,6 +446,19 @@ func (a *AgentRun) reportPath(slug string) (string, []spec.Problem) {
 	return path, nil
 }
 
+func (a *AgentRun) ExpectCommittedBy(identity string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		out, err := a.remoteGit("log", "-1", "--format=%an <%ae>%n%cn <%ce>", "--branches=gc/*")
+		if err != nil {
+			return agentProblems("cannot read the pushed commit: %v", err)
+		}
+		if want := identity + "\n" + identity; strings.TrimSpace(out) != want {
+			return agentProblems("expected the commit's author and committer to be %s, got %q", identity, out)
+		}
+		return nil
+	})
+}
+
 func (a *AgentRun) ExpectBranches(count int, prefix string) *AgentRun {
 	return a.expect(func() []spec.Problem {
 		out, err := a.remoteGit("for-each-ref", "--format=%(refname:short)", "refs/heads")
@@ -265,6 +478,41 @@ func (a *AgentRun) ExpectBranches(count int, prefix string) *AgentRun {
 			if !strings.HasPrefix(branch, prefix) {
 				return agentProblems("expected branch %q to start with %q", branch, prefix)
 			}
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectNoCommandFromTheAgentRan() *AgentRun {
+	return a.expect(func() []spec.Problem {
+		if a.record("command-ran") != "" {
+			return agentProblems("a command chosen by the agent ran outside its sandbox: %s", a.record("command-ran"))
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectNothingPushedToOtherRepository() *AgentRun {
+	return a.expect(func() []spec.Problem {
+		out, err := specGit("-C", a.otherRemotePath(), "for-each-ref", "refs/heads")
+		if err != nil {
+			return agentProblems("cannot read the other repository: %v", err)
+		}
+		if strings.TrimSpace(out) != "" {
+			return agentProblems("expected nothing in the other repository, got %q", out)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectFolderEmpty(name string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		entries, err := os.ReadDir(filepath.Join(a.records, name))
+		if err != nil {
+			return agentProblems("cannot read %s: %v", name, err)
+		}
+		if len(entries) != 0 {
+			return agentProblems("expected nothing written to %s, got %v", name, entries)
 		}
 		return nil
 	})
@@ -325,6 +573,66 @@ func (a *AgentRun) ExpectGitAuthenticated(token string) *AgentRun {
 		for _, service := range []string{"git-upload-pack", "git-receive-pack"} {
 			if got := a.gitAuthenticated[service]; got != token {
 				problems = append(problems, agentProblems("expected %s with token %q, got %q", service, token, got)...)
+			}
+		}
+		return problems
+	})
+}
+
+func (a *AgentRun) ExpectTokensLimitedToTheRepository() *AgentRun {
+	return a.expect(func() []spec.Problem {
+		a.tokensMu.Lock()
+		defer a.tokensMu.Unlock()
+		if len(a.tokenRequests) == 0 {
+			return agentProblems("expected a token request, got none")
+		}
+		var problems []spec.Problem
+		for _, body := range a.tokenRequests {
+			var request struct {
+				Repositories []string `json:"repositories"`
+			}
+			if json.Unmarshal([]byte(body), &request) != nil || !slices.Equal(request.Repositories, []string{"api"}) {
+				problems = append(problems, agentProblems("expected a token for the repository api alone, asked with %s", body)...)
+			}
+		}
+		return problems
+	})
+}
+
+func (a *AgentRun) issueToken(body string) string {
+	a.tokensMu.Lock()
+	defer a.tokensMu.Unlock()
+	a.tokenRequests = append(a.tokenRequests, body)
+	token := a.token
+	if a.tokensExpire {
+		token = fmt.Sprintf("%s-%d", a.token, len(a.tokensIssued)+1)
+	}
+	a.tokensIssued = append(a.tokensIssued, token)
+	return token
+}
+
+func (a *AgentRun) tokenValid(token string) bool {
+	a.tokensMu.Lock()
+	defer a.tokensMu.Unlock()
+	if !slices.Contains(a.tokensIssued, token) {
+		return false
+	}
+	if _, err := os.Stat(filepath.Join(a.records, "tokens-expired")); a.tokensExpire && err == nil {
+		return token == a.tokensIssued[len(a.tokensIssued)-1] && len(a.tokensIssued) > 1
+	}
+	return true
+}
+
+func (a *AgentRun) ExpectPromptWith(texts ...string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		args := a.agentArgs()
+		if len(args) == 0 {
+			return agentProblems("the agent recorded no arguments")
+		}
+		var problems []spec.Problem
+		for _, text := range texts {
+			if !strings.Contains(args[len(args)-1], text) {
+				problems = append(problems, agentProblems("expected the prompt to say %q", text)...)
 			}
 		}
 		return problems
@@ -436,6 +744,22 @@ func processGone(pid int) bool {
 	return false
 }
 
+func (a *AgentRun) openLeftovers() {
+	for _, name := range []string{"cwd", "home", "tmp"} {
+		folder := a.record(name)
+		if folder == "" {
+			continue
+		}
+		filepath.WalkDir(folder, func(path string, entry fs.DirEntry, _ error) error {
+			if entry != nil && entry.IsDir() {
+				os.Chmod(path, 0o700)
+			}
+			return nil
+		})
+		os.RemoveAll(folder)
+	}
+}
+
 func (a *AgentRun) Run() []spec.Problem {
 	if a.whens != 1 {
 		return agentProblems("expected one When call, got %d", a.whens)
@@ -459,11 +783,20 @@ func (a *AgentRun) Run() []spec.Problem {
 			return agentProblems("cannot create the repository: %v", err)
 		}
 	}
+	if err := a.prepareRecords(root); err != nil {
+		return agentProblems("cannot prepare the records: %v", err)
+	}
 	binary := filepath.Join(root, "fake-agent")
 	if err := os.WriteFile(binary, []byte(a.fakeAgentScript()), 0o700); err != nil {
 		return agentProblems("cannot write the fake agent: %v", err)
 	}
+	defer a.openLeftovers()
 	defer a.killLeftovers()
+	defer func() {
+		for _, cleanup := range a.cleanups {
+			cleanup()
+		}
+	}()
 
 	server, err := a.startGitHub(filepath.Join(root, "git"))
 	if err != nil {
@@ -474,7 +807,7 @@ func (a *AgentRun) Run() []spec.Problem {
 	codex := agent.Codex{
 		Binary:  binary,
 		Environ: a.environ(root),
-		GitHub:  contract.GitHub{APIURL: server.URL, Token: a.env["GITHUB_TOKEN"]},
+		GitHub:  contract.GitHub{APIURL: server.URL, AppID: fakeAppID, PrivateKey: fakeAppKey()},
 	}
 	for range a.runs {
 		if problems := a.work(codex); len(problems) > 0 {
@@ -483,6 +816,9 @@ func (a *AgentRun) Run() []spec.Problem {
 	}
 
 	problems := a.schemaProblems()
+	if a.panicked != nil {
+		problems = append(problems, agentProblems("the run panicked: %v", a.panicked)...)
+	}
 	if a.expectFails && a.err == nil {
 		problems = append(problems, agentProblems("expected the run to fail, it returned %+v", a.change)...)
 	}
@@ -525,8 +861,18 @@ func (a *AgentRun) work(codex agent.Codex) []spec.Problem {
 	finished := make(chan struct{})
 	go func() {
 		defer close(finished)
+		defer func() {
+			if failure := recover(); failure != nil {
+				a.panicked = failure
+				a.err = errors.New("panic")
+			}
+		}()
 		a.change, a.err = codex.Work(ctx, agentRepository)
 	}()
+	if a.stopAfter != 0 {
+		time.Sleep(a.stopAfter)
+		cancel()
+	}
 	if a.stopped {
 		if !a.waitHanging(finished) {
 			return agentProblems("expected the agent to start and hang within %s", agentRunLimit)
@@ -538,7 +884,10 @@ func (a *AgentRun) work(codex agent.Codex) []spec.Problem {
 		return nil
 	case <-time.After(agentRunLimit):
 		cancel()
-		<-finished
+		select {
+		case <-finished:
+		case <-time.After(processGoneWait):
+		}
 		return agentProblems("expected the run to finish within %s", agentRunLimit)
 	}
 }
@@ -570,6 +919,14 @@ func (a *AgentRun) environ(root string) []string {
 	return result
 }
 
+func (a *AgentRun) cloneURL(server string) string {
+	address := server + "/git/" + agentRepository + ".git"
+	if a.cloneCredentials != "" {
+		address = strings.Replace(address, "://", "://"+a.cloneCredentials+"@", 1)
+	}
+	return address
+}
+
 func (a *AgentRun) startGitHub(gitRoot string) (*httptest.Server, error) {
 	gitPath, err := exec.Command("git", "--exec-path").Output()
 	if err != nil {
@@ -580,17 +937,37 @@ func (a *AgentRun) startGitHub(gitRoot string) (*httptest.Server, error) {
 		Root: "/git",
 		Env:  []string{"GIT_PROJECT_ROOT=" + gitRoot, "GIT_HTTP_EXPORT_ALL=1", "PATH=" + os.Getenv("PATH")},
 	}
-	token := a.env["GITHUB_TOKEN"]
 	a.gitAuthenticated = map[string]string{}
 	var authenticated sync.Mutex
 	var server *httptest.Server
+	silent, err := a.silentAddress()
+	if err != nil {
+		return nil, err
+	}
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		switch {
-		case r.URL.Path == "/repos/"+agentRepository && r.Header.Get("Authorization") == "Bearer "+token:
-			json.NewEncoder(w).Encode(map[string]string{"clone_url": server.URL + "/git/" + agentRepository + ".git"})
+		case strings.HasPrefix(r.URL.Path, "/repos/"+agentRepository+"/pulls") && r.Method == http.MethodGet && a.tokenValid(token):
+			a.servePulls(w, r.URL.Path)
+		case r.URL.Path == "/app" && a.appUnknown:
+			w.WriteHeader(http.StatusInternalServerError)
+		case r.URL.Path == "/app" && validAppToken(r.Header.Get("Authorization")):
+			fmt.Fprint(w, `{"slug":"gc-spec"}`)
+		case r.URL.Path == "/users/gc-spec[bot]" && a.tokenValid(token):
+			fmt.Fprint(w, `{"id":4711,"login":"gc-spec[bot]","type":"Bot"}`)
+		case r.URL.Path == "/repos/"+agentRepository+"/installation" && validAppToken(r.Header.Get("Authorization")):
+			fmt.Fprint(w, `{"id":7}`)
+		case r.URL.Path == fakeInstallationPath && r.Method == http.MethodPost && validAppToken(r.Header.Get("Authorization")):
+			body, _ := io.ReadAll(r.Body)
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]string{"token": a.issueToken(string(body))})
+		case r.URL.Path == "/repos/"+agentRepository && a.tokenValid(token) && a.cloneStalls:
+			json.NewEncoder(w).Encode(map[string]string{"clone_url": "http://" + silent + "/x.git"})
+		case r.URL.Path == "/repos/"+agentRepository && a.tokenValid(token):
+			json.NewEncoder(w).Encode(map[string]string{"clone_url": a.cloneURL(server.URL)})
 		case strings.HasPrefix(r.URL.Path, "/git/"):
 			user, password, ok := r.BasicAuth()
-			if !ok || user == "" || password != token {
+			if !ok || user == "" || !a.tokenValid(password) {
 				w.Header().Set("WWW-Authenticate", `Basic realm="git"`)
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -605,7 +982,55 @@ func (a *AgentRun) startGitHub(gitRoot string) (*httptest.Server, error) {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
+	a.gitServer = server
 	return server, nil
+}
+
+func (a *AgentRun) silentAddress() (string, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", err
+	}
+	a.cleanups = append(a.cleanups, func() { listener.Close() })
+	var conns sync.Map
+	a.cleanups = append(a.cleanups, func() {
+		conns.Range(func(conn, _ any) bool { conn.(net.Conn).Close(); return true })
+	})
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			conns.Store(conn, true)
+		}
+	}()
+	return listener.Addr().String(), nil
+}
+
+func (a *AgentRun) otherRemotePath() string {
+	return filepath.Join(filepath.Dir(a.remote), "other.git")
+}
+
+func (a *AgentRun) prepareRecords(root string) error {
+	if err := os.Mkdir(filepath.Join(a.records, "outside"), 0o700); err != nil {
+		return err
+	}
+	command := fmt.Sprintf("#!/bin/sh\necho \"$0 $*\" >> %s\nexit 1\n", shellQuote(filepath.Join(a.records, "command-ran")))
+	if err := os.WriteFile(filepath.Join(a.records, "command.sh"), []byte(command), 0o700); err != nil {
+		return err
+	}
+	if a.otherRemote {
+		if _, err := specGit("init", "--bare", "--initial-branch=main", a.otherRemotePath()); err != nil {
+			return err
+		}
+		for _, setting := range []string{"http.receivepack", "receive.shallowUpdate"} {
+			if _, err := specGit("-C", a.otherRemotePath(), "config", setting, "true"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func gitService(r *http.Request) string {
@@ -626,6 +1051,14 @@ func (a *AgentRun) createRemote(root string) error {
 			return err
 		}
 	}
+	for file, content := range a.seedFiles {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(seed, file)), 0o700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(seed, file), []byte(content), 0o600); err != nil {
+			return err
+		}
+	}
 	for i := 1; i <= a.commits; i++ {
 		file := fmt.Sprintf("commit-%d.txt", i)
 		if err := os.WriteFile(filepath.Join(seed, file), []byte(file), 0o600); err != nil {
@@ -635,6 +1068,18 @@ func (a *AgentRun) createRemote(root string) error {
 			return err
 		}
 		if _, err := specGit("-C", seed, "commit", "--message", file); err != nil {
+			return err
+		}
+	}
+	if a.gitlink {
+		head, err := specGit("-C", seed, "rev-parse", "HEAD")
+		if err != nil {
+			return err
+		}
+		if _, err := specGit("-C", seed, "update-index", "--add", "--cacheinfo", "160000,"+strings.TrimSpace(head)+",sub"); err != nil {
+			return err
+		}
+		if _, err := specGit("-C", seed, "commit", "--message", "gitlink"); err != nil {
 			return err
 		}
 	}
@@ -683,7 +1128,7 @@ git rev-list --count HEAD > "$records/commits"
 git rev-parse --abbrev-ref HEAD > "$records/branch"
 if [ "$(git rev-parse --show-toplevel)" = "$(pwd -P)" ] && [ -f commit-1.txt ]; then echo yes > "$records/in-working-copy"; fi
 cp -R . "$records/copy"
-` + strings.Join(append(slices.Clone(a.script), a.finalScript...), "\n") + "\n"
+` + strings.ReplaceAll(strings.Join(append(slices.Clone(a.script), a.finalScript...), "\n"), recordsPlaceholder, a.records) + "\n"
 }
 
 func (a *AgentRun) record(name string) string {

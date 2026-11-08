@@ -2,18 +2,21 @@ package contract
 
 import (
 	"context"
+	"crypto/rsa"
 	"net/http"
 )
 
 type Journal interface {
 	Append(...Fact)
 	Facts() []Fact
+	Subscribe() (<-chan struct{}, func())
 }
 
 type GitHub struct {
-	APIURL    string
-	Token     string
-	Transport http.RoundTripper
+	APIURL     string
+	AppID      string
+	PrivateKey *rsa.PrivateKey
+	Transport  http.RoundTripper
 }
 
 type AgentChange struct {

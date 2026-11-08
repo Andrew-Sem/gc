@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Andrew-Sem/gc/framework/spec"
 	"github.com/Andrew-Sem/gc/specs/contract"
 	"github.com/Andrew-Sem/gc/specs/extensions"
 )
@@ -374,6 +375,161 @@ func TestOpenPullRequests(t *testing.T) {
 				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
 				contract.PrCreated{Repository: "acme/api", Number: 42},
 				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42, At: at("01:59")},
+			)
+	})
+
+	f.Run("a PR that GitHub takes 59 seconds to create", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.2.3").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenGitHubCreatesPRAfter(42, 59*time.Second).
+			WhenWokenUpFor(3*time.Minute).
+			Then("the PR is recorded").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.PrCreated{Repository: "acme/api", Number: 42},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42, At: at("00:00").Add(59 * time.Second)},
+			)
+	})
+
+	f.Run("a PR that GitHub never answers about", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.2.3", "OPEN-2.4.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenGitHubHangs().
+			WhenWokenUpFor(3*time.Minute).
+			Then("gc gives up after 60 seconds and records a failure").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeFailed, At: at("00:01")},
+			).
+			Expect(s.GitHubWaited(time.Minute))
+	})
+
+	f.RunWakeUp("the agent's reason reaches the log", func(s *extensions.WakeUpRun) {
+		s.Covers("OPEN-2.4.3").
+			GivenAgentFailsWith("the compiler is missing").
+			WhenWokenUp().
+			Then("the log says which repository failed and why").
+			ExpectOutcome(contract.OutcomeFailed).
+			ExpectLog("acme/api", "the compiler is missing")
+	})
+
+	f.RunWakeUp("GitHub's refusal reaches the log", func(s *extensions.WakeUpRun) {
+		s.Covers("OPEN-2.4.4").
+			GivenAgentChanged().
+			GivenGitHubAnswers(http.StatusUnprocessableEntity).
+			WhenWokenUp().
+			Then("the log says which repository failed and what GitHub answered").
+			ExpectOutcome(contract.OutcomeFailed).
+			ExpectLog("acme/api", "422")
+	})
+
+	for _, tt := range []struct {
+		name, form string
+	}{
+		{"a malformed answer", extensions.QuotedInStatus},
+		{"a broken redirect", extensions.QuotedInRedirect},
+	} {
+		f.RunWakeUp("the token stays out of the log when creating the PR: "+tt.name, func(s *extensions.WakeUpRun) {
+			s.Covers("OPEN-2.7.1").
+				GivenAgentChanged().
+				GivenGitHubQuotesToken(tt.form).
+				WhenWokenUp().
+				Then("the run fails and the log has no token").
+				ExpectOutcome(contract.OutcomeFailed).
+				ExpectLogWithout(s.GitHubToken())
+		})
+
+		f.RunWakeUp("the token stays out of the log when asking for the clone URL: "+tt.name, func(s *extensions.WakeUpRun) {
+			s.Covers("OPEN-2.7.1").
+				GivenTheRealAgentAsksForTheCloneURL().
+				GivenGitHubQuotesToken(tt.form).
+				WhenWokenUp().
+				Then("the run fails and the log has no token").
+				ExpectOutcome(contract.OutcomeFailed).
+				ExpectLogWithout(s.GitHubToken())
+		})
+	}
+
+	f.Run("run a connected repository now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			Covers("OPEN-3.1.1", "OPEN-3.1.2").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the run is requested and the block says so").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectElement(`#repositories-panel li[data-repository="acme/api"] button[hx-post="/repositories/acme/api/run"]`).
+			ExpectText(`#repositories-panel [role="status"]`, "Run requested. Follow it on the runs page.").
+			ExpectElement(`#repositories-panel [role="status"] a[href="/runs"]`)
+	})
+
+	f.Run("run a repository that is not connected now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}, contract.RepositoryDisconnected{FullName: "acme/api"}).
+			Covers("OPEN-3.1.3").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the request is rejected and nothing is requested").
+			ExpectStatus(http.StatusUnprocessableEntity).
+			ExpectFacts().
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectText(`#repositories-panel [role="alert"]`, "This repository is not connected")
+	})
+
+	f.Run("run a repository named in another casing now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			Covers("OPEN-3.1.4").
+			When(spec.Post("/repositories/Acme/API/run")).
+			Then("the run of acme/api is requested").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"})
+	})
+
+	f.Run("refuse a run request from another site", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			Covers("OPEN-3.1.5").
+			When(spec.Post("/repositories/acme/api/run").WithHeader("Sec-Fetch-Site", "cross-site")).
+			Then("the request is rejected and nothing is requested").
+			ExpectStatus(http.StatusForbidden).
+			ExpectFacts()
+	})
+
+	f.RunLaunch("a run request starts a run at once", func(s *extensions.Launch) {
+		s.GivenGitHubSees("acme/api").
+			GivenJournal(contract.RepositoryConnected{FullName: "acme/api"}).
+			Covers("OPEN-3.2.1").
+			When(spec.Post("/repositories/acme/api/run")).
+			ThenTheRunEnds().
+			ExpectStatus(http.StatusOK).
+			ExpectJournalKinds("RepositoryConnected", "RunRequested", "AdmissionApproved", "AgentRunStarted", "AgentRunFinished")
+	})
+
+	f.RunLaunch("a run request with no room is declined at once", func(s *extensions.Launch) {
+		journal := []contract.Fact{contract.RepositoryConnected{FullName: "acme/api"}}
+		for number := 1; number <= 12; number++ {
+			journal = append(journal, contract.PrCreated{Repository: "acme/api", Number: number})
+		}
+		s.GivenJournal(journal...).
+			Covers("OPEN-3.2.1").
+			When(spec.Post("/repositories/acme/api/run")).
+			ThenAWhilePasses().
+			ExpectStatus(http.StatusOK).
+			ExpectJournal(append(journal, contract.RunRequested{Repository: "acme/api"}, contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12})...)
+	})
+
+	f.RunLaunch("a run request from before the start makes no decision", func(s *extensions.Launch) {
+		s.GivenGitHubSees("acme/web").
+			GivenJournal(contract.RepositoryConnected{FullName: "acme/api"}, contract.RunRequested{Repository: "acme/api"}).
+			Covers("OPEN-3.2.2").
+			When(spec.Post("/repositories").WithForm("repo", "acme/web")).
+			ThenAWhilePasses().
+			ExpectStatus(http.StatusOK).
+			ExpectJournal(
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.RunRequested{Repository: "acme/api"},
+				contract.RepositoryConnected{FullName: "acme/web"},
 			)
 	})
 }
