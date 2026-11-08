@@ -168,6 +168,11 @@ func (l *Launch) Then(description string) *Launch {
 	return l
 }
 
+func (l *Launch) ExpectNoSuccessForTheWrite() *Launch {
+	l.expectNoSuccess = true
+	return l
+}
+
 func (l *Launch) ExpectExit() *Launch {
 	l.expectExit = true
 	return l

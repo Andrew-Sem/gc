@@ -23,8 +23,9 @@ func Serve(ctx context.Context, listener net.Listener, deps contract.Dependencie
 	closeInterruptedRuns(deps.Journal)
 	log.Printf("next wake-up at %s", nextWakeUp(time.Now()).UTC().Format(time.RFC3339))
 	var runs sync.WaitGroup
-	runs.Go(func() { wakeUpEveryHour(ctx, deps, &runs) })
-	runs.Go(func() { runOnRequest(ctx, deps, &runs) })
+	turn := newTurn()
+	runs.Go(func() { wakeUpEveryHour(ctx, deps, &runs, turn) })
+	runs.Go(func() { runOnRequest(ctx, deps, &runs, turn) })
 	server := &http.Server{Handler: New(deps)}
 	stop := context.AfterFunc(ctx, func() { server.Close() })
 	defer stop()
@@ -44,20 +45,18 @@ func closeInterruptedRuns(journal contract.Journal) {
 	}
 }
 
-func wakeUpEveryHour(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
+func wakeUpEveryHour(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, turn turn) {
+	planned := nextWakeUp(time.Now())
 	for {
-		now := time.Now()
-		timer := time.NewTimer(nextWakeUp(now).Sub(now))
+		timer := time.NewTimer(time.Until(planned))
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return
 		case <-timer.C:
-			if time.Now().UTC().Hour()%sweepEvery == 0 {
-				Sweep(ctx, deps)
-			}
-			WakeUp(ctx, deps, runs)
+			wakeUpAt(ctx, deps, runs, turn, planned)
 		}
+		planned = followingWakeUp(planned, time.Now())
 	}
 }
 
@@ -65,17 +64,48 @@ func nextWakeUp(now time.Time) time.Time {
 	return now.Truncate(time.Hour).Add(time.Hour)
 }
 
-var deciding sync.Mutex
+func followingWakeUp(planned, now time.Time) time.Time {
+	next := planned.Add(time.Hour)
+	for now.Sub(next) > time.Hour {
+		next = next.Add(time.Hour)
+	}
+	return next
+}
+
+type turn chan struct{}
+
+func newTurn() turn {
+	return make(turn, 1)
+}
+
+func (t turn) take() {
+	t <- struct{}{}
+}
+
+func (t turn) give() {
+	<-t
+}
 
 func WakeUp(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
-	deciding.Lock()
-	defer deciding.Unlock()
-	for _, repository := range domain.WakeUp(deps.Journal, time.Now()) {
+	decide(ctx, deps, runs, time.Now())
+}
+
+func wakeUpAt(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, turn turn, planned time.Time) {
+	turn.take()
+	defer turn.give()
+	if planned.UTC().Hour()%sweepEvery == 0 {
+		Sweep(ctx, deps)
+	}
+	decide(ctx, deps, runs, planned)
+}
+
+func decide(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, planned time.Time) {
+	for _, repository := range domain.WakeUp(deps.Journal, planned) {
 		start(ctx, deps, runs, repository)
 	}
 }
 
-func runOnRequest(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup) {
+func runOnRequest(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, turn turn) {
 	changes, stop := deps.Journal.Subscribe()
 	defer stop()
 	seen := len(deps.Journal.Facts())
@@ -88,16 +118,16 @@ func runOnRequest(ctx context.Context, deps contract.Dependencies, runs *sync.Wa
 		facts := deps.Journal.Facts()
 		for _, f := range facts[seen:] {
 			if requested, ok := f.(contract.RunRequested); ok {
-				runNow(ctx, deps, runs, requested.Repository)
+				runNow(ctx, deps, runs, turn, requested.Repository)
 			}
 		}
 		seen = len(facts)
 	}
 }
 
-func runNow(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, repository string) {
-	deciding.Lock()
-	defer deciding.Unlock()
+func runNow(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, turn turn, repository string) {
+	turn.take()
+	defer turn.give()
 	if domain.Admit(deps.Journal, repository) {
 		start(ctx, deps, runs, repository)
 	}

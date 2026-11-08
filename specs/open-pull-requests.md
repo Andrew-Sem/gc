@@ -55,6 +55,14 @@ OPEN-1.1.5. While `gc` runs, a wake-up happens at the start of every clock hour.
 OPEN-1.1.6. When `gc` starts, it prints "next wake-up at" followed by the time of the next
 wake-up.
 
+OPEN-1.1.7. A wake-up belongs to the clock hour it was planned for, even when it starts later, for
+example after a long sweep (MERGE-2.1.1): whether a repository is due, and whether this is a sweep
+hour, follow that planned hour, not the moment the work starts.
+
+OPEN-1.1.8. A wake-up that starts late because the previous one took long still happens. Only a
+wake-up more than an hour late, as after the computer slept, is skipped, so that waking up never
+makes up several hours at once.
+
 #### OPEN-1.2. There is room
 
 OPEN-1.2.1. If the repository has fewer open PRs than the limit, `AdmissionApproved` with this
@@ -142,7 +150,9 @@ OPEN-2.5.2. A run that finishes before the run limit is not affected by it.
 
 OPEN-2.6.1. `AgentRunFinished` carries the run's number and the time the run ended.
 
-OPEN-2.6.2. `AgentRunFinished` carries the tokens the run returned, whatever its outcome.
+OPEN-2.6.2. `AgentRunFinished` carries the tokens the run returned, whatever its outcome. A run
+that never returned, one marked "interrupted" at the next start (STORE-2.1.1), carries no tokens:
+its run ended with `gc`, and the tokens it used are unknown.
 
 #### OPEN-2.7. Secrets in the log
 

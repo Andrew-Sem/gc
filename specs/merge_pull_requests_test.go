@@ -149,6 +149,34 @@ func TestMergePullRequests(t *testing.T) {
 			Expect(s.GitHubNotAsked())
 	})
 
+	f.Run("a run request during a sweep waits for it", func(s *extensions.Scenario) {
+		closed := open
+		closed.Closed = true
+		facts := hangingSweep("acme/api", []int{1, 2})
+		facts = append(facts,
+			open.Snapshot("acme/api", 3),
+			contract.MergeApproved{Repository: "acme/api", Number: 3, HeadSHA: "abc123"},
+			contract.RunRequested{Repository: "acme/api"},
+			contract.MergeFailed{Repository: "acme/api", Number: 3, Reason: "GitHub did not answer"},
+		)
+		facts = append(facts, hangingSweep("acme/api", []int{4, 5})...)
+		facts = append(facts,
+			closed.Snapshot("acme/api", 6),
+			contract.AdmissionApproved{Repository: "acme/api"},
+			contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("06:05")},
+			contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("06:05")},
+		)
+		givenHangingPulls(s.Covers("MERGE-2.1.4").
+			Given(connected, contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 5, Limit: 6, Merge: true, At: extensions.At("2000-01-01 04:00")}),
+			"acme/api", 5).
+			Given(contract.PrCreated{Repository: "acme/api", Number: 6}).
+			GivenPullOnGitHub("acme/api", 6, closed).
+			GivenRunRequestedAt("acme/api", "06:02:30").
+			WhenRunning("05:59", 8*time.Minute).
+			Then("the request is decided after the sweep, with the closed PR's place free").
+			ExpectFacts(facts...)
+	})
+
 	f.Run("a sweep reads the PRs with merging off", func(s *extensions.Scenario) {
 		s.Covers("MERGE-2.2.1", "MERGE-2.2.2", "MERGE-3.1.1").
 			Given(connected, created).
@@ -381,4 +409,33 @@ func TestMergePullRequests(t *testing.T) {
 				contract.MergeFailed{Repository: "acme/api", Number: 7, Reason: "GitHub answered 405"},
 			)
 	})
+}
+
+func hangingSweep(repository string, numbers []int) []contract.Fact {
+	open := extensions.OpenPullOnGitHub()
+	var facts []contract.Fact
+	for _, number := range numbers {
+		facts = append(facts,
+			open.Snapshot(repository, number),
+			contract.MergeApproved{Repository: repository, Number: number, HeadSHA: "abc123"},
+			contract.MergeFailed{Repository: repository, Number: number, Reason: "GitHub did not answer"},
+		)
+	}
+	return facts
+}
+
+func numbersUpTo(n int) []int {
+	numbers := make([]int, n)
+	for i := range numbers {
+		numbers[i] = i + 1
+	}
+	return numbers
+}
+
+func givenHangingPulls(s *extensions.Scenario, repository string, n int) *extensions.Scenario {
+	s.GivenOpenPRs(repository, n)
+	for _, number := range numbersUpTo(n) {
+		s.GivenPullOnGitHub(repository, number, extensions.OpenPullOnGitHub())
+	}
+	return s.GivenMergeHangs()
 }

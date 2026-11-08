@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/internal/github"
@@ -91,7 +92,11 @@ func mergeFailure(err error) string {
 	return "GitHub did not answer"
 }
 
+var recording sync.Mutex
+
 func record(journal contract.Journal, snapshot contract.PrStateChanged) {
+	recording.Lock()
+	defer recording.Unlock()
 	if domain.IsNewSnapshot(journal.Facts(), snapshot) {
 		journal.Append(snapshot)
 	}

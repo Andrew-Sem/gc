@@ -14,6 +14,38 @@ func TestOpenPullRequests(t *testing.T) {
 	at := func(clock string) time.Time { return extensions.At("2000-01-01 " + clock) }
 	f := extensions.NewFeature(t, "open-pull-requests.md")
 
+	lateSweep := func(s *extensions.Scenario, pace, pulls int) *extensions.Scenario {
+		s.Given(
+			contract.RepositoryConnected{FullName: "acme/api"},
+			contract.RepositorySettingsChanged{Repository: "acme/api", Pace: pace, Limit: pulls, Merge: true, At: at("06:00")},
+		)
+		return givenHangingPulls(s, "acme/api", pulls)
+	}
+	declined := func(pulls int) contract.Fact {
+		return contract.AdmissionDeclined{Repository: "acme/api", Open: pulls, Limit: pulls}
+	}
+
+	f.Run("a decision after a long sweep follows its planned hour", func(s *extensions.Scenario) {
+		lateSweep(s.Covers("OPEN-1.1.7"), 2, 61).
+			WhenRunning("05:59", 75*time.Minute).
+			Then("the 06:00 decision, made at 07:01, finds the repository due, and the late 07:00 one does not").
+			ExpectFacts(append(hangingSweep("acme/api", numbersUpTo(61)), declined(61))...)
+	})
+
+	f.Run("a wake-up a minute late still happens", func(s *extensions.Scenario) {
+		lateSweep(s.Covers("OPEN-1.1.8"), 1, 61).
+			WhenRunning("05:59", 75*time.Minute).
+			Then("both the 06:00 and the 07:00 decisions are made at 07:01").
+			ExpectFacts(append(hangingSweep("acme/api", numbersUpTo(61)), declined(61), declined(61))...)
+	})
+
+	f.Run("a wake-up more than an hour late is skipped", func(s *extensions.Scenario) {
+		lateSweep(s.Covers("OPEN-1.1.8"), 1, 121).
+			WhenRunning("05:59", 2*time.Hour+15*time.Minute).
+			Then("after a sweep until 08:01, the 06:00 and 08:00 decisions are made, and 07:00 is skipped").
+			ExpectFacts(append(hangingSweep("acme/api", numbersUpTo(121)), declined(121), declined(121))...)
+	})
+
 	f.Run("no decision right after the start", func(s *extensions.Scenario) {
 		s.Covers("OPEN-1.1.3").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
@@ -391,6 +423,18 @@ func TestOpenPullRequests(t *testing.T) {
 				ExpectFacts(facts...)
 		})
 	}
+
+	f.Run("an interrupted run records no tokens", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.6.2").
+			Given(
+				contract.RepositoryConnected{FullName: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("09:00")},
+			).
+			GivenAgentUses(contract.TokenUsage{Input: 1200, Cached: 900, Output: 57}).
+			WhenRunning("10:30", time.Minute).
+			Then("the run is interrupted with no tokens").
+			ExpectFacts(contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeInterrupted, At: at("10:30")})
+	})
 
 	f.Run("no PR when the agent fails", func(s *extensions.Scenario) {
 		s.Covers("OPEN-2.4.1").

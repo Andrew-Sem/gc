@@ -77,8 +77,8 @@ func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	s.deliveries[id] = true
 	facts := s.journal.Facts()
-	if slices.Contains(usedActions, event.Action) && domain.IsOurPR(facts, snapshot.Repository, snapshot.Number) && domain.IsNewSnapshot(facts, snapshot) {
-		s.journal.Append(snapshot)
+	if slices.Contains(usedActions, event.Action) && domain.IsOurPR(facts, snapshot.Repository, snapshot.Number) {
+		record(s.journal, snapshot)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

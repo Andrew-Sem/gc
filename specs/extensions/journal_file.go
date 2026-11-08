@@ -34,13 +34,14 @@ type journalFile struct {
 	dir  string
 	path string
 
-	seed         []contract.Fact
-	rows         []journalRow
-	contents     *string
-	earlier      []earlierStart
-	otherRunning bool
-	failingWrite *spec.Request
-	breakJournal func() error
+	seed            []contract.Fact
+	rows            []journalRow
+	contents        *string
+	earlier         []earlierStart
+	otherRunning    bool
+	failingWrite    *spec.Request
+	expectNoSuccess bool
+	breakJournal    func() error
 
 	elements      []string
 	noElements    []string
@@ -345,7 +346,7 @@ func (l *Launch) breakWrites(exited <-chan error) []spec.Problem {
 	}
 	defer os.Chmod(l.dir, 0o700)
 	status, err := l.do(l.addr, *l.failingWrite)
-	if err == nil && status < 300 {
+	if l.expectNoSuccess && err == nil && status < 300 {
 		return []spec.Problem{launchProblem(fmt.Sprintf("expected no success for a write that failed, got %d", status))}
 	}
 	return nil

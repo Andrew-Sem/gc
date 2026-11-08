@@ -562,6 +562,18 @@ func TestRunAgent(t *testing.T) {
 			ExpectTokens(contract.TokenUsage{Input: 10, Output: 3})
 	})
 
+	f.RunAgent("count the tokens of a last line without a line break", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.6.2").
+			GivenRepositoryWithCommits(1).
+			GivenAgentPrints(`{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":3}}`).
+			GivenAgentPrintsLast(`{"type":"turn.completed","usage":{"input_tokens":5,"cached_input_tokens":2,"output_tokens":1}}`).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the last turn counts too").
+			ExpectNoChange().
+			ExpectTokens(contract.TokenUsage{Input: 15, Cached: 2, Output: 4})
+	})
+
 	f.RunAgent("a failed run keeps its tokens", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-3.6.3").
 			GivenRepositoryWithCommits(1).

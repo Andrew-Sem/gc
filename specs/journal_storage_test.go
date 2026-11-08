@@ -73,6 +73,7 @@ func TestJournalStorage(t *testing.T) {
 			WhenJournalRemovedBefore(connect("acme/api")).
 			Then("gc exits without confirming the connection").
 			ExpectExit().
+			ExpectNoSuccessForTheWrite().
 			ExpectOutput("cannot write to the journal at " + s.JournalPath())
 	})
 
@@ -82,6 +83,7 @@ func TestJournalStorage(t *testing.T) {
 			WhenJournalReplacedBefore(connect("acme/api")).
 			Then("gc exits without confirming the connection").
 			ExpectExit().
+			ExpectNoSuccessForTheWrite().
 			ExpectOutput("cannot write to the journal at " + s.JournalPath())
 	})
 
@@ -92,6 +94,7 @@ func TestJournalStorage(t *testing.T) {
 			WhenWriteFails(connect("acme/api")).
 			Then("gc exits without confirming the connection, and the file has no new fact").
 			ExpectExit().
+			ExpectNoSuccessForTheWrite().
 			ExpectOutput("cannot write to the journal at " + s.JournalPath()).
 			ExpectJournal(contract.RepositoryConnected{FullName: "acme/web"})
 	})
@@ -241,7 +244,8 @@ func TestJournalStorage(t *testing.T) {
 			ExpectJournal(connected).
 			ExpectJournalFileWithout(s.GitHubToken()).
 			ExpectJournalFileWithout(s.OpenAIKey()).
-			ExpectJournalFileWithout(s.WebhookSecret())
+			ExpectJournalFileWithout(s.WebhookSecret()).
+			ExpectJournalFileWithout(s.PrivateKeyText())
 	})
 
 	f.RunLaunch("a token echoed by GitHub stays out of the journal file", func(s *extensions.Launch) {

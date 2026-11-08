@@ -295,7 +295,9 @@ func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schem
 		return contract.TokenUsage{}, fmt.Errorf("cannot start the agent: %w", err)
 	}
 	defer syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	if err := cmd.Wait(); err != nil {
+	err := cmd.Wait()
+	events.flush()
+	if err != nil {
 		return events.usage, fmt.Errorf("the agent failed: %w: %s", err, c.reason(output.String()))
 	}
 	return events.usage, nil
@@ -329,12 +331,16 @@ func (u *usageCounter) Write(p []byte) (int, error) {
 			}
 			continue
 		}
-		if !u.overflow {
-			u.count(u.line)
-		}
-		u.line, u.overflow = u.line[:0], false
+		u.flush()
 	}
 	return len(p), nil
+}
+
+func (u *usageCounter) flush() {
+	if !u.overflow {
+		u.count(u.line)
+	}
+	u.line, u.overflow = u.line[:0], false
 }
 
 func (u *usageCounter) count(line []byte) {

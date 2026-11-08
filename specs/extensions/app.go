@@ -73,12 +73,15 @@ func (s *Scenario) WhenRunning(start string, runFor time.Duration) *Scenario {
 }
 
 func untilClock(clock string) time.Duration {
-	at, err := time.Parse("15:04", clock)
+	at, err := time.Parse("15:04:05", clock)
+	if err != nil {
+		at, err = time.Parse("15:04", clock)
+	}
 	if err != nil {
 		panic(err)
 	}
 	now := time.Now()
-	return now.Truncate(24 * time.Hour).Add(time.Duration(at.Hour())*time.Hour + time.Duration(at.Minute())*time.Minute).Sub(now)
+	return now.Truncate(24 * time.Hour).Add(at.Sub(at.Truncate(24 * time.Hour))).Sub(now)
 }
 
 type idleListener struct {

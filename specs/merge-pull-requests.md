@@ -58,6 +58,9 @@ not made up.
 MERGE-2.1.3. Each connected repository is swept, whatever its pace. A repository that is not
 connected is not.
 
+MERGE-2.1.4. A run request that comes during a sweep is decided after the sweep, so it sees the
+places the sweep freed.
+
 #### MERGE-2.2. Reading the PRs
 
 MERGE-2.2.1. The sweep reads each open PR of the repository, whether merging is on or not.

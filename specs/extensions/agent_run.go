@@ -392,6 +392,11 @@ func (a *AgentRun) GivenAgentPrints(lines ...string) *AgentRun {
 	return a
 }
 
+func (a *AgentRun) GivenAgentPrintsLast(line string) *AgentRun {
+	a.finalScript = append(a.finalScript, fmt.Sprintf(`printf '%%s' %s`, shellQuote(line)))
+	return a
+}
+
 func (a *AgentRun) ExpectTokens(want contract.TokenUsage) *AgentRun {
 	return a.expect(func() []spec.Problem {
 		if a.tokens != want {
