@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Usage: AGENT=codex|claude experiment/run.sh <run-dir>
 # Runs one implementer in <run-dir>/workspace with the fixed prompt and records the trace.
+# With CODEX_API_KEY and CODEX_PROXY_URL set, Codex uses that proxy instead of its login.
 set -euo pipefail
 run=$(cd "$1" && pwd)
 agent=${AGENT:-codex}
@@ -10,6 +11,7 @@ case $agent in
 codex)
   echo "codex gpt-6.1-sol medium $(codex --version)" > "$run/agent"
   codex exec --skip-git-repo-check --ephemeral --ignore-user-config --disable memories \
+    ${CODEX_PROXY_URL:+-c "openai_base_url=\"$CODEX_PROXY_URL\""} \
     -m gpt-6.1-sol -c model_reasoning_effort=medium \
     -s workspace-write -c sandbox_workspace_write.network_access=true \
     --add-dir "$(go env GOCACHE)" --add-dir "$(go env GOMODCACHE)" \
@@ -18,7 +20,7 @@ codex)
   ;;
 claude)
   echo "claude claude-opus-5-5 medium $(claude --version)" > "$run/agent"
-  (cd "$run/workspace" && claude -p "$(cat "$run/prompt.md")" \
+  (cd "$run/workspace" && env -u CODEX_API_KEY -u CODEX_PROXY_URL claude -p "$(cat "$run/prompt.md")" \
     --model claude-opus-5-5 --effort medium \
     --setting-sources project --strict-mcp-config --no-session-persistence \
     --dangerously-skip-permissions --output-format stream-json --verbose \
