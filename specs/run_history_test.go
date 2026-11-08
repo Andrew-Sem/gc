@@ -149,6 +149,51 @@ func TestRunHistory(t *testing.T) {
 		})
 	}
 
+	f.Run("a run without a PR says why", func(s *extensions.Scenario) {
+		s.Covers("HISTORY-1.5.1").
+			Given(
+				startedFact,
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, Explanation: "## Finding\n\nNothing safe to fix.", At: started},
+			).
+			When(spec.Get("/runs")).
+			Then("the status says no PR, and the explanation opens under it").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(runCell(1, "status"), "no PR why## Finding Nothing safe to fix.").
+			ExpectText(runCell(1, "status")+" details[data-explanation] > summary", "why").
+			ExpectText(runCell(1, "status")+" details[data-explanation] > pre", "## Finding Nothing safe to fix.").
+			ExpectBodyContaining("<pre>## Finding\n\nNothing safe to fix.</pre>")
+	})
+
+	f.Run("a run without a PR and without an explanation", func(s *extensions.Scenario) {
+		s.Covers("HISTORY-1.5.2").
+			Given(
+				startedFact,
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: started},
+			).
+			When(spec.Get("/runs")).
+			Then("the status is the words alone").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(runCell(1, "status"), "no PR").
+			ExpectNoElement(runCell(1, "status") + " details")
+	})
+
+	f.Run("markup in an explanation is shown, not run", func(s *extensions.Scenario) {
+		s.Covers("HISTORY-1.5.3").
+			Given(
+				startedFact,
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, Explanation: `<script>alert(1)</script><b>bold</b>`, At: started},
+			).
+			When(spec.Get("/runs")).
+			Then("the markup is text in the pre").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(runCell(1, "status")+" details[data-explanation] > pre", "<script>alert(1)</script><b>bold</b>").
+			ExpectNoElement(runCell(1, "status") + " details script").
+			ExpectNoElement(runCell(1, "status") + " details b")
+	})
+
 	f.Run("an interrupted run has no known duration", func(s *extensions.Scenario) {
 		s.Covers("HISTORY-1.4.4").
 			Given(

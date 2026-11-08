@@ -199,7 +199,7 @@ complete. Merging is allowed only on the current sweep's `RequiredChecksObserved
 | Fact | When it occurs |
 |---|---|
 | `PrCreated` | The agent opened a PR. Carries `reportId`, repository, number, branch, and first commit. Triggers reconciliation. |
-| `AgentRunFinished` | An agent run ended. Carries `reportId`, repository, optional PR, outcome, and token usage. A failure before the PR was created does not invent a number. |
+| `AgentRunFinished` | An agent run ended. Carries `reportId`, repository, optional PR, outcome, token usage, and, when there is no PR, the agent's explanation. A failure before the PR was created does not invent a number. |
 | `RunRequested` | The operator pressed "Run now" for a repository; its decision is made at once instead of at the wake-up. |
 | `AdmissionApproved` | Admission allowed starting new work. |
 | `MergeApproved` | The merge gate of the current `sweepId` allowed the merge. This is a decision, not an accomplished fact. |

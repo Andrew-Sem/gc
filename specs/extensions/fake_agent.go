@@ -12,31 +12,32 @@ import (
 )
 
 type fakeAgent struct {
-	mu       sync.Mutex
-	asked    []string
-	change   *contract.AgentChange
-	fails    bool
-	hangs    bool
-	worksFor time.Duration
+	mu          sync.Mutex
+	asked       []string
+	change      *contract.AgentChange
+	explanation string
+	fails       bool
+	hangs       bool
+	worksFor    time.Duration
 }
 
-func (a *fakeAgent) Work(ctx context.Context, repository string) (*contract.AgentChange, error) {
+func (a *fakeAgent) Work(ctx context.Context, repository string) (contract.AgentResult, error) {
 	a.mu.Lock()
 	a.asked = append(a.asked, repository)
 	a.mu.Unlock()
 	if a.hangs {
 		<-ctx.Done()
-		return nil, ctx.Err()
+		return contract.AgentResult{}, ctx.Err()
 	}
 	select {
 	case <-time.After(a.worksFor):
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return contract.AgentResult{}, ctx.Err()
 	}
 	if a.fails {
-		return nil, errors.New("the agent failed")
+		return contract.AgentResult{Explanation: a.explanation}, errors.New("the agent failed")
 	}
-	return a.change, nil
+	return contract.AgentResult{Change: a.change, Explanation: a.explanation}, nil
 }
 
 func (a *fakeAgent) askedSoFar() []string {

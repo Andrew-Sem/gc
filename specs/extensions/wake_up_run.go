@@ -41,8 +41,8 @@ type reasonAgent struct {
 	err    error
 }
 
-func (a reasonAgent) Work(context.Context, string) (*contract.AgentChange, error) {
-	return a.change, a.err
+func (a reasonAgent) Work(context.Context, string) (contract.AgentResult, error) {
+	return contract.AgentResult{Change: a.change}, a.err
 }
 
 func (f *Feature) RunWakeUp(name string, describe func(*WakeUpRun)) {

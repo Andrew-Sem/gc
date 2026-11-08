@@ -82,6 +82,17 @@ minute"; under an hour, "41 min"; on a whole hour, "2 h"; otherwise, "2 h 5 min"
 HISTORY-1.4.4. The duration of a run with the outcome "interrupted" reads "unknown": `gc` learns
 about the end only at its next start, which can be much later.
 
+#### HISTORY-1.5. Why there is no PR
+
+HISTORY-1.5.1. The status cell of a run with the outcome "no PR" and an explanation has, after
+"no PR", a `details[data-explanation]` whose `summary` reads "why" and whose `pre` holds the
+explanation as it is, so its line breaks stay.
+
+HISTORY-1.5.2. A run with the outcome "no PR" and an empty explanation has no
+`details[data-explanation]`, and its status is "no PR" alone.
+
+HISTORY-1.5.3. The explanation is text: markup in it is shown, not run.
+
 ### HISTORY-2. Getting there
 
 #### HISTORY-2.1. Links

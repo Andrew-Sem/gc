@@ -52,6 +52,12 @@ templ runsPanel(runs []domain.Run, now time.Time) {
 								running
 							} else {
 								{ string(run.Outcome) }
+								if run.Outcome == contract.OutcomeNoPR && run.Explanation != "" {
+									<details data-explanation>
+										<summary>why</summary>
+										<pre>{ run.Explanation }</pre>
+									</details>
+								}
 							}
 						</td>
 					</tr>

@@ -26,8 +26,13 @@ type AgentChange struct {
 	Description string
 }
 
+type AgentResult struct {
+	Change      *AgentChange
+	Explanation string
+}
+
 type Agent interface {
-	Work(ctx context.Context, repository string) (*AgentChange, error)
+	Work(ctx context.Context, repository string) (AgentResult, error)
 }
 
 type Dependencies struct {

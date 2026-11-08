@@ -109,6 +109,11 @@ func (s *Scenario) GivenAgentChanges(branch, title, description string) *Scenari
 	return s
 }
 
+func (s *Scenario) GivenAgentExplains(explanation string) *Scenario {
+	s.agent.explanation = explanation
+	return s
+}
+
 func (s *Scenario) GivenAgentFails() *Scenario {
 	s.agent.fails = true
 	return s

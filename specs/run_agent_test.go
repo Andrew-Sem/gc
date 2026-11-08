@@ -442,6 +442,89 @@ func TestRunAgent(t *testing.T) {
 			ExpectBranches(0, "gc/")
 	})
 
+	f.RunAgent("explain why there is no change", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.2.2").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers(answerWith(map[string]string{"finding": "The helper has no callers.\n"})).
+			WhenAgentRuns().
+			Then("the explanation holds the finding and the candidates, as in the report").
+			ExpectNoChange().
+			ExpectExplanation("## Finding\n\nThe helper has no callers.\n\n" +
+				"## Selected Candidate\n\nRemove the helper.\n\n" +
+				"## Rejected Candidates\n\nRename it: nothing calls it.")
+	})
+
+	f.RunAgent("an empty field is left out of the explanation", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.2.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers(answerWith(map[string]string{"finding": " ", "rejected_candidates": ""})).
+			WhenAgentRuns().
+			Then("only the selected candidate is left").
+			ExpectNoChange().
+			ExpectExplanation("## Selected Candidate\n\nRemove the helper.")
+	})
+
+	f.RunAgent("a missing field is left out of the explanation", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.2.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers(answerWithout("selected_candidate")).
+			WhenAgentRuns().
+			Then("the finding and the rejected candidates are left").
+			ExpectNoChange().
+			ExpectExplanation("## Finding\n\nThe helper has no callers.\n\n" +
+				"## Rejected Candidates\n\nRename it: nothing calls it.")
+	})
+
+	f.RunAgent("no explanation when the answer is not JSON", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.2.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers("Nothing to do!").
+			WhenAgentRuns().
+			Then("the run returns no change with an empty explanation").
+			ExpectNoChange().
+			ExpectExplanation("")
+	})
+
+	f.RunAgent("no explanation when every field is empty", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.2.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers(answerWith(map[string]string{"finding": "", "selected_candidate": "", "rejected_candidates": ""})).
+			WhenAgentRuns().
+			Then("the run returns no change with an empty explanation").
+			ExpectNoChange().
+			ExpectExplanation("")
+	})
+
+	f.RunAgent("a long explanation is cut on a whole character", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.2.4").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers(answerWith(map[string]string{
+				"finding":             "x" + strings.Repeat("ж", 3000),
+				"selected_candidate":  "",
+				"rejected_candidates": "",
+			})).
+			WhenAgentRuns().
+			Then("the first 3999 bytes stay, because the 4000th falls inside a letter").
+			ExpectNoChange().
+			ExpectExplanation("## Finding\n\nx" + strings.Repeat("ж", 1993))
+	})
+
+	f.RunAgent("no secrets in the explanation", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.2.5").
+			GivenInstallationToken("spec-github-token").
+			GivenEnv("OPENAI_API_KEY", "spec-openai-key").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers(answerWith(map[string]string{
+				"finding":             "I saw spec-github-token.",
+				"selected_candidate":  "",
+				"rejected_candidates": "And spec-openai-key.",
+			})).
+			WhenAgentRuns().
+			Then("the explanation stays, the secrets do not").
+			ExpectNoChange().
+			ExpectExplanation("## Finding\n\nI saw [secret].\n\n## Rejected Candidates\n\nAnd [secret].")
+	})
+
 	f.RunAgent("fail when the agent exits with an error", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-3.3.1").
 			GivenRepositoryWithCommits(1).

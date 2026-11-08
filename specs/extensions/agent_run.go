@@ -91,10 +91,11 @@ type AgentRun struct {
 	gitServer *httptest.Server
 	cleanups  []func()
 
-	remote  string
-	records string
-	change  *contract.AgentChange
-	err     error
+	remote      string
+	records     string
+	change      *contract.AgentChange
+	explanation string
+	err         error
 }
 
 func (f *Feature) RunAgent(name string, describe func(*AgentRun)) {
@@ -378,6 +379,15 @@ func (a *AgentRun) ExpectNoChange() *AgentRun {
 	return a.expect(func() []spec.Problem {
 		if a.change != nil {
 			return agentProblems("expected no change, got %+v", *a.change)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectExplanation(text string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		if a.explanation != text {
+			return agentProblems("expected the explanation %q, got %q", text, a.explanation)
 		}
 		return nil
 	})
@@ -867,7 +877,9 @@ func (a *AgentRun) work(codex agent.Codex) []spec.Problem {
 				a.err = errors.New("panic")
 			}
 		}()
-		a.change, a.err = codex.Work(ctx, agentRepository)
+		var result contract.AgentResult
+		result, a.err = codex.Work(ctx, agentRepository)
+		a.change, a.explanation = result.Change, result.Explanation
 	}()
 	if a.stopAfter != 0 {
 		time.Sleep(a.stopAfter)

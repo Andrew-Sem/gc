@@ -109,7 +109,7 @@ func start(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup
 func run(ctx context.Context, deps contract.Dependencies, number int, repository string) {
 	limited, cancel := context.WithTimeout(ctx, runLimit)
 	defer cancel()
-	change, err := deps.Agent.Work(limited, repository)
+	result, err := deps.Agent.Work(limited, repository)
 	finished := contract.AgentRunFinished{Run: number, Repository: repository}
 	switch {
 	case ctx.Err() != nil:
@@ -119,10 +119,10 @@ func run(ctx context.Context, deps contract.Dependencies, number int, repository
 	case err != nil:
 		log.Printf("agent run for %s failed: %v", repository, err)
 		finished.Outcome = contract.OutcomeFailed
-	case change == nil:
-		finished.Outcome = contract.OutcomeNoPR
+	case result.Change == nil:
+		finished.Outcome, finished.Explanation = contract.OutcomeNoPR, result.Explanation
 	default:
-		number, err := github.New(deps.GitHub).CreatePR(ctx, repository, *change)
+		number, err := github.New(deps.GitHub).CreatePR(ctx, repository, *result.Change)
 		if ctx.Err() != nil {
 			return
 		}

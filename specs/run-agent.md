@@ -127,6 +127,21 @@ If `gc` cannot learn them from GitHub, the run fails and nothing is pushed.
 
 AGENT-3.2.1. The run returns no change, whatever the answer says, and nothing is pushed.
 
+AGENT-3.2.2. The run returns an explanation made of the answer's `finding`,
+`selected_candidate`, and `rejected_candidates`, each under its heading and laid out as in the
+report: `## Finding`, `## Selected Candidate`, `## Rejected Candidates`. The explanation has no
+newline at the end.
+
+AGENT-3.2.3. A field that is missing or empty is left out of the explanation together with its
+heading. If the answer is not valid JSON or no field is left, the explanation is empty; the run
+still returns no change and does not fail.
+
+AGENT-3.2.4. An explanation longer than 4000 bytes keeps its first 4000 bytes, cut back to the
+last whole character, so the journal does not grow with whatever the agent writes.
+
+AGENT-3.2.5. The explanation has no installation token and no OpenAI key, even if the agent wrote
+them in its answer: each is replaced by `[secret]`, and the cut of AGENT-3.2.4 comes after that.
+
 #### AGENT-3.3. The run failed
 
 AGENT-3.3.1. If Codex exits with an error, the run fails and nothing is pushed.

@@ -71,11 +71,12 @@ type AgentRunStarted struct {
 }
 
 type AgentRunFinished struct {
-	Run        int
-	Repository string
-	Outcome    Outcome
-	Number     int
-	At         time.Time
+	Run         int
+	Repository  string
+	Outcome     Outcome
+	Number      int
+	Explanation string
+	At          time.Time
 }
 
 func (RepositoryConnected) fact()    {}

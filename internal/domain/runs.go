@@ -8,12 +8,13 @@ import (
 )
 
 type Run struct {
-	Number     int
-	Repository string
-	Started    time.Time
-	Outcome    contract.Outcome
-	PR         int
-	Ended      time.Time
+	Number      int
+	Repository  string
+	Started     time.Time
+	Outcome     contract.Outcome
+	PR          int
+	Explanation string
+	Ended       time.Time
 }
 
 func (r Run) Running() bool {
@@ -39,7 +40,7 @@ func Runs(facts []contract.Fact) []Run {
 			runs = append(runs, Run{Number: f.Run, Repository: f.Repository, Started: f.At})
 		case contract.AgentRunFinished:
 			if i := slices.IndexFunc(runs, func(r Run) bool { return r.Number == f.Run }); i >= 0 {
-				runs[i].Outcome, runs[i].PR, runs[i].Ended = f.Outcome, f.Number, f.At
+				runs[i].Outcome, runs[i].PR, runs[i].Explanation, runs[i].Ended = f.Outcome, f.Number, f.Explanation, f.At
 			}
 		}
 	}

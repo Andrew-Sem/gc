@@ -111,6 +111,9 @@ GitHub creates after `gc` gave up would never be counted.
 OPEN-2.3.1. If the agent changed nothing, `gc` does not ask GitHub to create a PR, and
 `AgentRunFinished` with the outcome "no PR" is written to the journal.
 
+OPEN-2.3.2. That `AgentRunFinished` carries the explanation the run returned, so the operator can
+see why there is no PR. Facts with other outcomes carry no explanation.
+
 #### OPEN-2.4. The run failed
 
 OPEN-2.4.1. If the agent fails, `gc` does not ask GitHub to create a PR, and `AgentRunFinished`

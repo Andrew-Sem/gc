@@ -77,9 +77,10 @@ const answerSchema = `{
 const killDelay = 5 * time.Second
 
 const (
-	reasonLimit  = 1000
-	reasonWindow = 64 << 10
-	hiddenSecret = "[secret]"
+	explanationLimit = 4000
+	reasonLimit      = 1000
+	reasonWindow     = 64 << 10
+	hiddenSecret     = "[secret]"
 )
 
 const reportsFolder = "docs/gc-reviews"
@@ -99,6 +100,8 @@ var reportSections = []struct{ heading, field string }{
 	{"Rollback", "rollback"},
 	{"Follow-up", "follow_up"},
 }
+
+var explanationSections = []string{"finding", "selected_candidate", "rejected_candidates"}
 
 var passedToAgent = []string{
 	"PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "SSL_CERT_FILE",
@@ -125,129 +128,129 @@ type Codex struct {
 	tokens *[]string
 }
 
-func (c Codex) Work(ctx context.Context, repository string) (*contract.AgentChange, error) {
+func (c Codex) Work(ctx context.Context, repository string) (contract.AgentResult, error) {
 	c.tokens = &[]string{}
 	client := github.New(c.GitHub)
 	token, err := client.Token(ctx, repository)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get a token for the clone: %w", err)
+		return contract.AgentResult{}, fmt.Errorf("cannot get a token for the clone: %w", err)
 	}
 	cloneURL, err := client.CloneURL(ctx, repository, token)
 	if err != nil {
-		return nil, fmt.Errorf("cannot find the clone URL: %w", err)
+		return contract.AgentResult{}, fmt.Errorf("cannot find the clone URL: %w", err)
 	}
 	if parsed, err := url.Parse(cloneURL); err != nil || parsed.User != nil {
-		return nil, errors.New("GitHub gave a clone URL with credentials or one that cannot be read")
+		return contract.AgentResult{}, errors.New("GitHub gave a clone URL with credentials or one that cannot be read")
 	}
 	root, err := os.MkdirTemp("", "gc-agent-")
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	defer removeAll(root)
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 
 	workingCopy := filepath.Join(root, "work")
 	home := filepath.Join(root, "home")
 	if err := os.Mkdir(home, 0o700); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	temporary := filepath.Join(root, "tmp")
 	if err := os.Mkdir(temporary, 0o700); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	schema := filepath.Join(root, "schema.json")
 	if err := os.WriteFile(schema, []byte(answerSchema), 0o600); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	answerFile := filepath.Join(root, "answer.json")
 
 	*c.tokens = append(*c.tokens, token)
 	authenticated, err := authenticatedGitEnv(cloneURL, token)
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	if _, err := c.git(ctx, checkout{dir: root}, authenticated, "clone", "--depth", "1", "--single-branch", cloneURL, workingCopy); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	botName, botEmail, err := client.BotIdentity(ctx, token)
 	if err != nil {
-		return nil, fmt.Errorf("cannot find who commits: %w", err)
+		return contract.AgentResult{}, fmt.Errorf("cannot find who commits: %w", err)
 	}
 	open, err := client.OpenPRs(ctx, repository, token, branchPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("cannot list the open PRs: %w", err)
+		return contract.AgentResult{}, fmt.Errorf("cannot list the open PRs: %w", err)
 	}
 	own := checkout{dir: workingCopy, gitDir: filepath.Join(root, "git")}
 	if err := os.CopyFS(own.gitDir, os.DirFS(filepath.Join(workingCopy, ".git"))); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	base, err := c.git(ctx, own, nil, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 
 	if err := c.runCodex(ctx, workingCopy, home, temporary, schema, answerFile, prompt(open)); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 
 	if err := refuseNestedRepository(workingCopy); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	changed, err := c.git(ctx, own, nil, "status", "--porcelain")
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	if changed == "" {
-		return nil, nil
+		return contract.AgentResult{Explanation: c.explanation(answerFile)}, nil
 	}
 	answer, err := readAnswer(answerFile)
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	reportPath, err := writeReport(workingCopy, answer)
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	branch, err := newBranch()
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	if _, err := c.git(ctx, own, nil, "add", "--all"); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	if _, err := c.git(ctx, own, nil, "add", "--force", "--", reportPath); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	touched, err := c.git(ctx, own, nil, "diff", "--cached", "--name-only", "--no-renames", "-z", "HEAD")
 	if err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	if err := refuseProtectedPaths(touched); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	if _, err := c.git(ctx, own, committer(botName, botEmail), "commit", "--no-verify", "--message", answer["title"]); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	token, err = client.Token(ctx, repository)
 	if err != nil {
-		return nil, fmt.Errorf("cannot get a token for the push: %w", err)
+		return contract.AgentResult{}, fmt.Errorf("cannot get a token for the push: %w", err)
 	}
 	*c.tokens = append(*c.tokens, token)
 	if authenticated, err = authenticatedGitEnv(cloneURL, token); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
 	if _, err := c.git(ctx, own, authenticated, "push", "--no-verify", "origin", "HEAD:refs/heads/"+branch); err != nil {
-		return nil, err
+		return contract.AgentResult{}, err
 	}
-	return &contract.AgentChange{
+	return contract.AgentResult{Change: &contract.AgentChange{
 		Branch:      branch,
 		Base:        base,
 		Title:       answer["title"],
 		Description: answer["description"] + "\n\nReport: " + reportPath,
-	}, nil
+	}}, nil
 }
 
 func prompt(open []github.OpenPR) string {
@@ -331,6 +334,32 @@ func removeAll(root string) {
 		return nil
 	})
 	os.RemoveAll(root)
+}
+
+func (c Codex) explanation(answerFile string) string {
+	raw, err := os.ReadFile(answerFile)
+	if err != nil {
+		return ""
+	}
+	var answer map[string]string
+	if json.Unmarshal(raw, &answer) != nil {
+		return ""
+	}
+	var sections []string
+	for _, section := range reportSections {
+		text := strings.TrimSpace(answer[section.field])
+		if slices.Contains(explanationSections, section.field) && text != "" {
+			sections = append(sections, "## "+section.heading+"\n\n"+text)
+		}
+	}
+	explanation := c.withoutSecrets(strings.Join(sections, "\n\n"))
+	if len(explanation) > explanationLimit {
+		explanation = explanation[:explanationLimit]
+		for explanation != "" && !utf8.ValidString(explanation) {
+			explanation = explanation[:len(explanation)-1]
+		}
+	}
+	return explanation
 }
 
 func readAnswer(path string) (map[string]string, error) {

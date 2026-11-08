@@ -320,6 +320,49 @@ func TestOpenPullRequests(t *testing.T) {
 			Expect(s.GitHubNotAsked())
 	})
 
+	f.Run("a run without a PR keeps the agent's explanation", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.3.1", "OPEN-2.3.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentExplains("## Finding\n\nNothing safe to fix.").
+			WhenWokenUpFor(time.Minute).
+			Then("the end of the run carries the explanation").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, Explanation: "## Finding\n\nNothing safe to fix.", At: at("00:00")},
+			)
+	})
+
+	f.Run("a run with a PR carries no explanation", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.3.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenAgentExplains("## Finding\n\nStray text.").
+			GivenGitHubCreatesPR(42).
+			WhenWokenUpFor(time.Minute).
+			Then("the end of the run has the PR and no explanation").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.PrCreated{Repository: "acme/api", Number: 42},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42, At: at("00:00")},
+			)
+	})
+
+	f.Run("a failed run carries no explanation", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.3.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentExplains("## Finding\n\nStray text.").
+			GivenAgentFails().
+			WhenWokenUpFor(time.Minute).
+			Then("the end of the run is a failure with no explanation").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeFailed, At: at("00:00")},
+			)
+	})
+
 	f.Run("no PR when the agent fails", func(s *extensions.Scenario) {
 		s.Covers("OPEN-2.4.1").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
