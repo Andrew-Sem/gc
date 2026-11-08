@@ -95,6 +95,7 @@ type AgentRun struct {
 	records     string
 	change      *contract.AgentChange
 	explanation string
+	tokens      contract.TokenUsage
 	err         error
 }
 
@@ -379,6 +380,22 @@ func (a *AgentRun) ExpectNoChange() *AgentRun {
 	return a.expect(func() []spec.Problem {
 		if a.change != nil {
 			return agentProblems("expected no change, got %+v", *a.change)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) GivenAgentPrints(lines ...string) *AgentRun {
+	for _, line := range lines {
+		a.script = append(a.script, fmt.Sprintf(`printf '%%s\n' %s`, shellQuote(line)))
+	}
+	return a
+}
+
+func (a *AgentRun) ExpectTokens(want contract.TokenUsage) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		if a.tokens != want {
+			return agentProblems("expected the tokens %+v, got %+v", want, a.tokens)
 		}
 		return nil
 	})
@@ -879,7 +896,7 @@ func (a *AgentRun) work(codex agent.Codex) []spec.Problem {
 		}()
 		var result contract.AgentResult
 		result, a.err = codex.Work(ctx, agentRepository)
-		a.change, a.explanation = result.Change, result.Explanation
+		a.change, a.explanation, a.tokens = result.Change, result.Explanation, result.Tokens
 	}()
 	if a.stopAfter != 0 {
 		time.Sleep(a.stopAfter)

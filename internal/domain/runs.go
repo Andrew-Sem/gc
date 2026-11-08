@@ -14,6 +14,7 @@ type Run struct {
 	Outcome     contract.Outcome
 	PR          int
 	Explanation string
+	Tokens      contract.TokenUsage
 	Ended       time.Time
 }
 
@@ -40,7 +41,7 @@ func Runs(facts []contract.Fact) []Run {
 			runs = append(runs, Run{Number: f.Run, Repository: f.Repository, Started: f.At})
 		case contract.AgentRunFinished:
 			if i := slices.IndexFunc(runs, func(r Run) bool { return r.Number == f.Run }); i >= 0 {
-				runs[i].Outcome, runs[i].PR, runs[i].Explanation, runs[i].Ended = f.Outcome, f.Number, f.Explanation, f.At
+				runs[i].Outcome, runs[i].PR, runs[i].Explanation, runs[i].Tokens, runs[i].Ended = f.Outcome, f.Number, f.Explanation, f.Tokens, f.At
 			}
 		}
 	}

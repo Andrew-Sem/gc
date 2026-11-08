@@ -16,8 +16,8 @@ without reading logs. The history outlives `gc`: see the
 **Running run** — one with `AgentRunStarted` and no `AgentRunFinished` with the same number.
 
 **Runs page** — `/runs`: a table in `#runs` with one `tr[data-run="<number>"]` per run. Its cells
-are `td[data-cell="repository"]`, `td[data-cell="started"]`, `td[data-cell="duration"]`, and
-`td[data-cell="status"]`.
+are `td[data-cell="repository"]`, `td[data-cell="started"]`, `td[data-cell="duration"]`,
+`td[data-cell="tokens"]`, and `td[data-cell="status"]`.
 
 **Runs panel** — `#runs-panel`: the part of the runs page that holds the table in `#runs` and the
 "No runs yet" text.
@@ -92,6 +92,17 @@ HISTORY-1.5.2. A run with the outcome "no PR" and an empty explanation has no
 `details[data-explanation]`, and its status is "no PR" alone.
 
 HISTORY-1.5.3. The explanation is text: markup in it is shown, not run.
+
+#### HISTORY-1.6. Tokens
+
+HISTORY-1.6.1. The tokens cell of a finished run reads "<input> in (<cached> cached), <output>
+out", from the tokens in its `AgentRunFinished`.
+
+HISTORY-1.6.2. A count under 1000 is written as it is; under a million, in thousands with one
+decimal and "k"; otherwise, in millions with two decimals and "M". Decimals are cut, not rounded:
+`1214346` reads "1.21M", `9012` reads "9.0k", and `999999` reads "999.9k".
+
+HISTORY-1.6.3. The tokens cell of a running run, or of a finished run with no tokens, is empty.
 
 ### HISTORY-2. Getting there
 

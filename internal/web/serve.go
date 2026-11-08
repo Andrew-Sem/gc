@@ -113,7 +113,7 @@ func run(ctx context.Context, deps contract.Dependencies, number int, repository
 	limited, cancel := context.WithTimeout(ctx, runLimit)
 	defer cancel()
 	result, err := deps.Agent.Work(limited, repository)
-	finished := contract.AgentRunFinished{Run: number, Repository: repository}
+	finished := contract.AgentRunFinished{Run: number, Repository: repository, Tokens: result.Tokens}
 	switch {
 	case ctx.Err() != nil:
 		return

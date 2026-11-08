@@ -102,6 +102,7 @@ type AgentRunFinished struct {
 	Outcome     Outcome
 	Number      int
 	Explanation string
+	Tokens      TokenUsage
 	At          time.Time
 }
 

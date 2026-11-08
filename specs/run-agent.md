@@ -191,6 +191,19 @@ layout of AGENT-3.5.2.
 AGENT-3.5.9. If a file or a link is already at the report's path, or a folder on the way to it is
 a link, the run fails and nothing is pushed. `gc` writes nothing through a link.
 
+#### AGENT-3.6. Tokens
+
+AGENT-3.6.1. `gc` runs Codex with `--json`, so Codex prints its events to standard output.
+
+AGENT-3.6.2. The run returns the tokens the agent used: the sums of `input_tokens`,
+`cached_input_tokens`, and `output_tokens` over every `turn.completed` event Codex printed.
+
+AGENT-3.6.3. A run that fails after Codex printed such events returns those tokens with its
+failure.
+
+AGENT-3.6.4. Other events, and output that is not JSON, add nothing and do not fail the run.
+Without any `turn.completed` event, the tokens are zero.
+
 ### AGENT-4. What the agent leaves behind
 
 The agent controls the working copy, and `gc` then runs `git` on it outside the sandbox with an

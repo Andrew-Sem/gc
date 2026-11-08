@@ -77,6 +77,7 @@ const answerSchema = `{
 const killDelay = 5 * time.Second
 
 const (
+	eventLineLimit   = 4096
 	explanationLimit = 4000
 	reasonLimit      = 1000
 	reasonWindow     = 64 << 10
@@ -192,65 +193,66 @@ func (c Codex) Work(ctx context.Context, repository string) (contract.AgentResul
 		return contract.AgentResult{}, err
 	}
 
-	if err := c.runCodex(ctx, workingCopy, home, temporary, schema, answerFile, prompt(open)); err != nil {
-		return contract.AgentResult{}, err
+	tokens, err := c.runCodex(ctx, workingCopy, home, temporary, schema, answerFile, prompt(open))
+	if err != nil {
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 
 	if err := refuseNestedRepository(workingCopy); err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	changed, err := c.git(ctx, own, nil, "status", "--porcelain")
 	if err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	if changed == "" {
-		return contract.AgentResult{Explanation: c.explanation(answerFile)}, nil
+		return contract.AgentResult{Explanation: c.explanation(answerFile), Tokens: tokens}, nil
 	}
 	answer, err := readAnswer(answerFile)
 	if err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	reportPath, err := writeReport(workingCopy, answer)
 	if err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	branch, err := newBranch()
 	if err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	if _, err := c.git(ctx, own, nil, "add", "--all"); err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	if _, err := c.git(ctx, own, nil, "add", "--force", "--", reportPath); err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	touched, err := c.git(ctx, own, nil, "diff", "--cached", "--name-only", "--no-renames", "-z", "HEAD")
 	if err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	if err := refuseProtectedPaths(touched); err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	if _, err := c.git(ctx, own, committer(botName, botEmail), "commit", "--no-verify", "--message", answer["title"]); err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	token, err = client.Token(ctx, repository)
 	if err != nil {
-		return contract.AgentResult{}, fmt.Errorf("cannot get a token for the push: %w", err)
+		return contract.AgentResult{Tokens: tokens}, fmt.Errorf("cannot get a token for the push: %w", err)
 	}
 	*c.tokens = append(*c.tokens, token)
 	if authenticated, err = authenticatedGitEnv(cloneURL, token); err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	if _, err := c.git(ctx, own, authenticated, "push", "--no-verify", "origin", "HEAD:refs/heads/"+branch); err != nil {
-		return contract.AgentResult{}, err
+		return contract.AgentResult{Tokens: tokens}, err
 	}
 	return contract.AgentResult{Change: &contract.AgentChange{
 		Branch:      branch,
 		Base:        base,
 		Title:       answer["title"],
 		Description: answer["description"] + "\n\nReport: " + reportPath,
-	}}, nil
+	}, Tokens: tokens}, nil
 }
 
 func prompt(open []github.OpenPR) string {
@@ -265,9 +267,9 @@ func prompt(open []github.OpenPR) string {
 	return text.String()
 }
 
-func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schema, answerFile, prompt string) error {
+func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schema, answerFile, prompt string) (contract.TokenUsage, error) {
 	args := []string{
-		"exec", "--ephemeral",
+		"exec", "--ephemeral", "--json",
 		"--sandbox", "workspace-write",
 		"-c", "sandbox_workspace_write.network_access=true",
 		"-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true",
@@ -287,14 +289,16 @@ func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schem
 	cmd.WaitDelay = killDelay
 	output := &tail{limit: reasonWindow}
 	cmd.Stderr = output
+	events := &usageCounter{}
+	cmd.Stdout = events
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("cannot start the agent: %w", err)
+		return contract.TokenUsage{}, fmt.Errorf("cannot start the agent: %w", err)
 	}
 	defer syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("the agent failed: %w: %s", err, c.reason(output.String()))
+		return events.usage, fmt.Errorf("the agent failed: %w: %s", err, c.reason(output.String()))
 	}
-	return nil
+	return events.usage, nil
 }
 
 func (c Codex) reason(output string) string {
@@ -307,6 +311,47 @@ func (c Codex) reason(output string) string {
 		}
 	}
 	return output
+}
+
+type usageCounter struct {
+	line     []byte
+	overflow bool
+	usage    contract.TokenUsage
+}
+
+func (u *usageCounter) Write(p []byte) (int, error) {
+	for _, b := range p {
+		if b != '\n' {
+			if len(u.line) < eventLineLimit {
+				u.line = append(u.line, b)
+			} else {
+				u.overflow = true
+			}
+			continue
+		}
+		if !u.overflow {
+			u.count(u.line)
+		}
+		u.line, u.overflow = u.line[:0], false
+	}
+	return len(p), nil
+}
+
+func (u *usageCounter) count(line []byte) {
+	var event struct {
+		Type  string `json:"type"`
+		Usage struct {
+			Input  int `json:"input_tokens"`
+			Cached int `json:"cached_input_tokens"`
+			Output int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(line, &event) != nil || event.Type != "turn.completed" {
+		return
+	}
+	u.usage.Input += event.Usage.Input
+	u.usage.Cached += event.Usage.Cached
+	u.usage.Output += event.Usage.Output
 }
 
 type tail struct {

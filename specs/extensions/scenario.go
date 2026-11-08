@@ -125,6 +125,11 @@ func (s *Scenario) GivenAgentExplains(explanation string) *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenAgentUses(tokens contract.TokenUsage) *Scenario {
+	s.agent.tokens = tokens
+	return s
+}
+
 func (s *Scenario) GivenAgentFails() *Scenario {
 	s.agent.fails = true
 	return s

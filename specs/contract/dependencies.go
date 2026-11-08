@@ -26,9 +26,16 @@ type AgentChange struct {
 	Description string
 }
 
+type TokenUsage struct {
+	Input  int
+	Cached int
+	Output int
+}
+
 type AgentResult struct {
 	Change      *AgentChange
 	Explanation string
+	Tokens      TokenUsage
 }
 
 type Agent interface {

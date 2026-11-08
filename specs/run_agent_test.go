@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Andrew-Sem/gc/specs/contract"
 	"github.com/Andrew-Sem/gc/specs/extensions"
 )
 
@@ -523,6 +524,78 @@ func TestRunAgent(t *testing.T) {
 			Then("the explanation stays, the secrets do not").
 			ExpectNoChange().
 			ExpectExplanation("## Finding\n\nI saw [secret].\n\n## Rejected Candidates\n\nAnd [secret].")
+	})
+
+	f.RunAgent("Codex prints its events", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.6.1").
+			GivenRepositoryWithCommits(1).
+			WhenAgentRuns().
+			Then("Codex is asked for JSON events").
+			ExpectAgentArgs("exec", "--json")
+	})
+
+	f.RunAgent("count the tokens of every turn", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.6.2", "AGENT-3.6.4").
+			GivenRepositoryWithCommits(1).
+			GivenAgentPrints(
+				`{"type":"thread.started","thread_id":"t1"}`,
+				`{"type":"turn.completed","usage":{"input_tokens":1000,"cached_input_tokens":800,"output_tokens":50,"reasoning_output_tokens":20}}`,
+				`{"type":"item.completed","item":{"type":"agent_message","usage":{"input_tokens":99}}}`,
+				`{"type":"turn.completed","usage":{"input_tokens":200,"cached_input_tokens":100,"output_tokens":7}}`,
+			).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the tokens are the sums over the completed turns").
+			ExpectNoChange().
+			ExpectTokens(contract.TokenUsage{Input: 1200, Cached: 900, Output: 57})
+	})
+
+	f.RunAgent("count the tokens of a change", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.6.2").
+			GivenRepositoryWithCommits(1).
+			GivenAgentPrints(`{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":3}}`).
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the change comes with its tokens").
+			ExpectChange("main", "Remove dead code", "cleaned.txt", "clean").
+			ExpectTokens(contract.TokenUsage{Input: 10, Output: 3})
+	})
+
+	f.RunAgent("a failed run keeps its tokens", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.6.3").
+			GivenRepositoryWithCommits(1).
+			GivenAgentPrints(`{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":4,"output_tokens":3}}`).
+			GivenAgentExitsWithError().
+			WhenAgentRuns().
+			Then("the failure comes with the tokens").
+			ExpectFailure().
+			ExpectTokens(contract.TokenUsage{Input: 10, Cached: 4, Output: 3})
+	})
+
+	f.RunAgent("output that is not JSON adds nothing", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.6.4").
+			GivenRepositoryWithCommits(1).
+			GivenAgentPrints(
+				`{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":3}}`,
+				`warning: something odd`,
+				`{"type":"turn.completed","usage":{"input_tokens":5,"cached_input_tokens":0,"output_tokens":1}}`,
+			).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the run does not fail, and the JSON events still count").
+			ExpectNoChange().
+			ExpectTokens(contract.TokenUsage{Input: 15, Output: 4})
+	})
+
+	f.RunAgent("no events, no tokens", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.6.4").
+			GivenRepositoryWithCommits(1).
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the tokens are zero").
+			ExpectNoChange().
+			ExpectTokens(contract.TokenUsage{})
 	})
 
 	f.RunAgent("fail when the agent exits with an error", func(s *extensions.AgentRun) {

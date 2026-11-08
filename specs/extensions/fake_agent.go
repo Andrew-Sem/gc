@@ -16,6 +16,7 @@ type fakeAgent struct {
 	asked       []string
 	change      *contract.AgentChange
 	explanation string
+	tokens      contract.TokenUsage
 	fails       bool
 	hangs       bool
 	worksFor    time.Duration
@@ -35,9 +36,9 @@ func (a *fakeAgent) Work(ctx context.Context, repository string) (contract.Agent
 		return contract.AgentResult{}, ctx.Err()
 	}
 	if a.fails {
-		return contract.AgentResult{Explanation: a.explanation}, errors.New("the agent failed")
+		return contract.AgentResult{Explanation: a.explanation, Tokens: a.tokens}, errors.New("the agent failed")
 	}
-	return contract.AgentResult{Change: a.change, Explanation: a.explanation}, nil
+	return contract.AgentResult{Change: a.change, Explanation: a.explanation, Tokens: a.tokens}, nil
 }
 
 func (a *fakeAgent) askedSoFar() []string {

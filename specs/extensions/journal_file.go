@@ -173,7 +173,7 @@ func EveryKindOfFact() []contract.Fact {
 		contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12},
 		contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at},
 		contract.PrCreated{Repository: "acme/api", Number: 7},
-		contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 7, At: at.Add(time.Minute)},
+		contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 7, Explanation: "None", Tokens: contract.TokenUsage{Input: 3, Cached: 2, Output: 1}, At: at.Add(time.Minute)},
 		contract.PrStateChanged{
 			Number:     7,
 			Repository: "acme/api",

@@ -194,6 +194,43 @@ func TestRunHistory(t *testing.T) {
 			ExpectNoElement(runCell(1, "status") + " details b")
 	})
 
+	for _, tt := range []struct {
+		tokens contract.TokenUsage
+		text   string
+	}{
+		{contract.TokenUsage{Input: 1214346, Cached: 1104640, Output: 9012}, "1.21M in (1.10M cached), 9.0k out"},
+		{contract.TokenUsage{Input: 999999, Cached: 0, Output: 999}, "999.9k in (0 cached), 999 out"},
+		{contract.TokenUsage{Input: 1000, Cached: 1999, Output: 1000000}, "1.0k in (1.9k cached), 1.00M out"},
+	} {
+		f.Run("tokens read "+tt.text, func(s *extensions.Scenario) {
+			s.Covers("HISTORY-1.6.1", "HISTORY-1.6.2").
+				Given(
+					startedFact,
+					contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, Tokens: tt.tokens, At: started},
+				).
+				When(spec.Get("/runs")).
+				Then("the tokens cell shows the counts").
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectText(runCell(1, "tokens"), tt.text)
+		})
+	}
+
+	f.Run("no tokens for a running run or a run without them", func(s *extensions.Scenario) {
+		s.Covers("HISTORY-1.6.3").
+			Given(
+				startedFact,
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeFailed, At: started},
+				contract.AgentRunStarted{Run: 2, Repository: "acme/api", At: started},
+			).
+			When(spec.Get("/runs")).
+			Then("both tokens cells are empty").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(runCell(1, "tokens"), "").
+			ExpectText(runCell(2, "tokens"), "")
+	})
+
 	f.Run("an interrupted run has no known duration", func(s *extensions.Scenario) {
 		s.Covers("HISTORY-1.4.4").
 			Given(
@@ -214,10 +251,10 @@ func TestRunHistory(t *testing.T) {
 				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeFailed, At: started},
 			).
 			When(spec.Get("/runs")).
-			Then("the row has only the four cells, and the status only the word").
+			Then("the row has only its five cells, and the status only the word").
 			ExpectStatus(http.StatusOK).
 			ExpectFacts().
-			ExpectElementCount(`#runs tr[data-run="1"] td`, 4).
+			ExpectElementCount(`#runs tr[data-run="1"] td`, 5).
 			ExpectText(runCell(1, "status"), "failed")
 	})
 

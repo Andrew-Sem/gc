@@ -142,6 +142,8 @@ OPEN-2.5.2. A run that finishes before the run limit is not affected by it.
 
 OPEN-2.6.1. `AgentRunFinished` carries the run's number and the time the run ended.
 
+OPEN-2.6.2. `AgentRunFinished` carries the tokens the run returned, whatever its outcome.
+
 #### OPEN-2.7. Secrets in the log
 
 OPEN-2.7.1. No GitHub credential reaches the log during a run, on the way to the clone URL or to

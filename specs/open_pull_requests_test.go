@@ -363,6 +363,35 @@ func TestOpenPullRequests(t *testing.T) {
 			)
 	})
 
+	for _, tt := range []struct {
+		name    string
+		given   func(*extensions.Scenario) *extensions.Scenario
+		outcome contract.Outcome
+		number  int
+	}{
+		{"a run with a PR", func(s *extensions.Scenario) *extensions.Scenario {
+			return s.GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").GivenGitHubCreatesPR(42)
+		}, contract.OutcomePR, 42},
+		{"a run without a PR", func(s *extensions.Scenario) *extensions.Scenario { return s }, contract.OutcomeNoPR, 0},
+		{"a failed run", func(s *extensions.Scenario) *extensions.Scenario { return s.GivenAgentFails() }, contract.OutcomeFailed, 0},
+	} {
+		f.Run(tt.name+" records its tokens", func(s *extensions.Scenario) {
+			tokens := contract.TokenUsage{Input: 1200, Cached: 900, Output: 57}
+			facts := []contract.Fact{
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+			}
+			if tt.number != 0 {
+				facts = append(facts, contract.PrCreated{Repository: "acme/api", Number: tt.number})
+			}
+			facts = append(facts, contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: tt.outcome, Number: tt.number, Tokens: tokens, At: at("00:00")})
+			tt.given(s.Covers("OPEN-2.6.2").Given(contract.RepositoryConnected{FullName: "acme/api"}).GivenAgentUses(tokens)).
+				WhenWokenUpFor(time.Minute).
+				Then("the end of the run carries the tokens").
+				ExpectFacts(facts...)
+		})
+	}
+
 	f.Run("no PR when the agent fails", func(s *extensions.Scenario) {
 		s.Covers("OPEN-2.4.1").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
