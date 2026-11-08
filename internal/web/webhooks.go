@@ -9,9 +9,9 @@ import (
 	"io"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
+	"github.com/Andrew-Sem/gc/internal/github"
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
@@ -20,50 +20,18 @@ const webhookBodyLimit = 25 << 20
 var usedActions = []string{"opened", "reopened", "closed", "synchronize", "edited", "ready_for_review", "converted_to_draft"}
 
 type pullRequestEvent struct {
-	Action      string `json:"action"`
-	PullRequest struct {
-		Number *int    `json:"number"`
-		State  *string `json:"state"`
-		Draft  *bool   `json:"draft"`
-		Head   struct {
-			SHA *string `json:"sha"`
-		} `json:"head"`
-		Base struct {
-			Ref *string `json:"ref"`
-		} `json:"base"`
-		Mergeable json.RawMessage `json:"mergeable"`
-		CreatedAt *time.Time      `json:"created_at"`
-		UpdatedAt *time.Time      `json:"updated_at"`
-	} `json:"pull_request"`
-	Repository struct {
+	Action      string      `json:"action"`
+	PullRequest github.Pull `json:"pull_request"`
+	Repository  struct {
 		FullName *string `json:"full_name"`
 	} `json:"repository"`
 }
 
 func (e pullRequestEvent) snapshot() (contract.PrStateChanged, bool) {
-	pr := e.PullRequest
-	if e.Repository.FullName == nil || pr.Number == nil || pr.State == nil || pr.Draft == nil || pr.Head.SHA == nil ||
-		pr.Base.Ref == nil || pr.Mergeable == nil || pr.CreatedAt == nil || pr.UpdatedAt == nil {
+	if e.Repository.FullName == nil {
 		return contract.PrStateChanged{}, false
 	}
-	mergeable := contract.MergeableUnknown
-	switch string(pr.Mergeable) {
-	case "true":
-		mergeable = contract.MergeableYes
-	case "false":
-		mergeable = contract.MergeableNo
-	}
-	return contract.PrStateChanged{
-		Repository: normalize(*e.Repository.FullName),
-		Number:     *pr.Number,
-		HeadSHA:    *pr.Head.SHA,
-		Base:       *pr.Base.Ref,
-		Draft:      *pr.Draft,
-		Open:       *pr.State == "open",
-		Mergeable:  mergeable,
-		CreatedAt:  pr.CreatedAt.UTC(),
-		UpdatedAt:  pr.UpdatedAt.UTC(),
-	}, true
+	return e.PullRequest.Snapshot(normalize(*e.Repository.FullName))
 }
 
 func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {

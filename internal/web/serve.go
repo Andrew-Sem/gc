@@ -53,6 +53,9 @@ func wakeUpEveryHour(ctx context.Context, deps contract.Dependencies, runs *sync
 			timer.Stop()
 			return
 		case <-timer.C:
+			if time.Now().UTC().Hour()%sweepEvery == 0 {
+				Sweep(ctx, deps)
+			}
 			WakeUp(ctx, deps, runs)
 		}
 	}

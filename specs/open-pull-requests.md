@@ -1,7 +1,7 @@
 # Open pull requests
 
-This contract details scenario 1 of the [PRD](prd.md). Merging and closing PRs is not
-garbage-collector's job for now.
+This contract details scenario 1 of the [PRD](prd.md). Merging PRs is in the
+[merge contract](merge-pull-requests.md).
 
 ## Why
 

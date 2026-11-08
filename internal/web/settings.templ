@@ -16,6 +16,7 @@ templ settingsPanel(form settingsForm) {
 		<form hx-post={ settingsPath(form.Repository) }>
 			<label>Every <input name="pace" value={ form.Pace } inputmode="numeric" required/> hours</label>
 			<label>At most <input name="limit" value={ form.Limit } inputmode="numeric" required/> open PRs</label>
+			<label><input type="checkbox" name="merge" checked?={ form.Merge }/> Merge green PRs</label>
 			<button>Save</button>
 		</form>
 		if form.Problem != "" {

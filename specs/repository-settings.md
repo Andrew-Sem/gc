@@ -17,8 +17,9 @@ default 1: every wake-up.
 **Maximum open** — the limit of the [open pull requests contract](open-pull-requests.md) for one
 repository. By default 12.
 
-**Settings** — the pace and the maximum open of one repository. Until the operator saves them,
-a repository has the defaults.
+**Settings** — the pace, the maximum open, and merging (MERGE-1 of the
+[merge contract](merge-pull-requests.md)) of one repository. Until the operator saves them, a
+repository has the defaults.
 
 **Interval start** — the start of the clock hour in UTC in which the settings were last saved.
 A repository whose settings were never saved has none.

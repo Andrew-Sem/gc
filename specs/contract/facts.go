@@ -43,6 +43,7 @@ type RepositorySettingsChanged struct {
 	Repository string
 	Pace       int
 	Limit      int
+	Merge      bool
 	At         time.Time
 }
 
@@ -58,6 +59,24 @@ type AdmissionDeclined struct {
 	Repository string
 	Open       int
 	Limit      int
+}
+
+type MergeApproved struct {
+	Repository string
+	Number     int
+	HeadSHA    string
+}
+
+type MergeDeclined struct {
+	Repository string
+	Number     int
+	Reason     string
+}
+
+type MergeFailed struct {
+	Repository string
+	Number     int
+	Reason     string
 }
 
 type Outcome string
@@ -96,3 +115,6 @@ func (AdmissionApproved) fact()         {}
 func (AdmissionDeclined) fact()         {}
 func (AgentRunStarted) fact()           {}
 func (AgentRunFinished) fact()          {}
+func (MergeApproved) fact()             {}
+func (MergeDeclined) fact()             {}
+func (MergeFailed) fact()               {}

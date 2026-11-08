@@ -14,6 +14,7 @@ const (
 type Settings struct {
 	Pace  int
 	Limit int
+	Merge bool
 	saved time.Time
 }
 
@@ -23,14 +24,14 @@ func RepositorySettings(facts []contract.Fact, repository string) Settings {
 	settings := DefaultSettings
 	for _, f := range facts {
 		if changed, ok := f.(contract.RepositorySettingsChanged); ok && changed.Repository == repository {
-			settings = Settings{Pace: changed.Pace, Limit: changed.Limit, saved: changed.At}
+			settings = Settings{Pace: changed.Pace, Limit: changed.Limit, Merge: changed.Merge, saved: changed.At}
 		}
 	}
 	return settings
 }
 
-func (s Settings) Same(pace, limit int) bool {
-	return s.Pace == pace && s.Limit == limit
+func (s Settings) Same(pace, limit int, merge bool) bool {
+	return s.Pace == pace && s.Limit == limit && s.Merge == merge
 }
 
 func (s Settings) Due(wakeUp time.Time) bool {

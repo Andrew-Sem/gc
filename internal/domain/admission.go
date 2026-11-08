@@ -30,11 +30,19 @@ func Admit(journal contract.Journal, repository string) bool {
 }
 
 func openPRs(facts []contract.Fact, repository string) int {
+	return len(OpenPRs(facts, repository))
+}
+
+func OpenPRs(facts []contract.Fact, repository string) []int {
+	var order []int
 	open := map[int]bool{}
 	for _, f := range facts {
 		switch f := f.(type) {
 		case contract.PrCreated:
 			if f.Repository == repository {
+				if _, known := open[f.Number]; !known {
+					order = append(order, f.Number)
+				}
 				open[f.Number] = true
 			}
 		case contract.PrStateChanged:
@@ -43,11 +51,11 @@ func openPRs(facts []contract.Fact, repository string) int {
 			}
 		}
 	}
-	count := 0
-	for _, isOpen := range open {
-		if isOpen {
-			count++
+	var numbers []int
+	for _, number := range order {
+		if open[number] {
+			numbers = append(numbers, number)
 		}
 	}
-	return count
+	return numbers
 }

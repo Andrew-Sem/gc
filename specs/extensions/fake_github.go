@@ -49,6 +49,15 @@ type fakeGitHub struct {
 	created       []createdPR
 	quotesToken   string
 	dropsFor      string
+
+	pulls            map[string]PullOnGitHub
+	required         []string
+	requiredApps     []string
+	requiredSet      bool
+	branchUnreadable bool
+	mergeStatus      int
+	mergeHangs       bool
+	merges           []mergeCall
 }
 
 var fakeAppKey = sync.OnceValue(func() *rsa.PrivateKey {
@@ -213,9 +222,10 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	case rejectsToken:
 		fail(http.StatusUnauthorized, "Bad credentials")
 	case strings.HasSuffix(r.URL.Path, "/installation") || strings.HasPrefix(r.URL.Path, "/app/"):
-		g.serveApp(w, r, fail, validAppToken(auth), sees || createsPR != 0)
+		g.serveApp(w, r, fail, validAppToken(auth), sees || createsPR != 0 || g.hasPulls())
 	case auth != "Bearer "+fakeGitHubToken:
 		fail(http.StatusUnauthorized, "Bad credentials")
+	case g.servePullsAPI(w, r, fail):
 	case r.Method == http.MethodPost && strings.HasSuffix(fullName, "/pulls") && createsPR != 0:
 		var pr createdPR
 		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil || pr.Head == "" || pr.Base == "" || pr.Title == "" {
@@ -238,6 +248,12 @@ func (g *fakeGitHub) serve(w http.ResponseWriter, r *http.Request) {
 	default:
 		fmt.Fprintf(w, `{"full_name":%q}`, canonicalCasing(fullName))
 	}
+}
+
+func (g *fakeGitHub) hasPulls() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return len(g.pulls) > 0
 }
 
 func (g *fakeGitHub) serveApp(w http.ResponseWriter, r *http.Request, fail func(int, string), signed, installed bool) {

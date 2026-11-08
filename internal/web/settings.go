@@ -15,6 +15,7 @@ type settingsForm struct {
 	Repository string
 	Pace       string
 	Limit      string
+	Merge      bool
 	Saved      bool
 	Problem    string
 }
@@ -28,7 +29,7 @@ func (s *server) settingsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings := domain.RepositorySettings(facts, fullName)
-	form := settingsForm{Repository: fullName, Pace: strconv.Itoa(settings.Pace), Limit: strconv.Itoa(settings.Limit)}
+	form := settingsForm{Repository: fullName, Pace: strconv.Itoa(settings.Pace), Limit: strconv.Itoa(settings.Limit), Merge: settings.Merge}
 	if err := settingsView(form).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the page", http.StatusInternalServerError)
 	}
@@ -39,6 +40,7 @@ func (s *server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		Repository: normalize(r.PathValue("owner") + "/" + r.PathValue("name")),
 		Pace:       strings.TrimSpace(r.FormValue("pace")),
 		Limit:      strings.TrimSpace(r.FormValue("limit")),
+		Merge:      r.FormValue("merge") != "",
 	}
 	facts := s.journal.Facts()
 	pace, paceOK := wholeNumber(form.Pace, domain.MaxPace)
@@ -55,8 +57,8 @@ func (s *server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		s.renderSettings(w, r, http.StatusUnprocessableEntity, form)
 		return
 	}
-	if !domain.RepositorySettings(facts, form.Repository).Same(pace, limit) {
-		s.journal.Append(contract.RepositorySettingsChanged{Repository: form.Repository, Pace: pace, Limit: limit, At: time.Now().UTC()})
+	if !domain.RepositorySettings(facts, form.Repository).Same(pace, limit, form.Merge) {
+		s.journal.Append(contract.RepositorySettingsChanged{Repository: form.Repository, Pace: pace, Limit: limit, Merge: form.Merge, At: time.Now().UTC()})
 	}
 	form.Pace, form.Limit, form.Saved = strconv.Itoa(pace), strconv.Itoa(limit), true
 	s.renderSettings(w, r, http.StatusOK, form)

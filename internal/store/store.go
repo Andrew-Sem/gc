@@ -29,6 +29,9 @@ var kinds = map[string]func([]byte) (contract.Fact, error){
 	"RepositorySettingsChanged": decode[contract.RepositorySettingsChanged],
 	"AdmissionApproved":         decode[contract.AdmissionApproved],
 	"AdmissionDeclined":         decode[contract.AdmissionDeclined],
+	"MergeApproved":             decode[contract.MergeApproved],
+	"MergeDeclined":             decode[contract.MergeDeclined],
+	"MergeFailed":               decode[contract.MergeFailed],
 	"AgentRunStarted":           decode[contract.AgentRunStarted],
 	"AgentRunFinished":          decode[contract.AgentRunFinished],
 }

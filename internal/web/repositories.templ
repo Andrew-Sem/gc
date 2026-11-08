@@ -3,6 +3,8 @@ package web
 import (
 	"fmt"
 
+	"github.com/Andrew-Sem/gc/internal/domain"
+
 	"github.com/Andrew-Sem/gc/ui"
 )
 
@@ -50,11 +52,19 @@ templ repositoryList(repositories []repositoryRow) {
 		for _, row := range repositories {
 			<li data-repository={ row.Name }>
 				{ row.Name }
-				{ fmt.Sprintf("every %d h, at most %d open", row.Settings.Pace, row.Settings.Limit) }
+				{ settingsSummary(row.Settings) }
 				<button hx-post={ runPath(row.Name) }>Run now</button>
 				<button hx-post={ disconnectPath(row.Name) }>Disconnect</button>
 				<a href={ templ.SafeURL(settingsPath(row.Name)) }>Settings</a>
 			</li>
 		}
 	</ul>
+}
+
+func settingsSummary(settings domain.Settings) string {
+	summary := fmt.Sprintf("every %d h, at most %d open", settings.Pace, settings.Limit)
+	if settings.Merge {
+		summary += ", merges green PRs"
+	}
+	return summary
 }
