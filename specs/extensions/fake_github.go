@@ -58,6 +58,7 @@ type fakeGitHub struct {
 	mergeStatus      int
 	mergeHangs       bool
 	merges           []mergeCall
+	reads            map[string]int
 }
 
 var fakeAppKey = sync.OnceValue(func() *rsa.PrivateKey {

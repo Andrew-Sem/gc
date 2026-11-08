@@ -87,7 +87,8 @@ of `MergeDeclined` with the repository and the PR's number:
 
 1. the PR is not a draft — "draft";
 2. the base branch has at least one required check — "no required checks";
-3. GitHub has computed the merge state, `mergeable` is not null — "GitHub is still checking";
+3. GitHub has computed the merge state, `mergeable` is not null, after the waiting of
+   MERGE-3.1.5 — "GitHub is still checking";
 4. `mergeable` is true — "conflicts";
 5. `mergeable_state` is not "blocked" — "required checks have not passed";
 6. `mergeable_state` is not "behind" — "behind the base branch";
@@ -99,6 +100,13 @@ branch".
 
 MERGE-3.1.4. If every condition holds, `MergeApproved` with the repository, the PR's number, and
 the head SHA of the read is written.
+
+MERGE-3.1.5. GitHub computes the merge state only after it is asked for the PR, and again after
+every change of the base branch, such as a merge in the same sweep. So when a read has `mergeable`
+null and the first two conditions hold, `gc` reads the PR again after 2, 4, 8, and 16 seconds,
+stopping at the first read with `mergeable` not null; that read decides. A read that differs from
+the known state is written as `PrStateChanged` (MERGE-2.2.2). A read that fails during the waiting
+counts as one with `mergeable` null.
 
 #### MERGE-3.2. Merging
 

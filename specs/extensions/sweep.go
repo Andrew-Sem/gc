@@ -33,6 +33,8 @@ type PullOnGitHub struct {
 	UpdatedAt      time.Time
 	Unreadable     bool
 	Incomplete     bool
+	// CheckingReads is how many reads answer with mergeable null before the PR's own values.
+	CheckingReads int
 }
 
 func OpenPullOnGitHub() PullOnGitHub {
@@ -120,6 +122,27 @@ func (s *Scenario) GitHubMerged(repository string, number int, sha string) func(
 	}
 }
 
+func (s *Scenario) GitHubReadPR(repository string, number, times int) func() spec.Problem {
+	return func() spec.Problem {
+		s.github.mu.Lock()
+		got := s.github.reads[repository+"#"+strconv.Itoa(number)]
+		s.github.mu.Unlock()
+		if got != times {
+			return githubRead{repository: repository, number: number, want: times, got: got}
+		}
+		return nil
+	}
+}
+
+type githubRead struct {
+	repository        string
+	number, want, got int
+}
+
+func (p githubRead) String() string {
+	return fmt.Sprintf("expected GitHub to be asked for %s#%d %d times, got %d", p.repository, p.number, p.want, p.got)
+}
+
 func (s *Scenario) GitHubMergedNothing() func() spec.Problem {
 	return func() spec.Problem {
 		if got := s.github.mergesSoFar(); len(got) != 0 {
@@ -169,6 +192,15 @@ func (g *fakeGitHub) servePullsAPI(w http.ResponseWriter, r *http.Request, fail 
 	case !known:
 		return false
 	case r.Method == http.MethodGet && len(parts) == 4:
+		g.mu.Lock()
+		if g.reads == nil {
+			g.reads = map[string]int{}
+		}
+		g.reads[key]++
+		if g.reads[key] <= pull.CheckingReads {
+			pull.Mergeable, pull.MergeableState = "null", "unknown"
+		}
+		g.mu.Unlock()
 		servePull(w, pull, number, fail)
 	case r.Method == http.MethodPut && len(parts) == 5 && parts[4] == "merge":
 		g.merge(w, r, repository, number, key, fail)

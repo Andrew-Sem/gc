@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/internal/github"
@@ -63,6 +64,12 @@ func readPull(ctx context.Context, client *github.Client, token string, tokenErr
 func mergePull(ctx context.Context, journal contract.Journal, client *github.Client, token string, snapshot contract.PrStateChanged, mergeableState string) {
 	repository, number := snapshot.Repository, snapshot.Number
 	required, err := client.RequiredChecks(ctx, repository, token, snapshot.Base)
+	if !snapshot.Draft && err == nil && required > 0 && snapshot.Mergeable == contract.MergeableUnknown {
+		snapshot, mergeableState = waitForMergeState(ctx, journal, client, token, snapshot, mergeableState)
+		if !snapshot.Open || ctx.Err() != nil {
+			return
+		}
+	}
 	reason, merge := domain.MergeVerdict(domain.MergeState{Draft: snapshot.Draft, RequiredChecks: required, Mergeable: snapshot.Mergeable, MergeableState: mergeableState})
 	if err != nil && !snapshot.Draft {
 		reason, merge = "GitHub did not give the base branch", false
@@ -82,6 +89,28 @@ func mergePull(ctx context.Context, journal contract.Journal, client *github.Cli
 	if _, after, read := readPull(ctx, client, token, nil, repository, number); read {
 		record(journal, after)
 	}
+}
+
+var checkingWaits = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second}
+
+func waitForMergeState(ctx context.Context, journal contract.Journal, client *github.Client, token string, snapshot contract.PrStateChanged, mergeableState string) (contract.PrStateChanged, string) {
+	for _, wait := range checkingWaits {
+		select {
+		case <-ctx.Done():
+			return snapshot, mergeableState
+		case <-time.After(wait):
+		}
+		pull, again, read := readPull(ctx, client, token, nil, snapshot.Repository, snapshot.Number)
+		if !read {
+			continue
+		}
+		record(journal, again)
+		snapshot, mergeableState = again, pull.MergeableState
+		if snapshot.Mergeable != contract.MergeableUnknown {
+			break
+		}
+	}
+	return snapshot, mergeableState
 }
 
 func mergeFailure(err error) string {

@@ -380,6 +380,54 @@ func TestMergePullRequests(t *testing.T) {
 		})
 	}
 
+	f.Run("a PR GitHub finishes checking while gc waits", func(s *extensions.Scenario) {
+		checking := with(func(p *extensions.PullOnGitHub) { p.CheckingReads = 2 })
+		unknown := with(func(p *extensions.PullOnGitHub) { p.Mergeable = "null" })
+		s.Covers("MERGE-3.1.2", "MERGE-3.1.5").
+			Given(connected, mergeOn, created).
+			GivenPullOnGitHub("acme/api", 7, checking).
+			WhenSwept().
+			Then("the third read, 6 seconds in, finds it mergeable, and it is merged").
+			ExpectFacts(
+				unknown.Snapshot("acme/api", 7),
+				open.Snapshot("acme/api", 7),
+				contract.MergeApproved{Repository: "acme/api", Number: 7, HeadSHA: "abc123"},
+				merged.Snapshot("acme/api", 7),
+			).
+			Expect(s.GitHubReadPR("acme/api", 7, 4)).
+			Expect(s.GitHubMerged("acme/api", 7, "abc123"))
+	})
+
+	f.Run("a PR GitHub is still checking after the waiting", func(s *extensions.Scenario) {
+		checking := with(func(p *extensions.PullOnGitHub) { p.CheckingReads = 100 })
+		unknown := with(func(p *extensions.PullOnGitHub) { p.Mergeable = "null" })
+		s.Covers("MERGE-3.1.2", "MERGE-3.1.5").
+			Given(connected, mergeOn, created).
+			GivenPullOnGitHub("acme/api", 7, checking).
+			WhenSwept().
+			Then("after five reads over 30 seconds the merge is declined").
+			ExpectFacts(
+				unknown.Snapshot("acme/api", 7),
+				contract.MergeDeclined{Repository: "acme/api", Number: 7, Reason: "GitHub is still checking"},
+			).
+			Expect(s.GitHubReadPR("acme/api", 7, 5)).
+			Expect(s.GitHubMergedNothing())
+	})
+
+	f.Run("a draft is not waited for", func(s *extensions.Scenario) {
+		draft := with(func(p *extensions.PullOnGitHub) { p.Draft = true; p.Mergeable = "null"; p.MergeableState = "unknown" })
+		s.Covers("MERGE-3.1.5").
+			Given(connected, mergeOn, created).
+			GivenPullOnGitHub("acme/api", 7, draft).
+			WhenSwept().
+			Then("one read, and the draft is declined").
+			ExpectFacts(
+				draft.Snapshot("acme/api", 7),
+				contract.MergeDeclined{Repository: "acme/api", Number: 7, Reason: "draft"},
+			).
+			Expect(s.GitHubReadPR("acme/api", 7, 1))
+	})
+
 	f.Run("the first failing condition gives the reason", func(s *extensions.Scenario) {
 		pull := with(func(p *extensions.PullOnGitHub) { p.Draft = true; p.Mergeable = "false"; p.MergeableState = "dirty" })
 		s.Covers("MERGE-3.1.2").

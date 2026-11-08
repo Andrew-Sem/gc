@@ -455,9 +455,11 @@ type fakeProxy struct {
 func newFakeProxy() *fakeProxy {
 	p := &fakeProxy{}
 	p.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p.mu.Lock()
-		p.asked = append(p.asked, r.Host)
-		p.mu.Unlock()
+		if r.Method == http.MethodConnect {
+			p.mu.Lock()
+			p.asked = append(p.asked, r.Host)
+			p.mu.Unlock()
+		}
 		http.Error(w, "the spec proxy forwards nothing", http.StatusForbidden)
 	}))
 	return p
