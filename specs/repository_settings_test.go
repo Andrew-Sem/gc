@@ -136,7 +136,7 @@ func TestRepositorySettings(t *testing.T) {
 			ExpectFacts()
 	})
 
-	for _, pace := range []string{"0", "169", "1.5", "two", "", "-1"} {
+	for _, pace := range []string{"169", "1.5", "two", "", "-1"} {
 		f.Run("reject the pace "+quoted(pace), func(s *extensions.Scenario) {
 			s.Covers("SET-1.3.1", "SET-1.3.4").
 				Given(connected).
@@ -145,7 +145,7 @@ func TestRepositorySettings(t *testing.T) {
 				ExpectStatus(http.StatusUnprocessableEntity).
 				ExpectFacts().
 				ExpectElement(settingsPanel).
-				ExpectText(`#settings-panel [role="alert"]`, "Pace must be a whole number of hours from 1 to 168").
+				ExpectText(`#settings-panel [role="alert"]`, "Pace must be a whole number of hours from 0 to 168").
 				ExpectElement(`#settings-panel input[name="pace"][value="` + pace + `"]`).
 				ExpectElement(`#settings-panel input[name="limit"][value="12"]`).
 				ExpectNoElement(`#settings-panel [role="status"]`)
@@ -286,6 +286,50 @@ func TestRepositorySettings(t *testing.T) {
 			WhenWokenUp().
 			Then("the saved maximum still applies").
 			ExpectFacts(contract.AdmissionDeclined{Repository: "acme/api", Open: 2, Limit: 2})
+	})
+
+	f.Run("save a pace of 0", func(s *extensions.Scenario) {
+		s.Covers("SET-1.2.1", "SET-1.3.1").
+			Given(connected).
+			When(save("0", "12")).
+			Then("the pace of 0 is saved").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(saved(0, 12, "2000-01-01 00:00")).
+			ExpectElement(`#settings-panel input[name="pace"][value="0"]`).
+			ExpectText(`#settings-panel [role="status"]`, "Saved")
+	})
+
+	f.Run("a pace of 0 gets no decision at a wake-up", func(s *extensions.Scenario) {
+		s.Covers("SET-2.1.5").
+			Given(connected, saved(0, 12, "2000-01-01 14:37")).
+			WhenRunning("14:59", 25*time.Hour+2*time.Minute).
+			Then("no wake-up in a day decides").
+			ExpectFacts()
+	})
+
+	f.Run("a pace of 0 still decides on a run request", func(s *extensions.Scenario) {
+		s.Covers("SET-2.1.5").
+			Given(connected, saved(0, 12, "2000-01-01 14:00")).
+			GivenRunRequestedAt("acme/api", "16:30").
+			WhenRunning("15:59", 2*time.Hour+2*time.Minute).
+			Then("16:30 decides on request, and no wake-up does").
+			ExpectFacts(
+				contract.RunRequested{Repository: "acme/api"},
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("16:30")},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("16:30")},
+			)
+	})
+
+	f.Run("the list shows a pace of 0", func(s *extensions.Scenario) {
+		s.Covers("SET-2.3.3").
+			Given(connected, contract.RepositoryConnected{FullName: "acme/web"}, saved(0, 3, "1999-12-31 10:00")).
+			When(spec.Get("/repositories")).
+			Then("acme/api runs only on request, acme/web every hour").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(`#repositories li[data-repository="acme/api"]`, "acme/api only on Run now, at most 3 open Run now Sweep now Disconnect Settings").
+			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Sweep now Disconnect Settings")
 	})
 
 	f.Run("the list shows each repository's settings", func(s *extensions.Scenario) {

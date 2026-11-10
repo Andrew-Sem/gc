@@ -43,13 +43,13 @@ func (s *server) saveSettings(w http.ResponseWriter, r *http.Request) {
 		Merge:      r.FormValue("merge") != "",
 	}
 	facts := s.journal.Facts()
-	pace, paceOK := wholeNumber(form.Pace, domain.MaxPace)
-	limit, limitOK := wholeNumber(form.Limit, domain.MaxLimit)
+	pace, paceOK := wholeNumber(form.Pace, 0, domain.MaxPace)
+	limit, limitOK := wholeNumber(form.Limit, 1, domain.MaxLimit)
 	switch {
 	case !domain.IsConnected(facts, form.Repository):
 		form.Problem = "This repository is not connected"
 	case !paceOK:
-		form.Problem = "Pace must be a whole number of hours from 1 to 168"
+		form.Problem = "Pace must be a whole number of hours from 0 to 168"
 	case !limitOK:
 		form.Problem = "Maximum open must be a whole number from 1 to 100"
 	}
@@ -64,9 +64,9 @@ func (s *server) saveSettings(w http.ResponseWriter, r *http.Request) {
 	s.renderSettings(w, r, http.StatusOK, form)
 }
 
-func wholeNumber(text string, max int) (int, bool) {
+func wholeNumber(text string, min, max int) (int, bool) {
 	n, err := strconv.Atoi(text)
-	return n, err == nil && n >= 1 && n <= max
+	return n, err == nil && n >= min && n <= max
 }
 
 func (s *server) renderSettings(w http.ResponseWriter, r *http.Request, status int, form settingsForm) {

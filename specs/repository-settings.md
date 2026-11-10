@@ -11,7 +11,8 @@ without restarting `gc`, and the hourly decision follows it from the next wake-u
 ## Glossary
 
 **Pace** — how often a repository gets a decision at a wake-up, as a whole number of hours. By
-default 1: every wake-up.
+default 1: every wake-up. A pace of 0 means never: the repository gets a decision only when the
+operator presses "Run now".
 
 **Maximum open** — the limit of the [open pull requests contract](open-pull-requests.md) for one
 repository. By default 12.
@@ -24,7 +25,8 @@ repository has the defaults.
 A repository whose settings were never saved has none.
 
 **Due** — a repository is due at a wake-up if it has no interval start, or if the whole hours from
-its interval start to the wake-up are a multiple of its pace.
+its interval start to the wake-up are a multiple of its pace. A repository with a pace of 0 is
+never due.
 
 **Settings page** — `/repositories/<owner>/<name>/settings`: the settings form of one repository
 in `#settings-panel`. The form submits through htmx; the response is the updated
@@ -67,8 +69,8 @@ SET-1.2.5. A save from another site is refused like a connect request (REPO-5.1)
 
 #### SET-1.3. Invalid values
 
-SET-1.3.1. A pace that is not a whole number from 1 to 168 writes no fact, and the block shows
-the error "Pace must be a whole number of hours from 1 to 168" (response 422).
+SET-1.3.1. A pace that is not a whole number from 0 to 168 writes no fact, and the block shows
+the error "Pace must be a whole number of hours from 0 to 168" (response 422).
 
 SET-1.3.2. A maximum open that is not a whole number from 1 to 100 writes no fact, and the block
 shows the error "Maximum open must be a whole number from 1 to 100" (response 422).
@@ -96,6 +98,9 @@ SET-2.1.3. A run request (OPEN-3.2.1) makes a decision whether the repository is
 SET-2.1.4. A run request does not move the interval: the repository is due at the same wake-ups
 as without it.
 
+SET-2.1.5. A repository with a pace of 0 gets no decision at any wake-up; a run request still
+makes one (SET-2.1.3).
+
 #### SET-2.2. Maximum open
 
 SET-2.2.1. Decisions compare the open PRs with the repository's maximum open, and
@@ -111,3 +116,5 @@ connected again.
 
 SET-2.3.2. The repositories list shows each repository's settings after its name, as
 "every <pace> h, at most <maximum> open".
+
+SET-2.3.3. With a pace of 0, the list shows "only on Run now, at most <maximum> open" instead.

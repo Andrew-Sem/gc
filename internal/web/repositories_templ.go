@@ -332,6 +332,9 @@ func repositoryList(repositories []repositoryRow) templ.Component {
 
 func settingsSummary(settings domain.Settings) string {
 	summary := fmt.Sprintf("every %d h, at most %d open", settings.Pace, settings.Limit)
+	if settings.Pace == 0 {
+		summary = fmt.Sprintf("only on Run now, at most %d open", settings.Limit)
+	}
 	if settings.Merge {
 		summary += ", merges green PRs"
 	}

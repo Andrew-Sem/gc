@@ -35,6 +35,9 @@ func (s Settings) Same(pace, limit int, merge bool) bool {
 }
 
 func (s Settings) Due(wakeUp time.Time) bool {
+	if s.Pace == 0 {
+		return false
+	}
 	if s.saved.IsZero() {
 		return true
 	}
