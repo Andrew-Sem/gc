@@ -167,6 +167,26 @@ func TestLaunch(t *testing.T) {
 			ExpectStatus(http.StatusOK)
 	})
 
+	for _, value := range []string{"proxy.example/v1", "http://user:secret@proxy.example", "http://proxy.example/v1?"} {
+		f.RunLaunch("start with the OpenAI Base URL "+quoted(value), func(s *extensions.Launch) {
+			s.GivenEnv("OPENAI_BASE_URL", value).
+				Covers("RUN-1.8.1").
+				WhenStarted().
+				Then("gc refuses to start").
+				ExpectExit().
+				ExpectOutput("OPENAI_BASE_URL is not an absolute http or https URL without credentials, query, or fragment")
+		})
+	}
+
+	f.RunLaunch("start with a valid OpenAI Base URL", func(s *extensions.Launch) {
+		s.GivenEnv("OPENAI_BASE_URL", " HTTP://127.0.0.1:8317/v1/ ").
+			Covers("RUN-1.8.2").
+			When(spec.Get("/settings")).
+			Then("its normalized form is the default on the settings page").
+			ExpectStatus(http.StatusOK).
+			ExpectElement(`input[name="openai_base_url"][value="http://127.0.0.1:8317/v1"]`)
+	})
+
 	f.RunLaunch("start without a webhook secret", func(s *extensions.Launch) {
 		s.GivenUnset("GC_WEBHOOK_SECRET").
 			Covers("RUN-1.4.1").

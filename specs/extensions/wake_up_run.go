@@ -41,7 +41,7 @@ type reasonAgent struct {
 	err    error
 }
 
-func (a reasonAgent) Work(context.Context, string) (contract.AgentResult, error) {
+func (a reasonAgent) Work(context.Context, contract.AgentTask) (contract.AgentResult, error) {
 	return contract.AgentResult{Change: a.change}, a.err
 }
 

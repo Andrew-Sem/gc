@@ -27,12 +27,14 @@ func TestAdminAccess(t *testing.T) {
 		{"the pull requests page", spec.Get("/pulls")},
 		{"the pull requests panel", spec.Get("/pulls/panel")},
 		{"the settings page", spec.Get("/repositories/acme/api/settings")},
+		{"the instance settings page", spec.Get("/settings")},
 		{"a static file", spec.Get(ui.HTMXPath)},
 		{"a connect", spec.Post("/repositories").WithForm("repo", "acme/web")},
 		{"a disconnect", spec.Post("/repositories/acme/api/disconnect")},
 		{"a run request", spec.Post("/repositories/acme/api/run")},
 		{"a sweep request", spec.Post("/repositories/acme/api/sweep")},
 		{"a settings save", spec.Post("/repositories/acme/api/settings").WithForm("pace", "1").WithForm("limit", "100").WithForm("merge", "on")},
+		{"an instance settings save", spec.Post("/settings").WithForm("openai_base_url", "http://evil.example")},
 	}
 
 	for _, tt := range adminRequests {

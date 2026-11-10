@@ -129,7 +129,8 @@ type Codex struct {
 	tokens *[]string
 }
 
-func (c Codex) Work(ctx context.Context, repository string) (contract.AgentResult, error) {
+func (c Codex) Work(ctx context.Context, task contract.AgentTask) (contract.AgentResult, error) {
+	repository := task.Repository
 	c.tokens = &[]string{}
 	client := github.New(c.GitHub)
 	token, err := client.Token(ctx, repository)
@@ -193,7 +194,7 @@ func (c Codex) Work(ctx context.Context, repository string) (contract.AgentResul
 		return contract.AgentResult{}, err
 	}
 
-	tokens, err := c.runCodex(ctx, workingCopy, home, temporary, schema, answerFile, prompt(open))
+	tokens, err := c.runCodex(ctx, task.OpenAIBaseURL, workingCopy, home, temporary, schema, answerFile, prompt(open))
 	if err != nil {
 		return contract.AgentResult{Tokens: tokens}, err
 	}
@@ -267,7 +268,7 @@ func prompt(open []github.OpenPR) string {
 	return text.String()
 }
 
-func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schema, answerFile, prompt string) (contract.TokenUsage, error) {
+func (c Codex) runCodex(ctx context.Context, baseURL, workingCopy, home, temporary, schema, answerFile, prompt string) (contract.TokenUsage, error) {
 	args := []string{
 		"exec", "--ephemeral", "--json",
 		"--sandbox", "workspace-write",
@@ -276,7 +277,7 @@ func (c Codex) runCodex(ctx context.Context, workingCopy, home, temporary, schem
 		"-c", "sandbox_workspace_write.exclude_slash_tmp=true",
 		"-c", fmt.Sprintf("sandbox_workspace_write.writable_roots=[%q]", temporary),
 	}
-	if baseURL := c.env("OPENAI_BASE_URL"); baseURL != "" {
+	if baseURL != "" {
 		args = append(args, "-c", fmt.Sprintf("openai_base_url=%q", baseURL))
 	}
 	args = append(args, "--output-schema", schema, "--output-last-message", answerFile, prompt)

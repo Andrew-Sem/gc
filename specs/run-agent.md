@@ -64,9 +64,10 @@ the `workspace-write` sandbox.
 AGENT-2.1.2. Network access is on inside the sandbox, so the agent can install dependencies and
 run tests.
 
-AGENT-2.1.3. If `OPENAI_BASE_URL` is set, `gc` tells Codex to use it as `openai_base_url`, so a
-local proxy can stand in for OpenAI. Without it, `gc` says nothing about the address and Codex
-uses OpenAI.
+AGENT-2.1.3. If the run's task has an OpenAI Base URL (INSTANCE-2.1 of the
+[instance settings contract](instance-settings.md)), `gc` tells Codex to use it as
+`openai_base_url`, so a local proxy can stand in for OpenAI. With an empty one, `gc` says nothing
+about the address and Codex uses OpenAI, even if `OPENAI_BASE_URL` is set in `gc`'s environment.
 
 AGENT-2.1.4. Codex gets an empty standard input, so it does not wait for one.
 

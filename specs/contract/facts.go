@@ -85,7 +85,13 @@ type RunRequested struct {
 }
 
 type AdmissionApproved struct {
-	Repository string
+	Repository    string
+	OpenAIBaseURL string
+}
+
+type SettingsChanged struct {
+	OpenAIBaseURL string
+	At            time.Time
 }
 
 type AdmissionDeclined struct {
@@ -155,3 +161,4 @@ func (MergeFailed) fact()               {}
 func (SweepRequested) fact()            {}
 func (CheckRunStateChanged) fact()      {}
 func (RequiredChecksObserved) fact()    {}
+func (SettingsChanged) fact()           {}

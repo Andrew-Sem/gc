@@ -14,6 +14,7 @@ import (
 type fakeAgent struct {
 	mu          sync.Mutex
 	asked       []string
+	tasks       []contract.AgentTask
 	change      *contract.AgentChange
 	explanation string
 	tokens      contract.TokenUsage
@@ -22,9 +23,10 @@ type fakeAgent struct {
 	worksFor    time.Duration
 }
 
-func (a *fakeAgent) Work(ctx context.Context, repository string) (contract.AgentResult, error) {
+func (a *fakeAgent) Work(ctx context.Context, task contract.AgentTask) (contract.AgentResult, error) {
 	a.mu.Lock()
-	a.asked = append(a.asked, repository)
+	a.asked = append(a.asked, task.Repository)
+	a.tasks = append(a.tasks, task)
 	a.mu.Unlock()
 	if a.hangs {
 		<-ctx.Done()
@@ -53,4 +55,18 @@ type agentAsked struct {
 
 func (p agentAsked) String() string {
 	return fmt.Sprintf("expected the agent to work on %v, got %v", p.want, p.got)
+}
+
+func (a *fakeAgent) tasksSoFar() []contract.AgentTask {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.Clone(a.tasks)
+}
+
+type agentTasks struct {
+	want, got []contract.AgentTask
+}
+
+func (p agentTasks) String() string {
+	return fmt.Sprintf("expected the agent to get the tasks %+v, got %+v", p.want, p.got)
 }

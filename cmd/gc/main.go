@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/Andrew-Sem/gc/internal/agent"
+	"github.com/Andrew-Sem/gc/internal/domain"
 	"github.com/Andrew-Sem/gc/internal/store"
 	"github.com/Andrew-Sem/gc/internal/web"
 	"github.com/Andrew-Sem/gc/specs/contract"
@@ -48,6 +49,10 @@ func main() {
 	if os.Getenv("OPENAI_API_KEY") == "" {
 		fail("OPENAI_API_KEY is not set")
 	}
+	baseURL, valid := domain.NormalizeBaseURL(os.Getenv("OPENAI_BASE_URL"))
+	if !valid {
+		fail("OPENAI_BASE_URL is not an absolute http or https URL without credentials, query, or fragment")
+	}
 	addr := os.Getenv("GC_ADDR")
 	if addr == "" {
 		fail("GC_ADDR is not set")
@@ -80,6 +85,7 @@ func main() {
 		GitHub:        github,
 		WebhookSecret: webhookSecret,
 		Admin:         contract.Credentials{User: adminUser, Password: adminPassword},
+		OpenAIBaseURL: baseURL,
 		Agent:         agent.Codex{Binary: "codex", Environ: os.Environ(), GitHub: github},
 	}
 	log.Printf("admin: http://%s/repositories", addr)

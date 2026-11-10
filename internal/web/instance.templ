@@ -1,0 +1,27 @@
+package web
+
+import "github.com/Andrew-Sem/gc/ui"
+
+templ instanceView(form instanceForm) {
+	<!DOCTYPE html>
+	@ui.Head()
+	<title>Settings</title>
+	<h1>Settings</h1>
+	<a href="/repositories">Repositories</a>
+	@instancePanel(form)
+}
+
+templ instancePanel(form instanceForm) {
+	<section id="instance-settings-panel" hx-target="#instance-settings-panel" hx-swap="outerHTML">
+		<form hx-post="/settings">
+			<label>OpenAI Base URL <input name="openai_base_url" value={ form.BaseURL } placeholder="empty for OpenAI's own endpoint"/></label>
+			<button>Save</button>
+		</form>
+		if form.Problem != "" {
+			<p role="alert">{ form.Problem }</p>
+		}
+		if form.Saved {
+			<p role="status">Saved</p>
+		}
+	</section>
+}

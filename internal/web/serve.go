@@ -100,8 +100,8 @@ func wakeUpAt(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGr
 }
 
 func decide(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, planned time.Time) {
-	for _, repository := range domain.WakeUp(deps.Journal, planned) {
-		start(ctx, deps, runs, repository)
+	for _, approval := range domain.WakeUp(deps.Journal, planned, deps.OpenAIBaseURL) {
+		start(ctx, deps, runs, approval)
 	}
 }
 
@@ -131,8 +131,8 @@ func runOnRequest(ctx context.Context, deps contract.Dependencies, runs *sync.Wa
 func runNow(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, turn turn, repository string) {
 	turn.take()
 	defer turn.give()
-	if domain.Admit(deps.Journal, repository) {
-		start(ctx, deps, runs, repository)
+	if approval, ok := domain.Admit(deps.Journal, repository, deps.OpenAIBaseURL); ok {
+		start(ctx, deps, runs, approval)
 	}
 }
 
@@ -144,16 +144,18 @@ func sweepNow(ctx context.Context, deps contract.Dependencies, turn turn, reposi
 	}
 }
 
-func start(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, repository string) {
+func start(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, approval contract.AdmissionApproved) {
 	number := domain.NextRunNumber(deps.Journal.Facts())
-	deps.Journal.Append(contract.AgentRunStarted{Run: number, Repository: repository, At: time.Now().UTC()})
-	runs.Go(func() { run(ctx, deps, number, repository) })
+	deps.Journal.Append(contract.AgentRunStarted{Run: number, Repository: approval.Repository, At: time.Now().UTC()})
+	task := contract.AgentTask{Repository: approval.Repository, OpenAIBaseURL: approval.OpenAIBaseURL}
+	runs.Go(func() { run(ctx, deps, number, task) })
 }
 
-func run(ctx context.Context, deps contract.Dependencies, number int, repository string) {
+func run(ctx context.Context, deps contract.Dependencies, number int, task contract.AgentTask) {
+	repository := task.Repository
 	limited, cancel := context.WithTimeout(ctx, runLimit)
 	defer cancel()
-	result, err := deps.Agent.Work(limited, repository)
+	result, err := deps.Agent.Work(limited, task)
 	finished := contract.AgentRunFinished{Run: number, Repository: repository, Tokens: result.Tokens}
 	switch {
 	case ctx.Err() != nil:

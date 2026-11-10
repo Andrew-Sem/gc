@@ -378,7 +378,7 @@ func TestRunAgent(t *testing.T) {
 
 	f.RunAgent("use a local proxy instead of OpenAI", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.1.3").
-			GivenEnv("OPENAI_BASE_URL", "http://127.0.0.1:8317/v1").
+			GivenTaskBaseURL("http://127.0.0.1:8317/v1").
 			GivenRepositoryWithCommits(1).
 			WhenAgentRuns().
 			Then("the agent is told the address").
@@ -387,10 +387,10 @@ func TestRunAgent(t *testing.T) {
 
 	f.RunAgent("use OpenAI without a base URL", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.1.3").
-			GivenUnset("OPENAI_BASE_URL").
+			GivenEnv("OPENAI_BASE_URL", "http://127.0.0.1:8317/v1").
 			GivenRepositoryWithCommits(1).
 			WhenAgentRuns().
-			Then("the agent is told no address").
+			Then("the agent is told no address, whatever gc's environment says").
 			ExpectAgentArgsWithout("openai_base_url")
 	})
 

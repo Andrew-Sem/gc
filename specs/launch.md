@@ -82,3 +82,11 @@ prints "GC_ADMIN_PASSWORD is not set".
 RUN-1.7.3. A running `gc` refuses an admin request without the operator's credentials (ACCESS-1.1
 of the [admin access contract](admin-access.md)) and handles one with them.
 
+#### RUN-1.8. OpenAI Base URL
+
+RUN-1.8.1. A set `OPENAI_BASE_URL` that is not a valid URL (see the
+[instance settings contract](instance-settings.md)) stops `gc` from starting: it exits with a
+non-zero status and prints "OPENAI_BASE_URL is not an absolute http or https URL without
+credentials, query, or fragment".
+
+RUN-1.8.2. A valid `OPENAI_BASE_URL` becomes, normalized, the default of the OpenAI Base URL.

@@ -15,6 +15,7 @@ templ repositoriesView(repositories []repositoryRow) {
 	<h1>Repositories</h1>
 	<a href="/runs">Runs</a>
 	<a href="/pulls">Pull requests</a>
+	<a href="/settings">Instance settings</a>
 	@repositoriesPanel(repositories, panelState{})
 }
 

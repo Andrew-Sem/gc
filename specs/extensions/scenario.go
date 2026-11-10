@@ -21,11 +21,13 @@ type Scenario struct {
 
 	requests []timedRequest
 	admin    contract.Credentials
+	baseURL  string
 }
 
 type timedRequest struct {
 	repository, clock string
 	sweep             bool
+	fact              contract.Fact
 }
 
 func At(moment string) time.Time {
@@ -53,6 +55,25 @@ func (s *Scenario) Given(facts ...contract.Fact) *Scenario {
 func (s *Scenario) GivenRequest(r spec.Request) *Scenario {
 	s.Scenario.GivenRequest(r)
 	return s
+}
+
+func (s *Scenario) GivenDefaultBaseURL(url string) *Scenario {
+	s.baseURL = url
+	return s
+}
+
+func (s *Scenario) GivenFactWrittenAt(clock string, fact contract.Fact) *Scenario {
+	s.requests = append(s.requests, timedRequest{clock: clock, fact: fact})
+	return s
+}
+
+func (s *Scenario) AgentGotTasks(tasks ...contract.AgentTask) func() spec.Problem {
+	return func() spec.Problem {
+		if got := s.agent.tasksSoFar(); !slices.Equal(got, tasks) {
+			return agentTasks{want: tasks, got: got}
+		}
+		return nil
+	}
 }
 
 func (s *Scenario) GivenNoAdminLogin() *Scenario {

@@ -37,7 +37,7 @@ func (f *Feature) Run(name string, describe func(*Scenario)) {
 }
 
 func (s *Scenario) WhenWokenUp() *Scenario {
-	s.WhenAction(func(j *journal.Journal[contract.Fact]) { domain.WakeUp(j, time.Now()) })
+	s.WhenAction(func(j *journal.Journal[contract.Fact]) { domain.WakeUp(j, time.Now(), s.baseURL) })
 	return s
 }
 
@@ -66,6 +66,9 @@ func (s *Scenario) WhenRunning(start string, runFor time.Duration) *Scenario {
 			var request contract.Fact = contract.RunRequested{Repository: r.repository}
 			if r.sweep {
 				request = contract.SweepRequested{Repository: r.repository}
+			}
+			if r.fact != nil {
+				request = r.fact
 			}
 			time.AfterFunc(untilClock(r.clock), func() { j.Append(request) })
 		}
@@ -131,5 +134,6 @@ func (s *Scenario) dependencies(j *journal.Journal[contract.Fact]) contract.Depe
 		Agent:         s.agent,
 		WebhookSecret: fakeWebhookSecret,
 		Admin:         s.admin,
+		OpenAIBaseURL: s.baseURL,
 	}
 }

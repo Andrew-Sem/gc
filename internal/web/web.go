@@ -34,15 +34,16 @@ const (
 )
 
 type server struct {
-	journal       contract.Journal
-	github        *github.Client
-	webhookSecret string
-	webhooks      sync.Mutex
-	deliveries    map[string]bool
+	journal        contract.Journal
+	github         *github.Client
+	webhookSecret  string
+	defaultBaseURL string
+	webhooks       sync.Mutex
+	deliveries     map[string]bool
 }
 
 func New(deps contract.Dependencies) http.Handler {
-	s := &server{journal: deps.Journal, github: github.New(deps.GitHub), webhookSecret: deps.WebhookSecret, deliveries: map[string]bool{}}
+	s := &server{journal: deps.Journal, github: github.New(deps.GitHub), webhookSecret: deps.WebhookSecret, defaultBaseURL: deps.OpenAIBaseURL, deliveries: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
@@ -53,6 +54,8 @@ func New(deps contract.Dependencies) http.Handler {
 	mux.Handle("POST /repositories/{owner}/{name}/sweep", sameSite.Handler(http.HandlerFunc(s.requestSweep)))
 	mux.HandleFunc("GET /repositories/{owner}/{name}/settings", s.settingsPage)
 	mux.Handle("POST /repositories/{owner}/{name}/settings", sameSite.Handler(http.HandlerFunc(s.saveSettings)))
+	mux.HandleFunc("GET /settings", s.instancePage)
+	mux.Handle("POST /settings", sameSite.Handler(http.HandlerFunc(s.saveInstanceSettings)))
 	mux.HandleFunc("GET /runs", s.runsPage)
 	mux.HandleFunc("GET /pulls", s.pullsPage)
 	mux.HandleFunc("GET /pulls/panel", s.pullsPanel)

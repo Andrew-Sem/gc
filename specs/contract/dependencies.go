@@ -38,8 +38,13 @@ type AgentResult struct {
 	Tokens      TokenUsage
 }
 
+type AgentTask struct {
+	Repository    string
+	OpenAIBaseURL string
+}
+
 type Agent interface {
-	Work(ctx context.Context, repository string) (AgentResult, error)
+	Work(ctx context.Context, task AgentTask) (AgentResult, error)
 }
 
 type Credentials struct {
@@ -53,4 +58,5 @@ type Dependencies struct {
 	Agent         Agent
 	WebhookSecret string
 	Admin         Credentials
+	OpenAIBaseURL string
 }

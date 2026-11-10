@@ -6,14 +6,14 @@ import (
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
 
-func WakeUp(journal contract.Journal, now time.Time) []string {
-	var approved []string
+func WakeUp(journal contract.Journal, now time.Time, defaultBaseURL string) []contract.AdmissionApproved {
+	var approved []contract.AdmissionApproved
 	for _, repository := range ConnectedRepositories(journal.Facts()) {
 		if !RepositorySettings(journal.Facts(), repository).Due(now) {
 			continue
 		}
-		if Admit(journal, repository) {
-			approved = append(approved, repository)
+		if approval, ok := Admit(journal, repository, defaultBaseURL); ok {
+			approved = append(approved, approval)
 		}
 	}
 	return approved
@@ -24,13 +24,15 @@ func HasRoom(facts []contract.Fact, repository string) (open, limit int, room bo
 	return open, limit, open < limit
 }
 
-func Admit(journal contract.Journal, repository string) bool {
-	if open, limit, room := HasRoom(journal.Facts(), repository); !room {
+func Admit(journal contract.Journal, repository, defaultBaseURL string) (contract.AdmissionApproved, bool) {
+	facts := journal.Facts()
+	if open, limit, room := HasRoom(facts, repository); !room {
 		journal.Append(contract.AdmissionDeclined{Repository: repository, Open: open, Limit: limit})
-		return false
+		return contract.AdmissionApproved{}, false
 	}
-	journal.Append(contract.AdmissionApproved{Repository: repository})
-	return true
+	approval := contract.AdmissionApproved{Repository: repository, OpenAIBaseURL: OpenAIBaseURL(facts, defaultBaseURL)}
+	journal.Append(approval)
+	return approval, true
 }
 
 func openPRs(facts []contract.Fact, repository string) int {

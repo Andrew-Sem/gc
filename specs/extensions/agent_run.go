@@ -97,6 +97,7 @@ type AgentRun struct {
 	change      *contract.AgentChange
 	explanation string
 	tokens      contract.TokenUsage
+	baseURL     string
 	err         error
 }
 
@@ -125,6 +126,11 @@ func (a *AgentRun) Covered() []string {
 
 func (a *AgentRun) GivenEnv(name, value string) *AgentRun {
 	a.env[name] = value
+	return a
+}
+
+func (a *AgentRun) GivenTaskBaseURL(url string) *AgentRun {
+	a.baseURL = url
 	return a
 }
 
@@ -907,7 +913,7 @@ func (a *AgentRun) work(codex agent.Codex) []spec.Problem {
 			}
 		}()
 		var result contract.AgentResult
-		result, a.err = codex.Work(ctx, agentRepository)
+		result, a.err = codex.Work(ctx, contract.AgentTask{Repository: agentRepository, OpenAIBaseURL: a.baseURL})
 		a.change, a.explanation, a.tokens = result.Change, result.Explanation, result.Tokens
 	}()
 	if a.stopAfter != 0 {
