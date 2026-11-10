@@ -39,6 +39,35 @@ type PrStateChanged struct {
 	UpdatedAt  time.Time
 }
 
+type CheckRun struct {
+	ID          int64
+	Name        string
+	AppID       int64
+	HeadSHA     string
+	Status      string
+	Conclusion  string
+	StartedAt   time.Time
+	CompletedAt time.Time
+}
+
+type CheckRunStateChanged struct {
+	Repository string
+	Number     int
+	CheckRun   CheckRun
+}
+
+type RequiredCheck struct {
+	Name  string
+	AppID int64
+}
+
+type RequiredChecksObserved struct {
+	Repository string
+	Number     int
+	HeadSHA    string
+	Required   []RequiredCheck
+}
+
 type RepositorySettingsChanged struct {
 	Repository string
 	Pace       int
@@ -124,3 +153,5 @@ func (MergeApproved) fact()             {}
 func (MergeDeclined) fact()             {}
 func (MergeFailed) fact()               {}
 func (SweepRequested) fact()            {}
+func (CheckRunStateChanged) fact()      {}
+func (RequiredChecksObserved) fact()    {}

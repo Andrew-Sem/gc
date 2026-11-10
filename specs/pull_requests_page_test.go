@@ -144,6 +144,104 @@ func TestPullRequestsPage(t *testing.T) {
 			ExpectNoElement(pullCell("acme/api#7", "reason") + " b")
 	})
 
+	head := extensions.OpenPullOnGitHub().Snapshot("acme/api", 7)
+	required := func(names ...string) contract.RequiredChecksObserved {
+		observed := contract.RequiredChecksObserved{Repository: "acme/api", Number: 7, HeadSHA: "abc123", Required: []contract.RequiredCheck{}}
+		for _, name := range names {
+			observed.Required = append(observed.Required, contract.RequiredCheck{Name: name})
+		}
+		return observed
+	}
+	attempt := func(id int64, name, status, conclusion, started string) contract.CheckRunStateChanged {
+		return contract.CheckRunStateChanged{Repository: "acme/api", Number: 7, CheckRun: contract.CheckRun{
+			ID: id, Name: name, AppID: 15368, HeadSHA: "abc123", Status: status, Conclusion: conclusion, StartedAt: extensions.At("1999-12-31 " + started),
+		}}
+	}
+	otherHead := head
+	otherHead.HeadSHA, otherHead.UpdatedAt = "def456", extensions.At("1999-12-31 12:00")
+	appRequired := required()
+	appRequired.Required = []contract.RequiredCheck{{Name: "test", AppID: 15368}}
+	otherApp := attempt(9, "test", "completed", "success", "10:00")
+	otherApp.CheckRun.AppID = 999
+	oldHead := attempt(9, "test", "completed", "success", "10:00")
+	oldHead.CheckRun.HeadSHA = "def456"
+
+	for _, tt := range []struct {
+		name   string
+		clause string
+		facts  []contract.Fact
+		checks string
+	}{
+		{"a PR without a known head", "PULLS-1.4.2", []contract.Fact{required("test")}, "unknown"},
+		{"a PR without an observation", "PULLS-1.4.2", []contract.Fact{head, attempt(9, "test", "completed", "success", "10:00")}, "unknown"},
+		{"a PR whose head moved after the observation", "PULLS-1.4.2", []contract.Fact{head, required("test"), otherHead}, "unknown"},
+		{"a PR whose base requires no checks", "PULLS-1.4.4", []contract.Fact{head, required()}, "no required checks"},
+		{"a PR whose required check passed", "PULLS-1.4.7", []contract.Fact{head, attempt(9, "test", "completed", "success", "10:00"), required("test")}, "passed"},
+		{"neutral and skipped pass too", "PULLS-1.4.7", []contract.Fact{head, attempt(9, "test", "completed", "neutral", "10:00"), attempt(10, "lint", "completed", "skipped", "10:00"), required("test", "lint")}, "passed"},
+		{"a PR whose required check failed", "PULLS-1.4.5", []contract.Fact{head, attempt(9, "test", "completed", "failure", "10:00"), required("test")}, "failed: test"},
+		{"a failure comes before a wait", "PULLS-1.4.5", []contract.Fact{head, attempt(9, "test", "completed", "timed_out", "10:00"), attempt(10, "lint", "in_progress", "", "10:00"), required("lint", "test")}, "failed: test"},
+		{"a required check without an attempt", "PULLS-1.4.6", []contract.Fact{head, required("test")}, "pending: test"},
+		{"a required check still running", "PULLS-1.4.6", []contract.Fact{head, attempt(9, "test", "in_progress", "", "10:00"), required("test")}, "pending: test"},
+		{"names follow the observation", "PULLS-1.4.8", []contract.Fact{head, attempt(9, "test", "completed", "failure", "10:00"), attempt(10, "build", "completed", "cancelled", "10:00"), attempt(11, "lint", "completed", "success", "10:00"), required("build", "lint", "test")}, "failed: build, test"},
+		{"pending names follow the observation", "PULLS-1.4.8", []contract.Fact{head, required("test", "lint")}, "pending: test, lint"},
+		{"the attempt that started last counts", "PULLS-1.4.3", []contract.Fact{head, attempt(10, "test", "completed", "success", "10:10"), attempt(9, "test", "completed", "failure", "10:00"), required("test")}, "passed"},
+		{"with equal starts the larger id counts", "PULLS-1.4.3", []contract.Fact{head, attempt(10, "test", "completed", "failure", "10:00"), attempt(9, "test", "completed", "success", "10:00"), required("test")}, "failed: test"},
+		{"an attempt of another app does not match", "PULLS-1.4.3", []contract.Fact{head, otherApp, appRequired}, "pending: test"},
+		{"an attempt of another head does not count", "PULLS-1.4.3", []contract.Fact{head, oldHead, required("test")}, "pending: test"},
+		{"a webhook after the observation changes the cell", "PULLS-1.4.1", []contract.Fact{head, attempt(9, "test", "completed", "failure", "10:00"), required("test"), attempt(10, "test", "completed", "success", "10:30")}, "passed"},
+		{"a later state of the same attempt counts", "PULLS-1.4.1", []contract.Fact{head, attempt(9, "test", "in_progress", "", "10:00"), required("test"), attempt(9, "test", "completed", "failure", "10:00")}, "failed: test"},
+	} {
+		f.Run("checks for "+tt.name, func(s *extensions.Scenario) {
+			s.Covers(tt.clause).
+				Given(append([]contract.Fact{connected, created}, tt.facts...)...).
+				When(spec.Get("/pulls")).
+				Then("the checks cell reads "+tt.checks).
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectText(pullCell("acme/api#7", "checks"), tt.checks)
+		})
+	}
+
+	livePanel := `#pulls-panel[hx-get="/pulls/panel"][hx-trigger="pulls-changed from:body, every 60s"][hx-swap="outerHTML"]`
+
+	f.Run("the panel alone", func(s *extensions.Scenario) {
+		s.Covers("PULLS-3.1.1", "PULLS-3.1.2", "PULLS-3.1.3").
+			Given(connected, created, head, attempt(9, "test", "completed", "success", "10:00"), required("test")).
+			When(spec.Get("/pulls/panel")).
+			Then("it has the same row and keeps updating, with no page around it").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(livePanel+` #pulls tr[data-pull="acme/api#7"]`).
+			ExpectText(pullCell("acme/api#7", "checks"), "passed").
+			ExpectNoElement(extensions.WholePage).
+			ExpectBodyWithout("EventSource")
+	})
+
+	f.Run("the panel alone with no open PRs", func(s *extensions.Scenario) {
+		s.Covers("PULLS-3.1.1", "PULLS-3.1.2").
+			When(spec.Get("/pulls/panel")).
+			Then("it says so and has no rows").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(livePanel).
+			ExpectBodyContaining("No open PRs").
+			ExpectElementCount(`#pulls tr[data-pull]`, 0)
+	})
+
+	f.Run("the page holds the live panel and listens to the stream", func(s *extensions.Scenario) {
+		s.Covers("PULLS-3.1.2", "PULLS-3.2.1", "PULLS-3.2.2").
+			Given(connected, created).
+			When(spec.Get("/pulls")).
+			Then("a signal and each connection fire pulls-changed on the body").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(livePanel + ` #pulls tr[data-pull="acme/api#7"]`).
+			ExpectBodyContaining(`new EventSource("/runs/events")`).
+			ExpectBodyContaining(`document.body.dispatchEvent(new Event("pulls-changed"))`).
+			ExpectBodyContaining(`.onmessage = pullsChanged`).
+			ExpectBodyContaining(`.onopen = pullsChanged`)
+	})
+
 	for _, page := range []string{"/repositories", "/runs"} {
 		f.Run(page+" links to the pull requests page", func(s *extensions.Scenario) {
 			s.Covers("PULLS-2.1.1").

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -116,7 +117,7 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 
 	if s.action != nil {
 		s.action(j)
-		if written := j.Facts()[before:]; !slices.Equal(written, s.expected) {
+		if written := j.Facts()[before:]; !sameFacts(written, s.expected) {
 			problems = append(problems, factsMismatch[F]{expected: s.expected, got: written})
 		}
 		for _, check := range s.checks {
@@ -141,7 +142,7 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 	}
 
 	written := j.Facts()[before:]
-	if !slices.Equal(written, s.expected) {
+	if !sameFacts(written, s.expected) {
 		problems = append(problems, factsMismatch[F]{expected: s.expected, got: written})
 	}
 
@@ -167,4 +168,8 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 		problems = append(problems, elementProblems(response.Body.String(), s.elements, s.noElements, s.texts, s.counts)...)
 	}
 	return problems
+}
+
+func sameFacts[F any](got, want []F) bool {
+	return slices.EqualFunc(got, want, func(a, b F) bool { return reflect.DeepEqual(a, b) })
 }

@@ -75,6 +75,22 @@ the PR".
 
 MERGE-2.2.4. A closed PR gets no merge decision.
 
+#### MERGE-2.3. Observing the checks
+
+MERGE-2.3.1. For each PR that the read shows open, whether merging is on or not, the sweep reads the
+required checks of its base branch and every check run of its head
+(`GET /repos/<owner>/<name>/commits/<head>/check-runs`).
+
+MERGE-2.3.2. When both reads succeed, each check run whose state differs from the known check run
+state, as in HOOK-5.2 of the [webhook contract](receive-webhooks.md), is written as
+`CheckRunStateChanged`, and then `RequiredChecksObserved` with the repository, the PR's number,
+the head, and the required checks: each a name and, when branch protection names one, an app id.
+`RequiredChecksObserved` is written at every sweep, even when nothing changed.
+
+MERGE-2.3.3. When either read fails, or GitHub has more check runs than its first page of 100
+gives, neither `CheckRunStateChanged` nor `RequiredChecksObserved` is written for that PR: a
+partial answer is never taken for the full set. The merge decision does not depend on it.
+
 ### MERGE-3. Deciding to merge
 
 #### MERGE-3.1. The gate

@@ -1,6 +1,8 @@
 package extensions
 
 import (
+	"github.com/Andrew-Sem/gc/specs/contract"
+
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -59,6 +61,9 @@ type fakeGitHub struct {
 	mergeHangs       bool
 	merges           []mergeCall
 	reads            map[string]int
+
+	checkRuns           map[string][]contract.CheckRun
+	checkRunsBeyondPage map[string]bool
 }
 
 var fakeAppKey = sync.OnceValue(func() *rsa.PrivateKey {

@@ -61,22 +61,6 @@ func (c *Client) Pull(ctx context.Context, fullName, token string, number int) (
 	return pull, err
 }
 
-func (c *Client) RequiredChecks(ctx context.Context, fullName, token, branch string) (int, error) {
-	var answer struct {
-		Protection struct {
-			RequiredStatusChecks struct {
-				Contexts []string          `json:"contexts"`
-				Checks   []json.RawMessage `json:"checks"`
-			} `json:"required_status_checks"`
-		} `json:"protection"`
-	}
-	if err := c.get(ctx, c.repositoryURL(fullName)+"/branches/"+escapeBranch(branch), token, &answer); err != nil {
-		return 0, err
-	}
-	checks := answer.Protection.RequiredStatusChecks
-	return max(len(checks.Contexts), len(checks.Checks)), nil
-}
-
 func (c *Client) Merge(ctx context.Context, fullName, token string, number int, sha string) error {
 	body, err := json.Marshal(map[string]string{"merge_method": "squash", "sha": sha})
 	if err != nil {

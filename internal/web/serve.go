@@ -166,7 +166,8 @@ func run(ctx context.Context, deps contract.Dependencies, number int, repository
 	case result.Change == nil:
 		finished.Outcome, finished.Explanation = contract.OutcomeNoPR, result.Explanation
 	default:
-		number, err := github.New(deps.GitHub).CreatePR(ctx, repository, *result.Change)
+		client := github.New(deps.GitHub)
+		number, err := client.CreatePR(ctx, repository, *result.Change)
 		if ctx.Err() != nil {
 			return
 		}
@@ -177,6 +178,7 @@ func run(ctx context.Context, deps contract.Dependencies, number int, repository
 		}
 		finished.Outcome, finished.Number = contract.OutcomePR, number
 		deps.Journal.Append(contract.PrCreated{Repository: repository, Number: number})
+		reconcile(ctx, deps.Journal, client, repository, number)
 	}
 	finished.At = time.Now().UTC()
 	deps.Journal.Append(finished)

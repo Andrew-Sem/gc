@@ -55,6 +55,7 @@ func New(deps contract.Dependencies) http.Handler {
 	mux.Handle("POST /repositories/{owner}/{name}/settings", sameSite.Handler(http.HandlerFunc(s.saveSettings)))
 	mux.HandleFunc("GET /runs", s.runsPage)
 	mux.HandleFunc("GET /pulls", s.pullsPage)
+	mux.HandleFunc("GET /pulls/panel", s.pullsPanel)
 	mux.HandleFunc("GET /runs/panel", s.runsPanel)
 	mux.HandleFunc("GET /runs/events", s.runsEvents)
 	mux.HandleFunc("POST /webhooks/github", s.receiveWebhook)
@@ -79,6 +80,13 @@ func (s *server) pullsPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := pullsView(domain.OpenPulls(s.journal.Facts())).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the page", http.StatusInternalServerError)
+	}
+}
+
+func (s *server) pullsPanel(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := pullsPanel(domain.OpenPulls(s.journal.Facts())).Render(r.Context(), w); err != nil {
+		http.Error(w, "cannot render the panel", http.StatusInternalServerError)
 	}
 }
 

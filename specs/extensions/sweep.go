@@ -90,6 +90,26 @@ func (s *Scenario) GivenRequiredCheckApps(apps ...string) *Scenario {
 	return s
 }
 
+func (s *Scenario) GivenCheckRunsOnGitHub(repository, head string, runs ...contract.CheckRun) *Scenario {
+	s.github.given(func(g *fakeGitHub) {
+		if g.checkRuns == nil {
+			g.checkRuns = map[string][]contract.CheckRun{}
+		}
+		g.checkRuns[repository+"@"+head] = append([]contract.CheckRun{}, runs...)
+	})
+	return s
+}
+
+func (s *Scenario) GivenMoreCheckRunsThanAPage(repository, head string) *Scenario {
+	s.github.given(func(g *fakeGitHub) {
+		if g.checkRunsBeyondPage == nil {
+			g.checkRunsBeyondPage = map[string]bool{}
+		}
+		g.checkRunsBeyondPage[repository+"@"+head] = true
+	})
+	return s
+}
+
 func (s *Scenario) GivenBaseBranchUnreadable() *Scenario {
 	s.github.given(func(g *fakeGitHub) { g.branchUnreadable = true })
 	return s
@@ -177,6 +197,8 @@ func (g *fakeGitHub) servePullsAPI(w http.ResponseWriter, r *http.Request, fail 
 	case r.Method == http.MethodGet && parts[2] == "branches" && len(parts) == 4:
 		g.serveBranch(w, fail)
 		return true
+	case r.Method == http.MethodGet && parts[2] == "commits" && len(parts) == 5 && parts[4] == "check-runs":
+		return g.serveCheckRuns(w, repository+"@"+parts[3])
 	case parts[2] != "pulls":
 		return false
 	}
@@ -289,4 +311,35 @@ func (g *fakeGitHub) merge(w http.ResponseWriter, r *http.Request, repository st
 	g.pulls[key] = pull
 	g.mu.Unlock()
 	fmt.Fprint(w, `{"merged":true}`)
+}
+
+func (g *fakeGitHub) serveCheckRuns(w http.ResponseWriter, key string) bool {
+	g.mu.Lock()
+	runs, known := g.checkRuns[key]
+	beyond := g.checkRunsBeyondPage[key]
+	g.mu.Unlock()
+	if !known {
+		return false
+	}
+	list := []map[string]any{}
+	for _, run := range runs {
+		var conclusion, completedAt any
+		if run.Conclusion != "" {
+			conclusion = run.Conclusion
+		}
+		if !run.CompletedAt.IsZero() {
+			completedAt = run.CompletedAt.Format(time.RFC3339)
+		}
+		list = append(list, map[string]any{
+			"id": run.ID, "name": run.Name, "app": map[string]any{"id": run.AppID}, "head_sha": run.HeadSHA,
+			"status": run.Status, "conclusion": conclusion, "started_at": run.StartedAt.Format(time.RFC3339),
+			"completed_at": completedAt,
+		})
+	}
+	total := len(list)
+	if beyond {
+		total += 100
+	}
+	json.NewEncoder(w).Encode(map[string]any{"total_count": total, "check_runs": list})
+	return true
 }

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/Andrew-Sem/gc/specs/contract"
 )
@@ -36,6 +37,7 @@ func MergeVerdict(state MergeState) (reason string, merge bool) {
 type OpenPull struct {
 	Repository string
 	Number     int
+	Checks     string
 	Decision   string
 	Reason     string
 }
@@ -67,7 +69,7 @@ func OpenPulls(facts []contract.Fact) []OpenPull {
 			continue
 		}
 		seen[k] = true
-		pull := OpenPull{Repository: k.repository, Number: k.number, Decision: "no sweep yet"}
+		pull := OpenPull{Repository: k.repository, Number: k.number, Checks: ChecksVerdict(facts, k.repository, k.number), Decision: "no sweep yet"}
 		switch decision := decisions[k].(type) {
 		case contract.MergeApproved:
 			pull.Decision = "merging"
@@ -82,4 +84,59 @@ func OpenPulls(facts []contract.Fact) []OpenPull {
 		pulls = append(pulls, pull)
 	}
 	return pulls
+}
+
+var passingConclusions = []string{"success", "neutral", "skipped"}
+
+func ChecksVerdict(facts []contract.Fact, repository string, number int) string {
+	head := ""
+	var observed *contract.RequiredChecksObserved
+	attempts := map[int64]contract.CheckRun{}
+	for _, f := range facts {
+		switch f := f.(type) {
+		case contract.PrStateChanged:
+			if f.Repository == repository && f.Number == number {
+				head = f.HeadSHA
+			}
+		case contract.RequiredChecksObserved:
+			if f.Repository == repository && f.Number == number {
+				observed = &f
+			}
+		case contract.CheckRunStateChanged:
+			if f.Repository == repository && f.Number == number {
+				attempts[f.CheckRun.ID] = f.CheckRun
+			}
+		}
+	}
+	if head == "" || observed == nil || observed.HeadSHA != head {
+		return "unknown"
+	}
+	if len(observed.Required) == 0 {
+		return "no required checks"
+	}
+	var failed, pending []string
+	for _, required := range observed.Required {
+		var counted *contract.CheckRun
+		for _, run := range attempts {
+			if run.HeadSHA != head || run.Name != required.Name || (required.AppID != 0 && run.AppID != required.AppID) {
+				continue
+			}
+			if counted == nil || run.StartedAt.After(counted.StartedAt) || (run.StartedAt.Equal(counted.StartedAt) && run.ID > counted.ID) {
+				counted = &run
+			}
+		}
+		switch {
+		case counted == nil || counted.Status != "completed":
+			pending = append(pending, required.Name)
+		case !slices.Contains(passingConclusions, counted.Conclusion):
+			failed = append(failed, required.Name)
+		}
+	}
+	switch {
+	case len(failed) > 0:
+		return "failed: " + strings.Join(failed, ", ")
+	case len(pending) > 0:
+		return "pending: " + strings.Join(pending, ", ")
+	}
+	return "passed"
 }

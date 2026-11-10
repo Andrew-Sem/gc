@@ -161,4 +161,5 @@ HISTORY-3.3.2. On each signal, the page fires `runs-changed` on `body`.
 HISTORY-3.3.3. Each time the stream connects, including when the browser reconnects it by itself,
 the page also fires `runs-changed`, so a phone that slept catches up at once.
 
-HISTORY-3.3.4. Only the runs page opens the stream: the repositories page does not.
+HISTORY-3.3.4. Only the runs page and the pull requests page open the stream: the repositories page
+does not.

@@ -97,3 +97,65 @@ func signature(body []byte) string {
 func nextDeliveryID() string {
 	return "delivery-" + strconv.FormatInt(deliveries.Add(1), 10)
 }
+
+type CheckRunEvent struct {
+	Action      string
+	Repository  string
+	Pulls       []int
+	ID          int64
+	Name        string
+	AppID       int64
+	HeadSHA     string
+	Status      string
+	Conclusion  string
+	StartedAt   time.Time
+	CompletedAt time.Time
+}
+
+func CheckRunDelivery(event CheckRunEvent) spec.Request {
+	return RawDelivery("check_run", marshal(checkRunPayload(event)))
+}
+
+func CheckRunDeliveryWithout(event CheckRunEvent, field string) spec.Request {
+	payload := checkRunPayload(event)
+	path := strings.Split(field, ".")
+	parent := payload
+	for _, key := range path[:len(path)-1] {
+		parent = parent[key].(map[string]any)
+	}
+	delete(parent, path[len(path)-1])
+	return RawDelivery("check_run", marshal(payload))
+}
+
+func checkRunPayload(event CheckRunEvent) map[string]any {
+	pulls := []any{}
+	for _, number := range event.Pulls {
+		pulls = append(pulls, map[string]any{
+			"number": number,
+			"head":   map[string]any{"sha": event.HeadSHA},
+			"base":   map[string]any{"ref": "main"},
+		})
+	}
+	var conclusion, completedAt any
+	if event.Conclusion != "" {
+		conclusion = event.Conclusion
+	}
+	if !event.CompletedAt.IsZero() {
+		completedAt = event.CompletedAt.Format(time.RFC3339)
+	}
+	return map[string]any{
+		"action": event.Action,
+		"check_run": map[string]any{
+			"id":            event.ID,
+			"name":          event.Name,
+			"app":           map[string]any{"id": event.AppID},
+			"head_sha":      event.HeadSHA,
+			"status":        event.Status,
+			"conclusion":    conclusion,
+			"started_at":    event.StartedAt.Format(time.RFC3339),
+			"completed_at":  completedAt,
+			"pull_requests": pulls,
+		},
+		"repository": map[string]any{"full_name": event.Repository},
+	}
+}

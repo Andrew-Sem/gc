@@ -28,3 +28,17 @@ func IsNewSnapshot(facts []contract.Fact, snapshot contract.PrStateChanged) bool
 	}
 	return true
 }
+
+func IsNewCheckRunState(facts []contract.Fact, repository string, number int, run contract.CheckRun) bool {
+	for i := len(facts) - 1; i >= 0; i-- {
+		known, ok := facts[i].(contract.CheckRunStateChanged)
+		if !ok || known.Repository != repository || known.Number != number || known.CheckRun.ID != run.ID {
+			continue
+		}
+		if known.CheckRun.Status == "completed" && run.Status != "completed" {
+			return false
+		}
+		return known.CheckRun != run
+	}
+	return true
+}

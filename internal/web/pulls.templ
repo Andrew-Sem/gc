@@ -14,27 +14,41 @@ templ pullsView(pulls []domain.OpenPull) {
 	<h1>Pull requests</h1>
 	<a href="/repositories">Repositories</a>
 	<a href="/runs">Runs</a>
-	if len(pulls) == 0 {
-		<p>No open PRs</p>
-	}
-	<table id="pulls">
-		<thead>
-			<tr>
-				<th>Repository</th>
-				<th>PR</th>
-				<th>Decision</th>
-				<th>Reason</th>
-			</tr>
-		</thead>
-		<tbody>
-			for _, pull := range pulls {
-				<tr data-pull={ fmt.Sprintf("%s#%d", pull.Repository, pull.Number) }>
-					<td data-cell="repository">{ pull.Repository }</td>
-					<td data-cell="number"><a href={ templ.SafeURL(fmt.Sprintf("https://github.com/%s/pull/%d", pull.Repository, pull.Number)) }>{ fmt.Sprintf("#%d", pull.Number) }</a></td>
-					<td data-cell="decision">{ pull.Decision }</td>
-					<td data-cell="reason">{ pull.Reason }</td>
+	@pullsPanel(pulls)
+	<script>
+		const pullsChanged = () => document.body.dispatchEvent(new Event("pulls-changed"));
+		const pullsEvents = new EventSource("/runs/events");
+		pullsEvents.onopen = pullsChanged;
+		pullsEvents.onmessage = pullsChanged;
+	</script>
+}
+
+templ pullsPanel(pulls []domain.OpenPull) {
+	<div id="pulls-panel" hx-get="/pulls/panel" hx-trigger="pulls-changed from:body, every 60s" hx-swap="outerHTML">
+		if len(pulls) == 0 {
+			<p>No open PRs</p>
+		}
+		<table id="pulls">
+			<thead>
+				<tr>
+					<th>Repository</th>
+					<th>PR</th>
+					<th>Checks</th>
+					<th>Decision</th>
+					<th>Reason</th>
 				</tr>
-			}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				for _, pull := range pulls {
+					<tr data-pull={ fmt.Sprintf("%s#%d", pull.Repository, pull.Number) }>
+						<td data-cell="repository">{ pull.Repository }</td>
+						<td data-cell="number"><a href={ templ.SafeURL(fmt.Sprintf("https://github.com/%s/pull/%d", pull.Repository, pull.Number)) }>{ fmt.Sprintf("#%d", pull.Number) }</a></td>
+						<td data-cell="checks">{ pull.Checks }</td>
+						<td data-cell="decision">{ pull.Decision }</td>
+						<td data-cell="reason">{ pull.Reason }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
 }

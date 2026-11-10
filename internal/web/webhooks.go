@@ -60,6 +60,10 @@ func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if kind == "check_run" {
+		s.receiveCheckRun(w, id, body)
+		return
+	}
 	if kind != "pull_request" {
 		s.deliveries[id] = true
 		w.WriteHeader(http.StatusNoContent)
@@ -79,6 +83,47 @@ func (s *server) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	facts := s.journal.Facts()
 	if slices.Contains(usedActions, event.Action) && domain.IsOurPR(facts, snapshot.Repository, snapshot.Number) {
 		record(s.journal, snapshot)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+var usedCheckRunActions = []string{"created", "rerequested", "completed"}
+
+type checkRunEvent struct {
+	Action   string `json:"action"`
+	CheckRun struct {
+		github.CheckRun
+		PullRequests []struct {
+			Number int `json:"number"`
+		} `json:"pull_requests"`
+	} `json:"check_run"`
+	Repository struct {
+		FullName *string `json:"full_name"`
+	} `json:"repository"`
+}
+
+func (s *server) receiveCheckRun(w http.ResponseWriter, id string, body []byte) {
+	var event checkRunEvent
+	if err := json.Unmarshal(body, &event); err != nil || event.Repository.FullName == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	run, complete := event.CheckRun.Snapshot()
+	if !complete {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	s.deliveries[id] = true
+	if slices.Contains(usedCheckRunActions, event.Action) {
+		repository := normalize(*event.Repository.FullName)
+		var seen []int
+		for _, pull := range event.CheckRun.PullRequests {
+			if slices.Contains(seen, pull.Number) || !domain.IsOurPR(s.journal.Facts(), repository, pull.Number) {
+				continue
+			}
+			seen = append(seen, pull.Number)
+			recordCheckRun(s.journal, repository, pull.Number, run)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -10,7 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
+	"reflect"
 	"strings"
 	"time"
 
@@ -187,6 +187,11 @@ func EveryKindOfFact() []contract.Fact {
 			CreatedAt:  at,
 			UpdatedAt:  at.Add(time.Nanosecond),
 		},
+		contract.CheckRunStateChanged{Repository: "acme/api", Number: 7, CheckRun: contract.CheckRun{
+			ID: 9, Name: "test", AppID: 15368, HeadSHA: "abc123", Status: "completed", Conclusion: "success",
+			StartedAt: at, CompletedAt: at.Add(time.Minute),
+		}},
+		contract.RequiredChecksObserved{Repository: "acme/api", Number: 7, HeadSHA: "abc123", Required: []contract.RequiredCheck{{Name: "test", AppID: 15368}, {Name: "lint"}}},
 		contract.RepositoryDisconnected{FullName: "acme/api"},
 	}
 }
@@ -439,7 +444,7 @@ func (l *Launch) journalProblems() []spec.Problem {
 		return []spec.Problem{launchProblem(fmt.Sprintf("cannot open the journal file: %v", err))}
 	}
 	defer journal.Close()
-	if got := journal.Facts(); !slices.Equal(got, l.journal) {
+	if got := journal.Facts(); !reflect.DeepEqual(got, l.journal) {
 		return []spec.Problem{launchProblem(fmt.Sprintf("expected the journal %#v, got %#v", l.journal, got))}
 	}
 	return nil

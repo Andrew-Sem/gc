@@ -43,6 +43,9 @@ func sweepRepository(ctx context.Context, journal contract.Journal, client *gith
 			continue
 		}
 		record(journal, snapshot)
+		if snapshot.Open {
+			observeChecks(ctx, journal, client, token, snapshot)
+		}
 		if merging && snapshot.Open {
 			mergePull(ctx, journal, client, token, snapshot, pull.MergeableState)
 		}
@@ -64,13 +67,13 @@ func readPull(ctx context.Context, client *github.Client, token string, tokenErr
 func mergePull(ctx context.Context, journal contract.Journal, client *github.Client, token string, snapshot contract.PrStateChanged, mergeableState string) {
 	repository, number := snapshot.Repository, snapshot.Number
 	required, err := client.RequiredChecks(ctx, repository, token, snapshot.Base)
-	if !snapshot.Draft && err == nil && required > 0 && snapshot.Mergeable == contract.MergeableUnknown {
+	if !snapshot.Draft && err == nil && len(required) > 0 && snapshot.Mergeable == contract.MergeableUnknown {
 		snapshot, mergeableState = waitForMergeState(ctx, journal, client, token, snapshot, mergeableState)
 		if !snapshot.Open || ctx.Err() != nil {
 			return
 		}
 	}
-	reason, merge := domain.MergeVerdict(domain.MergeState{Draft: snapshot.Draft, RequiredChecks: required, Mergeable: snapshot.Mergeable, MergeableState: mergeableState})
+	reason, merge := domain.MergeVerdict(domain.MergeState{Draft: snapshot.Draft, RequiredChecks: len(required), Mergeable: snapshot.Mergeable, MergeableState: mergeableState})
 	if err != nil && !snapshot.Draft {
 		reason, merge = "GitHub did not give the base branch", false
 	}
@@ -128,5 +131,40 @@ func record(journal contract.Journal, snapshot contract.PrStateChanged) {
 	defer recording.Unlock()
 	if domain.IsNewSnapshot(journal.Facts(), snapshot) {
 		journal.Append(snapshot)
+	}
+}
+
+func observeChecks(ctx context.Context, journal contract.Journal, client *github.Client, token string, snapshot contract.PrStateChanged) {
+	required, err := client.RequiredChecks(ctx, snapshot.Repository, token, snapshot.Base)
+	if err != nil {
+		return
+	}
+	runs, err := client.CheckRuns(ctx, snapshot.Repository, token, snapshot.HeadSHA)
+	if err != nil {
+		return
+	}
+	for _, run := range runs {
+		recordCheckRun(journal, snapshot.Repository, snapshot.Number, run)
+	}
+	journal.Append(contract.RequiredChecksObserved{Repository: snapshot.Repository, Number: snapshot.Number, HeadSHA: snapshot.HeadSHA, Required: required})
+}
+
+func reconcile(ctx context.Context, journal contract.Journal, client *github.Client, repository string, number int) {
+	token, err := client.Token(ctx, repository)
+	_, snapshot, read := readPull(ctx, client, token, err, repository, number)
+	if !read {
+		return
+	}
+	record(journal, snapshot)
+	if snapshot.Open {
+		observeChecks(ctx, journal, client, token, snapshot)
+	}
+}
+
+func recordCheckRun(journal contract.Journal, repository string, number int, run contract.CheckRun) {
+	recording.Lock()
+	defer recording.Unlock()
+	if domain.IsNewCheckRunState(journal.Facts(), repository, number, run) {
+		journal.Append(contract.CheckRunStateChanged{Repository: repository, Number: number, CheckRun: run})
 	}
 }

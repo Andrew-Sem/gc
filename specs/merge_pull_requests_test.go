@@ -247,6 +247,102 @@ func TestMergePullRequests(t *testing.T) {
 			Expect(s.GitHubMergedNothing())
 	})
 
+	test := contract.CheckRun{ID: 9, Name: "test", AppID: 15368, HeadSHA: "abc123", Status: "completed", Conclusion: "success",
+		StartedAt: extensions.At("1999-12-31 11:00"), CompletedAt: extensions.At("1999-12-31 11:05")}
+	testState := contract.CheckRunStateChanged{Repository: "acme/api", Number: 7, CheckRun: test}
+	observed := func(required ...contract.RequiredCheck) contract.RequiredChecksObserved {
+		return contract.RequiredChecksObserved{Repository: "acme/api", Number: 7, HeadSHA: "abc123", Required: append([]contract.RequiredCheck{}, required...)}
+	}
+
+	f.Run("a sweep observes the checks of an open PR", func(s *extensions.Scenario) {
+		s.Covers("MERGE-2.3.1", "MERGE-2.3.2").
+			Given(connected, created).
+			GivenPullOnGitHub("acme/api", 7, open).
+			GivenCheckRunsOnGitHub("acme/api", "abc123", test).
+			WhenSwept().
+			Then("the check run and the required checks of the head are recorded, with merging off").
+			ExpectFacts(open.Snapshot("acme/api", 7), testState, observed(contract.RequiredCheck{Name: "test"}))
+	})
+
+	f.Run("a sweep observes the checks again when nothing changed", func(s *extensions.Scenario) {
+		s.Covers("MERGE-2.3.2").
+			Given(connected, created, open.Snapshot("acme/api", 7), testState).
+			GivenPullOnGitHub("acme/api", 7, open).
+			GivenCheckRunsOnGitHub("acme/api", "abc123", test).
+			WhenSwept().
+			Then("only the observation is written").
+			ExpectFacts(observed(contract.RequiredCheck{Name: "test"}))
+	})
+
+	f.Run("a required check that names its app", func(s *extensions.Scenario) {
+		s.Covers("MERGE-2.3.2").
+			Given(connected, created, open.Snapshot("acme/api", 7)).
+			GivenPullOnGitHub("acme/api", 7, open).
+			GivenRequiredCheckApps("ci/build").
+			GivenCheckRunsOnGitHub("acme/api", "abc123").
+			WhenSwept().
+			Then("the observation carries the app").
+			ExpectFacts(observed(contract.RequiredCheck{Name: "ci/build", AppID: 15368}))
+	})
+
+	f.Run("the checks are observed before the merge decision", func(s *extensions.Scenario) {
+		s.Covers("MERGE-2.3.1").
+			Given(connected, mergeOn, created).
+			GivenPullOnGitHub("acme/api", 7, open).
+			GivenCheckRunsOnGitHub("acme/api", "abc123", test).
+			WhenSwept().
+			Then("the observation comes first, then the merge").
+			ExpectFacts(
+				open.Snapshot("acme/api", 7), testState, observed(contract.RequiredCheck{Name: "test"}),
+				contract.MergeApproved{Repository: "acme/api", Number: 7, HeadSHA: "abc123"},
+				merged.Snapshot("acme/api", 7),
+			)
+	})
+
+	f.Run("a closed PR's checks are not observed", func(s *extensions.Scenario) {
+		closed := with(func(p *extensions.PullOnGitHub) { p.Closed = true })
+		s.Covers("MERGE-2.3.1").
+			Given(connected, created).
+			GivenPullOnGitHub("acme/api", 7, closed).
+			GivenCheckRunsOnGitHub("acme/api", "abc123", test).
+			WhenSwept().
+			Then("only the closed state is recorded").
+			ExpectFacts(closed.Snapshot("acme/api", 7))
+	})
+
+	for _, tt := range []struct {
+		name  string
+		given func(*extensions.Scenario) *extensions.Scenario
+	}{
+		{"the check runs cannot be read", func(s *extensions.Scenario) *extensions.Scenario { return s }},
+		{"the base branch cannot be read", func(s *extensions.Scenario) *extensions.Scenario {
+			return s.GivenCheckRunsOnGitHub("acme/api", "abc123", test).GivenBaseBranchUnreadable()
+		}},
+		{"GitHub has more check runs than a page", func(s *extensions.Scenario) *extensions.Scenario {
+			return s.GivenCheckRunsOnGitHub("acme/api", "abc123", test).GivenMoreCheckRunsThanAPage("acme/api", "abc123")
+		}},
+	} {
+		f.Run("no observation when "+tt.name, func(s *extensions.Scenario) {
+			tt.given(s.Covers("MERGE-2.3.3").Given(connected, created).GivenPullOnGitHub("acme/api", 7, open)).
+				WhenSwept().
+				Then("no check fact is written").
+				ExpectFacts(open.Snapshot("acme/api", 7))
+		})
+	}
+
+	f.Run("a merge goes on without an observation", func(s *extensions.Scenario) {
+		s.Covers("MERGE-2.3.3").
+			Given(connected, mergeOn, created).
+			GivenPullOnGitHub("acme/api", 7, open).
+			WhenSwept().
+			Then("the check runs cannot be read, and the PR is still merged").
+			ExpectFacts(
+				open.Snapshot("acme/api", 7),
+				contract.MergeApproved{Repository: "acme/api", Number: 7, HeadSHA: "abc123"},
+				merged.Snapshot("acme/api", 7),
+			)
+	})
+
 	f.Run("a sweep reads the PRs with merging off", func(s *extensions.Scenario) {
 		s.Covers("MERGE-2.2.1", "MERGE-2.2.2", "MERGE-3.1.1").
 			Given(connected, created).

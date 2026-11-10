@@ -535,3 +535,29 @@ func TestActionScenarioRejectsGivenRequest(t *testing.T) {
 		t.Errorf("Run() = %v, want %v", got, want)
 	}
 }
+
+type listed struct {
+	Names []string
+}
+
+func (listed) fact() {}
+
+func TestRunComparesFactsThatHoldLists(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		written listed
+		want    int
+	}{
+		{"the same list", listed{Names: []string{"test", "lint"}}, 0},
+		{"another list", listed{Names: []string{"test"}}, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario[fact]{}
+			s.WhenAction(func(j *journal.Journal[fact]) { j.Append(tt.written) }).
+				ExpectFacts(listed{Names: []string{"test", "lint"}})
+			if problems := s.Run(nil); len(problems) != tt.want {
+				t.Errorf("run returned %q, want %d problems", problems, tt.want)
+			}
+		})
+	}
+}

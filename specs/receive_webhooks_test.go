@@ -51,6 +51,33 @@ func snapshot(change func(*contract.PrStateChanged)) contract.PrStateChanged {
 	return known
 }
 
+func checkRun(change func(*extensions.CheckRunEvent)) extensions.CheckRunEvent {
+	event := extensions.CheckRunEvent{
+		Action:      "completed",
+		Repository:  "acme/api",
+		Pulls:       []int{7},
+		ID:          9,
+		Name:        "test",
+		AppID:       15368,
+		HeadSHA:     "abc123",
+		Status:      "completed",
+		Conclusion:  "success",
+		StartedAt:   extensions.At("1999-12-31 10:00"),
+		CompletedAt: extensions.At("1999-12-31 10:05"),
+	}
+	if change != nil {
+		change(&event)
+	}
+	return event
+}
+
+func checkRunState(number int, event extensions.CheckRunEvent) contract.CheckRunStateChanged {
+	return contract.CheckRunStateChanged{Repository: "acme/api", Number: number, CheckRun: contract.CheckRun{
+		ID: event.ID, Name: event.Name, AppID: event.AppID, HeadSHA: event.HeadSHA, Status: event.Status,
+		Conclusion: event.Conclusion, StartedAt: event.StartedAt, CompletedAt: event.CompletedAt,
+	}}
+}
+
 func TestReceiveWebhooks(t *testing.T) {
 	f := extensions.NewFeature(t, "receive-webhooks.md")
 	later := extensions.At("1999-12-31 11:00")
@@ -232,6 +259,138 @@ func TestReceiveWebhooks(t *testing.T) {
 				ExpectFacts()
 		})
 	}
+
+	for _, action := range []string{"created", "rerequested", "completed"} {
+		f.Run("record a check run of our PR: "+action, func(s *extensions.Scenario) {
+			event := checkRun(func(e *extensions.CheckRunEvent) { e.Action = action })
+			s.Covers("HOOK-5.1.1").
+				Given(ourPR...).
+				When(extensions.CheckRunDelivery(event)).
+				Then("the check run state is recorded").
+				ExpectStatus(http.StatusNoContent).
+				ExpectFacts(checkRunState(7, event))
+		})
+	}
+
+	f.Run("record a check run that has not finished", func(s *extensions.Scenario) {
+		event := checkRun(func(e *extensions.CheckRunEvent) {
+			e.Action, e.Status, e.Conclusion, e.CompletedAt = "created", "in_progress", "", time.Time{}
+		})
+		s.Covers("HOOK-5.1.1").
+			Given(ourPR...).
+			When(extensions.CheckRunDelivery(event)).
+			Then("it is recorded with no conclusion and no end").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts(checkRunState(7, event))
+	})
+
+	f.Run("record a check run for each of our PRs in GitHub's order", func(s *extensions.Scenario) {
+		event := checkRun(func(e *extensions.CheckRunEvent) { e.Pulls = []int{8, 7}; e.Repository = "Acme/API" })
+		s.Covers("HOOK-5.1.1").
+			Given(append(ourPR, contract.PrCreated{Repository: "acme/api", Number: 8})...).
+			When(extensions.CheckRunDelivery(event)).
+			Then("PR 8 and then PR 7 get the state, under the normalized name").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts(checkRunState(8, event), checkRunState(7, event))
+	})
+
+	for _, tt := range []struct {
+		name  string
+		given []contract.Fact
+		pulls []int
+		want  []int
+	}{
+		{"a PR listed twice", ourPR, []int{7, 7}, []int{7}},
+		{"a PR that is not ours", ourPR, []int{9}, nil},
+		{"no PR listed", ourPR, nil, nil},
+		{"a disconnected repository", append(ourPR, contract.RepositoryDisconnected{FullName: "acme/api"}), []int{7}, nil},
+	} {
+		f.Run("check runs and PRs: "+tt.name, func(s *extensions.Scenario) {
+			event := checkRun(func(e *extensions.CheckRunEvent) { e.Pulls = tt.pulls })
+			var want []contract.Fact
+			for _, number := range tt.want {
+				want = append(want, checkRunState(number, event))
+			}
+			s.Covers("HOOK-5.1.2").
+				Given(tt.given...).
+				When(extensions.CheckRunDelivery(event)).
+				Then("only our PRs get a state, once each").
+				ExpectStatus(http.StatusNoContent).
+				ExpectFacts(want...)
+		})
+	}
+
+	f.Run("a check run action we do not use", func(s *extensions.Scenario) {
+		s.Covers("HOOK-5.1.3").
+			Given(ourPR...).
+			When(extensions.CheckRunDelivery(checkRun(func(e *extensions.CheckRunEvent) { e.Action = "requested_action" }))).
+			Then("it is accepted and nothing is recorded").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts()
+	})
+
+	f.Run("a check run body that is not JSON", func(s *extensions.Scenario) {
+		s.Covers("HOOK-5.1.4").
+			Given(ourPR...).
+			When(extensions.RawDelivery("check_run", "not json")).
+			Then("the request is rejected and nothing is recorded").
+			ExpectStatus(http.StatusBadRequest).
+			ExpectFacts()
+	})
+
+	for _, field := range []string{"check_run.id", "check_run.name", "check_run.app", "check_run.head_sha", "check_run.status", "check_run.started_at"} {
+		f.Run("a check run without "+field, func(s *extensions.Scenario) {
+			s.Covers("HOOK-5.1.4").
+				Given(ourPR...).
+				When(extensions.CheckRunDeliveryWithout(checkRun(nil), field)).
+				Then("the request is rejected and nothing is recorded").
+				ExpectStatus(http.StatusBadRequest).
+				ExpectFacts()
+		})
+	}
+
+	f.Run("the same check run state again", func(s *extensions.Scenario) {
+		s.Covers("HOOK-5.2.1").
+			Given(append(ourPR, checkRunState(7, checkRun(nil)))...).
+			When(extensions.CheckRunDelivery(checkRun(nil))).
+			Then("nothing new is recorded").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts()
+	})
+
+	f.Run("another state of a known check run", func(s *extensions.Scenario) {
+		failed := checkRun(func(e *extensions.CheckRunEvent) { e.Conclusion = "failure" })
+		s.Covers("HOOK-5.2.1").
+			Given(append(ourPR, checkRunState(7, checkRun(nil)))...).
+			When(extensions.CheckRunDelivery(failed)).
+			Then("the new state is recorded").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts(checkRunState(7, failed))
+	})
+
+	f.Run("a late running state after the check run completed", func(s *extensions.Scenario) {
+		running := checkRun(func(e *extensions.CheckRunEvent) {
+			e.Action, e.Status, e.Conclusion, e.CompletedAt = "created", "in_progress", "", time.Time{}
+		})
+		s.Covers("HOOK-5.2.2").
+			Given(append(ourPR, checkRunState(7, checkRun(nil)))...).
+			When(extensions.CheckRunDelivery(running)).
+			Then("the completed state stays").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts()
+	})
+
+	f.Run("a completed state after a running one", func(s *extensions.Scenario) {
+		running := checkRun(func(e *extensions.CheckRunEvent) {
+			e.Action, e.Status, e.Conclusion, e.CompletedAt = "created", "in_progress", "", time.Time{}
+		})
+		s.Covers("HOOK-5.2.2").
+			Given(append(ourPR, checkRunState(7, running))...).
+			When(extensions.CheckRunDelivery(checkRun(nil))).
+			Then("the completed state is recorded").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts(checkRunState(7, checkRun(nil)))
+	})
 
 	for _, action := range []string{"labeled", "assigned"} {
 		f.Run("an action we do not use: "+action, func(s *extensions.Scenario) {

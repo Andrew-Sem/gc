@@ -117,6 +117,12 @@ OPEN-2.2.2. A PR created by a run takes a place from the next wake-up on.
 OPEN-2.2.3. `gc` waits up to 60 seconds for GitHub's answer to creating a PR, because a PR that
 GitHub creates after `gc` gave up would never be counted.
 
+OPEN-2.2.4. Right after `PrCreated`, `gc` reconciles the new PR: it reads the PR and writes its
+state as `PrStateChanged` (MERGE-2.2.2 of the [merge contract](merge-pull-requests.md)), and then
+observes its checks as in MERGE-2.3. So a check run webhook that came before `PrCreated` is not
+lost. These facts come before the run's `AgentRunFinished`. A read that fails writes nothing and
+does not change the run's outcome.
+
 #### OPEN-2.3. The agent changed nothing
 
 OPEN-2.3.1. If the agent changed nothing, `gc` does not ask GitHub to create a PR, and

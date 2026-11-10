@@ -282,6 +282,43 @@ func TestOpenPullRequests(t *testing.T) {
 			Expect(s.GitHubPRCreated("acme/api", "gc/run-1", "Remove dead code", "The helper has no callers."))
 	})
 
+	f.Run("a new PR is reconciled before the run ends", func(s *extensions.Scenario) {
+		pull := extensions.OpenPullOnGitHub()
+		run := contract.CheckRun{ID: 9, Name: "test", AppID: 15368, HeadSHA: "abc123", Status: "queued", StartedAt: at("00:00")}
+		s.Covers("OPEN-2.2.4").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenGitHubCreatesPR(42).
+			GivenPullOnGitHub("acme/api", 42, pull).
+			GivenCheckRunsOnGitHub("acme/api", "abc123", run).
+			WhenWokenUpFor(time.Minute).
+			Then("the PR's state and checks are recorded between PrCreated and the end of the run").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.PrCreated{Repository: "acme/api", Number: 42},
+				pull.Snapshot("acme/api", 42),
+				contract.CheckRunStateChanged{Repository: "acme/api", Number: 42, CheckRun: run},
+				contract.RequiredChecksObserved{Repository: "acme/api", Number: 42, HeadSHA: "abc123", Required: []contract.RequiredCheck{{Name: "test"}}},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42, At: at("00:00")},
+			)
+	})
+
+	f.Run("a new PR that cannot be read is still a PR", func(s *extensions.Scenario) {
+		s.Covers("OPEN-2.2.4").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentChanges("gc/run-1", "Remove dead code", "The helper has no callers.").
+			GivenGitHubCreatesPR(42).
+			WhenWokenUpFor(time.Minute).
+			Then("nothing more is recorded, and the run ends with the PR").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.PrCreated{Repository: "acme/api", Number: 42},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 42, At: at("00:00")},
+			)
+	})
+
 	f.Run("each approved repository gets its own run", func(s *extensions.Scenario) {
 		s.Covers("OPEN-2.1.1", "OPEN-2.1.5").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}, contract.RepositoryConnected{FullName: "acme/web"}).
