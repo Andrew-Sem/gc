@@ -67,7 +67,7 @@ clean up. The prompt lives in the settings.
 **Trigger:** a tick every 6 hours.
 
 Before deciding, the executor obtains one terminal result of the current `sweepId` for each open
-PR: either a full evidence snapshot or `LookupIncomplete`.
+PR: either a full evidence snapshot or a decline because the lookup was incomplete.
 
 Before the required-check lookup it rereads the current PR. If GitHub is still computing
 `mergeable` or the head has changed, the fresh snapshot goes into the journal, and checks are
@@ -87,11 +87,9 @@ and all check-run attempts of the current head. For each identity, the latest at
 conclusions fail; incomplete statuses and a missing attempt wait.
 
 If branch protection is not configured and there are no required checks, we do not merge.
-Partial pagination is never treated as a full snapshot. `LookupIncomplete` blocks merging for
-the current sweep only; the next sweep obtains its own evidence afresh. A new sweep
-does not replace the old snapshot.
-
-<!-- FLAG: "the next sweep obtains its own evidence afresh" and "A new sweep does not replace the old snapshot" say almost the same thing. Not merged: check whether the second sentence carries a separate meaning. -->
+Partial pagination is never treated as a full snapshot. An incomplete lookup blocks merging for
+the current sweep only: the next sweep gathers its own evidence afresh, and until a new snapshot
+is complete the screen keeps showing the last full one.
 
 **If everything checks out:** `MergeApproved`, the effect calls GitHub. Success will arrive as an
 observation. Failure — `MergeFailed`.
@@ -165,10 +163,8 @@ and replaces its HTML fragment.
 
 ## Facts
 
-Fifteen facts in four groups. The formal types are in `specs/contract`, which is the source of
+Seventeen facts in four groups. The formal types are in `specs/contract`, which is the source of
 truth. Here are meaning and boundaries.
-
-<!-- FLAG: the header says "Fifteen facts", while the tables list sixteen: 4 + 5 + 3 + 4. The number is sacred and is not corrected automatically — decide whether a fact is missing from the text or extra in the table. -->
 
 ### Observations from GitHub
 
@@ -177,7 +173,6 @@ truth. Here are meaning and boundaries.
 | `PrStateChanged` | We saw a PR snapshot, not older than the known one, that differs from it. Carries head, target branch, draft, open, mergeable, creation and update dates. |
 | `CheckRunStateChanged` | We saw a newer check run state. Carries raw data: id, required identity, status, conclusion, and times. Whether it is required is not derived from the webhook. |
 | `RequiredChecksObserved` | We fully obtained the required inventory and all attempts for one PR, head, and `sweepId`. A partial response cannot be this fact. |
-| `LookupIncomplete` | A lookup broke off: rate limit, no permissions, an upstream error, or the pagination limit. A checks lookup carries `sweepId` and blocks only this sweep attempt. |
 
 `PrStateChanged` and `CheckRunStateChanged` are emitted only for our PRs and only if the
 observation is not older than the known one. The delivery ID drops an exact duplicate at intake,
@@ -192,8 +187,10 @@ complete. Merging is allowed only on the current sweep's `RequiredChecksObserved
 | Fact | When it occurs |
 |---|---|
 | `PrCreated` | The agent opened a PR. Carries `reportId`, repository, number, branch, and first commit. Triggers reconciliation. |
+| `AgentRunStarted` | Admission started an agent run. Carries the run number, repository, and start time. |
 | `AgentRunFinished` | An agent run ended. Carries `reportId`, repository, optional PR, outcome, token usage, and, when there is no PR, the agent's explanation. A failure before the PR was created does not invent a number. |
 | `RunRequested` | The operator pressed "Run now" for a repository; its decision is made at once instead of at the wake-up. |
+| `SweepRequested` | The operator pressed "Sweep now" for a repository; its sweep runs at once instead of at the 6-hour tick. |
 | `AdmissionApproved` | Admission allowed starting new work. |
 | `MergeApproved` | The merge gate of the current `sweepId` allowed the merge. This is a decision, not an accomplished fact. |
 
