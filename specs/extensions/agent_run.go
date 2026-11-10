@@ -92,13 +92,14 @@ type AgentRun struct {
 	gitServer *httptest.Server
 	cleanups  []func()
 
-	remote      string
-	records     string
-	change      *contract.AgentChange
-	explanation string
-	tokens      contract.TokenUsage
-	baseURL     string
-	err         error
+	remote              string
+	records             string
+	change              *contract.AgentChange
+	explanation         string
+	tokens              contract.TokenUsage
+	baseURL             string
+	reportInDescription bool
+	err                 error
 }
 
 func (f *Feature) RunAgent(name string, describe func(*AgentRun)) {
@@ -131,6 +132,11 @@ func (a *AgentRun) GivenEnv(name, value string) *AgentRun {
 
 func (a *AgentRun) GivenTaskBaseURL(url string) *AgentRun {
 	a.baseURL = url
+	return a
+}
+
+func (a *AgentRun) GivenTaskReportInDescription() *AgentRun {
+	a.reportInDescription = true
 	return a
 }
 
@@ -471,6 +477,31 @@ func (a *AgentRun) ExpectDescriptionEndingWithReportPath(prefix string) *AgentRu
 		}
 		if a.change.Description != prefix+path {
 			return agentProblems("expected description %q, got %q", prefix+path, a.change.Description)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectDescription(text string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		if a.change == nil {
+			return agentProblems("expected a change, got none")
+		}
+		if a.change.Description != text {
+			return agentProblems("expected description %q, got %q", text, a.change.Description)
+		}
+		return nil
+	})
+}
+
+func (a *AgentRun) ExpectBranchFiles(files ...string) *AgentRun {
+	return a.expect(func() []spec.Problem {
+		if a.change == nil {
+			return agentProblems("expected a change, got none")
+		}
+		out, err := a.remoteGit("diff", "--name-only", "main", a.change.Branch)
+		if got := strings.Fields(out); err != nil || !slices.Equal(got, files) {
+			return agentProblems("expected the branch to change %q, got %q (%v)", files, got, err)
 		}
 		return nil
 	})
@@ -913,7 +944,7 @@ func (a *AgentRun) work(codex agent.Codex) []spec.Problem {
 			}
 		}()
 		var result contract.AgentResult
-		result, a.err = codex.Work(ctx, contract.AgentTask{Repository: agentRepository, OpenAIBaseURL: a.baseURL})
+		result, a.err = codex.Work(ctx, contract.AgentTask{Repository: agentRepository, OpenAIBaseURL: a.baseURL, ReportInDescription: a.reportInDescription})
 		a.change, a.explanation, a.tokens = result.Change, result.Explanation, result.Tokens
 	}()
 	if a.stopAfter != 0 {

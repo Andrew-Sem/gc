@@ -36,7 +36,11 @@ func Admit(journal contract.Journal, repository, defaultBaseURL string) (contrac
 		journal.Append(contract.AdmissionDeclined{Repository: repository, Open: open, Limit: limit})
 		return contract.AdmissionApproved{}, false
 	}
-	approval := contract.AdmissionApproved{Repository: repository, OpenAIBaseURL: OpenAIBaseURL(facts, defaultBaseURL)}
+	approval := contract.AdmissionApproved{
+		Repository:          repository,
+		OpenAIBaseURL:       OpenAIBaseURL(facts, defaultBaseURL),
+		ReportInDescription: RepositorySettings(facts, repository).ReportInDescription,
+	}
 	journal.Append(approval)
 	return approval, true
 }

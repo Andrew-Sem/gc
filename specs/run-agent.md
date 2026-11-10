@@ -204,6 +204,12 @@ layout of AGENT-3.5.2.
 AGENT-3.5.9. If a file or a link is already at the report's path, or a folder on the way to it is
 a link, the run fails and nothing is pushed. `gc` writes nothing through a link.
 
+AGENT-3.5.10. When the task asks for the report in the PR description, `gc` writes no report file:
+the branch has only the agent's changes.
+
+AGENT-3.5.11. Then the PR description is the answer's `description`, a blank line, and the text the
+report would have had (AGENT-3.5.2).
+
 #### AGENT-3.6. Tokens
 
 AGENT-3.6.1. `gc` runs Codex with `--json`, so Codex prints its events to standard output.

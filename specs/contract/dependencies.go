@@ -39,8 +39,9 @@ type AgentResult struct {
 }
 
 type AgentTask struct {
-	Repository    string
-	OpenAIBaseURL string
+	Repository          string
+	OpenAIBaseURL       string
+	ReportInDescription bool
 }
 
 type Agent interface {

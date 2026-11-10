@@ -332,6 +332,94 @@ func TestRepositorySettings(t *testing.T) {
 			ExpectText(`#repositories li[data-repository="acme/web"]`, "acme/web every 1 h, at most 12 open Run now Sweep now Disconnect Settings")
 	})
 
+	inDescription := contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, ReportInDescription: true, At: extensions.At("1999-12-31 10:00")}
+
+	f.Run("the report goes to a file by default", func(s *extensions.Scenario) {
+		s.Covers("SET-2.4.1").
+			Given(connected).
+			When(spec.Get("/repositories/acme/api/settings")).
+			Then("the checkbox is there and not checked").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(`#settings-panel label:has(input[type="checkbox"][name="report_in_description"])`, "Put the report in the PR description, not in a file").
+			ExpectNoElement(`#settings-panel input[name="report_in_description"][checked]`)
+	})
+
+	f.Run("the settings form shows the report in the description", func(s *extensions.Scenario) {
+		s.Covers("SET-2.4.1").
+			Given(connected, inDescription).
+			When(spec.Get("/repositories/acme/api/settings")).
+			Then("the checkbox is checked").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectElement(`#settings-panel input[type="checkbox"][name="report_in_description"][checked]`)
+	})
+
+	f.Run("put the report in the description", func(s *extensions.Scenario) {
+		s.Covers("SET-2.4.1", "SET-2.4.2").
+			Given(connected).
+			When(save("1", "12").WithForm("report_in_description", "on")).
+			Then("it is saved, and the form shows it on").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, ReportInDescription: true, At: at("00:00")}).
+			ExpectElement(`#settings-panel input[name="report_in_description"][checked]`)
+	})
+
+	f.Run("put the report back in a file", func(s *extensions.Scenario) {
+		s.Covers("SET-2.4.2").
+			Given(connected, inDescription).
+			When(save("1", "12")).
+			Then("the file is saved again").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(saved(1, 12, "2000-01-01 00:00")).
+			ExpectNoElement(`#settings-panel input[name="report_in_description"][checked]`)
+	})
+
+	f.Run("save the report in the description again", func(s *extensions.Scenario) {
+		s.Covers("SET-2.4.2").
+			Given(connected, inDescription).
+			When(save("1", "12").WithForm("report_in_description", "on")).
+			Then("nothing is written").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts()
+	})
+
+	f.Run("an approval carries the report setting to the agent", func(s *extensions.Scenario) {
+		s.Covers("SET-2.4.3").
+			Given(connected, inDescription).
+			WhenWokenUpFor(time.Minute).
+			Then("the approval and the agent's task say the report goes in the description").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api", ReportInDescription: true},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("00:00")},
+			).
+			Expect(s.AgentGotTasks(contract.AgentTask{Repository: "acme/api", ReportInDescription: true}))
+	})
+
+	f.Run("a report setting saved during a run waits for the next decision", func(s *extensions.Scenario) {
+		changed := contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, At: at("15:10")}
+		s.Covers("SET-2.4.3").
+			Given(connected, inDescription).
+			GivenAgentWorksFor(30*time.Minute).
+			GivenFactWrittenAt("15:10", changed).
+			WhenRunning("14:59", time.Hour+32*time.Minute).
+			Then("the 15:00 run keeps the description, and the 16:00 one gets the file").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api", ReportInDescription: true},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("15:00")},
+				changed,
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("15:30")},
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 2, Repository: "acme/api", At: at("16:00")},
+				contract.AgentRunFinished{Run: 2, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("16:30")},
+			).
+			Expect(s.AgentGotTasks(
+				contract.AgentTask{Repository: "acme/api", ReportInDescription: true},
+				contract.AgentTask{Repository: "acme/api"},
+			))
+	})
+
 	f.Run("the list shows each repository's settings", func(s *extensions.Scenario) {
 		s.Covers("SET-2.3.2").
 			Given(connected, contract.RepositoryConnected{FullName: "acme/web"}, saved(24, 3, "1999-12-31 10:00")).

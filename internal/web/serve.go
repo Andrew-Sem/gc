@@ -157,7 +157,7 @@ func sweepNow(ctx context.Context, deps contract.Dependencies, turn turn, reposi
 func start(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, approval contract.AdmissionApproved) {
 	number := domain.NextRunNumber(deps.Journal.Facts())
 	deps.Journal.Append(contract.AgentRunStarted{Run: number, Repository: approval.Repository, At: time.Now().UTC()})
-	task := contract.AgentTask{Repository: approval.Repository, OpenAIBaseURL: approval.OpenAIBaseURL}
+	task := contract.AgentTask{Repository: approval.Repository, OpenAIBaseURL: approval.OpenAIBaseURL, ReportInDescription: approval.ReportInDescription}
 	runs.Go(func() { run(ctx, deps, number, task) })
 }
 

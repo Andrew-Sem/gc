@@ -17,8 +17,8 @@ operator presses "Run now".
 **Maximum open** — the limit of the [open pull requests contract](open-pull-requests.md) for one
 repository. By default 12.
 
-**Settings** — the pace, the maximum open, and merging (MERGE-1 of the
-[merge contract](merge-pull-requests.md)) of one repository. Until the operator saves them, a
+**Settings** — the pace, the maximum open, merging (MERGE-1 of the
+[merge contract](merge-pull-requests.md)), and where the report goes of one repository. Until the operator saves them, a
 repository has the defaults.
 
 **Interval start** — the start of the clock hour in UTC in which the settings were last saved.
@@ -118,3 +118,17 @@ SET-2.3.2. The repositories list shows each repository's settings after its name
 "every <pace> h, at most <maximum> open".
 
 SET-2.3.3. With a pace of 0, the list shows "only on Run now, at most <maximum> open" instead.
+
+#### SET-2.4. Where the report goes
+
+SET-2.4.1. The settings form has a checkbox `report_in_description` labelled "Put the report in
+the PR description, not in a file", checked when that is on. It is not checked for a repository
+whose settings were never saved, so by default the report is a file (AGENT-3.5 of the
+[agent contract](run-agent.md)).
+
+SET-2.4.2. Saving the form writes `RepositorySettingsChanged` with `ReportInDescription` true when
+the checkbox is checked and false when it is not. Saving what the repository already has writes
+nothing (SET-1.2.2).
+
+SET-2.4.3. `AdmissionApproved` carries the repository's `ReportInDescription` at that decision,
+and the run it starts gives that value to the agent. A save during the run changes nothing for it.

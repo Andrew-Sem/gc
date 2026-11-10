@@ -213,9 +213,13 @@ func (c Codex) Work(ctx context.Context, task contract.AgentTask) (contract.Agen
 	if err != nil {
 		return contract.AgentResult{Tokens: tokens}, err
 	}
-	reportPath, err := writeReport(workingCopy, answer)
-	if err != nil {
-		return contract.AgentResult{Tokens: tokens}, err
+	description := answer["description"] + "\n\n" + reportText(answer)
+	reportPath := ""
+	if !task.ReportInDescription {
+		if reportPath, err = writeReport(workingCopy, answer); err != nil {
+			return contract.AgentResult{Tokens: tokens}, err
+		}
+		description = answer["description"] + "\n\nReport: " + reportPath
 	}
 	branch, err := newBranch()
 	if err != nil {
@@ -224,8 +228,10 @@ func (c Codex) Work(ctx context.Context, task contract.AgentTask) (contract.Agen
 	if _, err := c.git(ctx, own, nil, "add", "--all"); err != nil {
 		return contract.AgentResult{Tokens: tokens}, err
 	}
-	if _, err := c.git(ctx, own, nil, "add", "--force", "--", reportPath); err != nil {
-		return contract.AgentResult{Tokens: tokens}, err
+	if reportPath != "" {
+		if _, err := c.git(ctx, own, nil, "add", "--force", "--", reportPath); err != nil {
+			return contract.AgentResult{Tokens: tokens}, err
+		}
 	}
 	touched, err := c.git(ctx, own, nil, "diff", "--cached", "--name-only", "--no-renames", "-z", "HEAD")
 	if err != nil {
@@ -252,7 +258,7 @@ func (c Codex) Work(ctx context.Context, task contract.AgentTask) (contract.Agen
 		Branch:      branch,
 		Base:        base,
 		Title:       answer["title"],
-		Description: answer["description"] + "\n\nReport: " + reportPath,
+		Description: description,
 	}, Tokens: tokens}, nil
 }
 
@@ -442,11 +448,15 @@ func readAnswer(path string) (map[string]string, error) {
 	return answer, nil
 }
 
-func writeReport(workingCopy string, answer map[string]string) (string, error) {
+func reportText(answer map[string]string) string {
 	var sections []string
 	for _, section := range reportSections {
 		sections = append(sections, "## "+section.heading+"\n\n"+answer[section.field])
 	}
+	return strings.Join(sections, "\n\n") + "\n"
+}
+
+func writeReport(workingCopy string, answer map[string]string) (string, error) {
 	root, err := os.OpenRoot(workingCopy)
 	if err != nil {
 		return "", err
@@ -461,7 +471,7 @@ func writeReport(workingCopy string, answer map[string]string) (string, error) {
 		return "", fmt.Errorf("cannot write the report: %w", err)
 	}
 	defer report.Close()
-	if _, err := report.WriteString(strings.Join(sections, "\n\n") + "\n"); err != nil {
+	if _, err := report.WriteString(reportText(answer)); err != nil {
 		return "", fmt.Errorf("cannot write the report: %w", err)
 	}
 	return reportPath, nil

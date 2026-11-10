@@ -77,11 +77,12 @@ type RequiredChecksObserved struct {
 }
 
 type RepositorySettingsChanged struct {
-	Repository string
-	Pace       int
-	Limit      int
-	Merge      bool
-	At         time.Time
+	Repository          string
+	Pace                int
+	Limit               int
+	Merge               bool
+	ReportInDescription bool
+	At                  time.Time
 }
 
 type SweepRequested struct {
@@ -93,8 +94,9 @@ type RunRequested struct {
 }
 
 type AdmissionApproved struct {
-	Repository    string
-	OpenAIBaseURL string
+	Repository          string
+	OpenAIBaseURL       string
+	ReportInDescription bool
 }
 
 type SettingsChanged struct {

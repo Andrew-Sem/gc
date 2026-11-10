@@ -165,14 +165,14 @@ func EveryKindOfFact() []contract.Fact {
 	at := At("1999-12-31 22:00")
 	return []contract.Fact{
 		contract.RepositoryConnected{FullName: "acme/api"},
-		contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, Merge: true, At: at},
+		contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, Merge: true, ReportInDescription: true, At: at},
 		contract.SettingsChanged{OpenAIBaseURL: "http://127.0.0.1:8317/v1", At: at},
 		contract.RunRequested{Repository: "acme/api"},
 		contract.SweepRequested{Repository: "acme/api"},
 		contract.MergeApproved{Repository: "acme/api", Number: 7, HeadSHA: "abc123"},
 		contract.MergeDeclined{Repository: "acme/api", Number: 7, Reason: "draft"},
 		contract.MergeFailed{Repository: "acme/api", Number: 7, Reason: "GitHub answered 405"},
-		contract.AdmissionApproved{Repository: "acme/api", OpenAIBaseURL: "http://127.0.0.1:8317/v1"},
+		contract.AdmissionApproved{Repository: "acme/api", OpenAIBaseURL: "http://127.0.0.1:8317/v1", ReportInDescription: true},
 		contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12, Running: 3},
 		contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at},
 		contract.PrCreated{Repository: "acme/api", Number: 7},

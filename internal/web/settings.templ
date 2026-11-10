@@ -17,6 +17,7 @@ templ settingsPanel(form settingsForm) {
 			<label>Every <input name="pace" value={ form.Pace } inputmode="numeric" required/> hours (0: only on Run now)</label>
 			<label>At most <input name="limit" value={ form.Limit } inputmode="numeric" required/> open PRs</label>
 			<label><input type="checkbox" name="merge" checked?={ form.Merge }/> Merge green PRs</label>
+			<label><input type="checkbox" name="report_in_description" checked?={ form.InDescription }/> Put the report in the PR description, not in a file</label>
 			<button>Save</button>
 		</form>
 		if form.Problem != "" {

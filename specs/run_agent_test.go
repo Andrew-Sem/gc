@@ -110,6 +110,19 @@ func TestRunAgent(t *testing.T) {
 			ExpectReport("dead-code", report)
 	})
 
+	f.RunAgent("the report in the description leaves no file", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-3.5.10", "AGENT-3.5.11").
+			GivenRepositoryWithCommits(1).
+			GivenTaskReportInDescription().
+			GivenAgentChanges("cleaned.txt", "clean").
+			GivenAgentAnswers(answer).
+			WhenAgentRuns().
+			Then("the branch has only the agent's change, and the description holds the report").
+			ExpectChange("main", "Remove dead code", "cleaned.txt", "clean").
+			ExpectBranchFiles("cleaned.txt").
+			ExpectDescription("The helper has no callers, so it is removed.\n\n" + report)
+	})
+
 	f.RunAgent("the PR description points to the report", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-3.1.2", "AGENT-3.5.3").
 			GivenRepositoryWithCommits(1).
