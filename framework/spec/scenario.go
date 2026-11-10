@@ -24,6 +24,7 @@ type Scenario[F comparable] struct {
 	counts     []countExpectation
 	absentText []string
 	bodyTexts  []string
+	headers    map[string]string
 	covers     []string
 	checks     []func() Problem
 
@@ -97,6 +98,14 @@ func (s *Scenario[F]) ExpectElementCount(selector string, count int) *Scenario[F
 
 func (s *Scenario[F]) ExpectBodyContaining(text string) *Scenario[F] {
 	s.bodyTexts = append(s.bodyTexts, text)
+	return s
+}
+
+func (s *Scenario[F]) ExpectHeader(name, value string) *Scenario[F] {
+	if s.headers == nil {
+		s.headers = map[string]string{}
+	}
+	s.headers[name] = value
 	return s
 }
 

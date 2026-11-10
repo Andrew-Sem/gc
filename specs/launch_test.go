@@ -131,6 +131,42 @@ func TestLaunch(t *testing.T) {
 			ExpectStatus(http.StatusOK)
 	})
 
+	for _, name := range []string{"GC_ADMIN_USER", "GC_ADMIN_PASSWORD"} {
+		f.RunLaunch("start without "+name, func(s *extensions.Launch) {
+			clause := map[string]string{"GC_ADMIN_USER": "RUN-1.7.1", "GC_ADMIN_PASSWORD": "RUN-1.7.2"}[name]
+			s.GivenUnset(name).
+				Covers(clause).
+				WhenStarted().
+				Then("gc refuses to start").
+				ExpectExit().
+				ExpectOutput(name + " is not set")
+		})
+
+		f.RunLaunch("start with an empty "+name, func(s *extensions.Launch) {
+			clause := map[string]string{"GC_ADMIN_USER": "RUN-1.7.1", "GC_ADMIN_PASSWORD": "RUN-1.7.2"}[name]
+			s.GivenEnv(name, "").
+				Covers(clause).
+				WhenStarted().
+				Then("gc refuses to start").
+				ExpectExit().
+				ExpectOutput(name + " is not set")
+		})
+	}
+
+	f.RunLaunch("a running gc refuses the admin without a login", func(s *extensions.Launch) {
+		s.Covers("RUN-1.7.3").
+			When(extensions.Anonymously(spec.Get("/repositories"))).
+			Then("the page is refused").
+			ExpectStatus(http.StatusUnauthorized)
+	})
+
+	f.RunLaunch("a running gc opens the admin with the login", func(s *extensions.Launch) {
+		s.Covers("RUN-1.7.3").
+			When(extensions.WithLogin(spec.Get("/repositories"), "spec-operator", extensions.AdminPassword())).
+			Then("the page is shown").
+			ExpectStatus(http.StatusOK)
+	})
+
 	f.RunLaunch("start without a webhook secret", func(s *extensions.Launch) {
 		s.GivenUnset("GC_WEBHOOK_SECRET").
 			Covers("RUN-1.4.1").

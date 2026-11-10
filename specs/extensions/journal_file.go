@@ -305,6 +305,7 @@ func (l *Launch) do(addr string, r spec.Request) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	asOperator(req)
 	resp, err := (&http.Client{Timeout: 2 * longerThanAnyTimeout}).Do(req)
 	if err != nil {
 		return 0, err

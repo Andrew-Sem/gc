@@ -3,7 +3,6 @@ package extensions
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"reflect"
 	"slices"
 	"strings"
@@ -36,7 +35,7 @@ func (l *Launch) ExpectJournalKinds(kinds ...string) *Launch {
 func (l *Launch) waitRunEnd() []spec.Problem {
 	deadline := time.Now().Add(runEndLimit)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get("http://" + l.addr + "/runs/panel")
+		resp, err := operatorGet("http://" + l.addr + "/runs/panel")
 		if err == nil {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()

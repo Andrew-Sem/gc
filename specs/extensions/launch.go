@@ -270,6 +270,8 @@ func (l *Launch) shapeProblems() []spec.Problem {
 func (l *Launch) environ() []string {
 	env := map[string]string{
 		"GC_ADDR":                     l.addr,
+		"GC_ADMIN_USER":               fakeAdminUser,
+		"GC_ADMIN_PASSWORD":           fakeAdminPassword,
 		"GC_DB":                       l.path,
 		"GC_WEBHOOK_SECRET":           fakeWebhookSecret,
 		"GITHUB_API_URL":              l.apiURL,
@@ -418,7 +420,7 @@ func waitServing(addr string, exited <-chan error) (ready, running bool) {
 			return false, false
 		default:
 		}
-		if resp, err := http.Get("http://" + addr + "/repositories"); err == nil {
+		if resp, err := operatorGet("http://" + addr + "/repositories"); err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return true, true
@@ -434,6 +436,7 @@ func (l *Launch) send() []spec.Problem {
 	if err != nil {
 		return []spec.Problem{launchProblem(fmt.Sprintf("cannot build the request: %v", err))}
 	}
+	asOperator(req)
 	client := &http.Client{Timeout: 2 * longerThanAnyTimeout}
 	resp, err := client.Do(req)
 	if err != nil {

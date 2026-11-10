@@ -13,7 +13,7 @@ page.
 
 **Environment** — the variables `gc` reads at start: `GITHUB_APP_ID`,
 `GITHUB_APP_PRIVATE_KEY_FILE`, `GC_WEBHOOK_SECRET`,
-`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `GC_ADDR`, `GC_DB`, `GITHUB_API_URL`, and the standard proxy variables `HTTPS_PROXY`, `HTTP_PROXY`, and
+`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `GC_ADMIN_USER`, `GC_ADMIN_PASSWORD`, `GC_ADDR`, `GC_DB`, `GITHUB_API_URL`, and the standard proxy variables `HTTPS_PROXY`, `HTTP_PROXY`, and
 `NO_PROXY`.
 
 **Output** — everything `gc` writes to stdout and stderr, including its logs.
@@ -70,3 +70,15 @@ prints "OPENAI_API_KEY is not set".
 RUN-1.6.1. Without `GC_DB`, `gc` does not start: it exits with a non-zero status and prints
 "GC_DB is not set". There is no default path. The
 [journal storage contract](journal-storage.md) decides what happens to the file.
+
+#### RUN-1.7. Admin login
+
+RUN-1.7.1. Without `GC_ADMIN_USER`, `gc` does not start: it exits with a non-zero status and
+prints "GC_ADMIN_USER is not set".
+
+RUN-1.7.2. Without `GC_ADMIN_PASSWORD`, `gc` does not start: it exits with a non-zero status and
+prints "GC_ADMIN_PASSWORD is not set".
+
+RUN-1.7.3. A running `gc` refuses an admin request without the operator's credentials (ACCESS-1.1
+of the [admin access contract](admin-access.md)) and handles one with them.
+

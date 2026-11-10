@@ -2,6 +2,7 @@ package spec
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -37,6 +38,14 @@ type factsMismatch[F any] struct {
 
 func (p factsMismatch[F]) String() string {
 	return fmt.Sprintf("expected facts %s, got %s", factList(p.expected...), factList(p.got...))
+}
+
+type headerMismatch struct {
+	name, expected, got string
+}
+
+func (p headerMismatch) String() string {
+	return fmt.Sprintf("expected the header %s to be %q, got %q", p.name, p.expected, p.got)
 }
 
 type bodyMissing struct {
@@ -144,6 +153,12 @@ func (s *Scenario[F]) Run(newApp func(*journal.Journal[F]) http.Handler) []Probl
 	written := j.Facts()[before:]
 	if !sameFacts(written, s.expected) {
 		problems = append(problems, factsMismatch[F]{expected: s.expected, got: written})
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(s.headers)) {
+		if got := response.Header().Get(name); got != s.headers[name] {
+			problems = append(problems, headerMismatch{name: name, expected: s.headers[name], got: got})
+		}
 	}
 
 	for _, text := range s.bodyTexts {

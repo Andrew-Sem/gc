@@ -58,8 +58,7 @@ func New(deps contract.Dependencies) http.Handler {
 	mux.HandleFunc("GET /pulls/panel", s.pullsPanel)
 	mux.HandleFunc("GET /runs/panel", s.runsPanel)
 	mux.HandleFunc("GET /runs/events", s.runsEvents)
-	mux.HandleFunc("POST /webhooks/github", s.receiveWebhook)
-	return mux
+	return operatorOnly(deps.Admin, http.HandlerFunc(s.receiveWebhook), mux)
 }
 
 func (s *server) repositoriesPage(w http.ResponseWriter, r *http.Request) {

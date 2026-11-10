@@ -37,6 +37,14 @@ func main() {
 	if webhookSecret == "" {
 		fail("GC_WEBHOOK_SECRET is not set")
 	}
+	adminUser := os.Getenv("GC_ADMIN_USER")
+	if adminUser == "" {
+		fail("GC_ADMIN_USER is not set")
+	}
+	adminPassword := os.Getenv("GC_ADMIN_PASSWORD")
+	if adminPassword == "" {
+		fail("GC_ADMIN_PASSWORD is not set")
+	}
 	if os.Getenv("OPENAI_API_KEY") == "" {
 		fail("OPENAI_API_KEY is not set")
 	}
@@ -71,6 +79,7 @@ func main() {
 		Journal:       journal,
 		GitHub:        github,
 		WebhookSecret: webhookSecret,
+		Admin:         contract.Credentials{User: adminUser, Password: adminPassword},
 		Agent:         agent.Codex{Binary: "codex", Environ: os.Environ(), GitHub: github},
 	}
 	log.Printf("admin: http://%s/repositories", addr)

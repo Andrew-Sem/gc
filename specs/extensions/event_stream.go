@@ -216,6 +216,7 @@ func (l *Launch) watchStream() []spec.Problem {
 	if err != nil {
 		return []spec.Problem{launchProblem(fmt.Sprintf("cannot build the stream request: %v", err))}
 	}
+	asOperator(request)
 	ctx, stop := context.WithCancel(context.Background())
 	l.stream.stop = stop
 	opening := time.AfterFunc(startupLimit, stop)

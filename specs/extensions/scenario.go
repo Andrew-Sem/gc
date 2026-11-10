@@ -20,6 +20,7 @@ type Scenario struct {
 	streams []*openStream
 
 	requests []timedRequest
+	admin    contract.Credentials
 }
 
 type timedRequest struct {
@@ -36,7 +37,7 @@ func At(moment string) time.Time {
 }
 
 func newScenario(core *spec.Scenario[contract.Fact]) *Scenario {
-	return &Scenario{Scenario: core, github: newFakeGitHub(), agent: &fakeAgent{}}
+	return &Scenario{Scenario: core, github: newFakeGitHub(), agent: &fakeAgent{}, admin: operator}
 }
 
 func (s *Scenario) Covers(ids ...string) *Scenario {
@@ -51,6 +52,11 @@ func (s *Scenario) Given(facts ...contract.Fact) *Scenario {
 
 func (s *Scenario) GivenRequest(r spec.Request) *Scenario {
 	s.Scenario.GivenRequest(r)
+	return s
+}
+
+func (s *Scenario) GivenNoAdminLogin() *Scenario {
+	s.admin = contract.Credentials{}
 	return s
 }
 

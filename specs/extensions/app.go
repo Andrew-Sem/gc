@@ -116,7 +116,11 @@ func (l *idleListener) Addr() net.Addr {
 
 func (s *Scenario) app(newApp func(contract.Dependencies) http.Handler) func(*journal.Journal[contract.Fact]) http.Handler {
 	return func(j *journal.Journal[contract.Fact]) http.Handler {
-		return newApp(s.dependencies(j))
+		app := newApp(s.dependencies(j))
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			asOperator(r)
+			app.ServeHTTP(w, r)
+		})
 	}
 }
 
@@ -126,5 +130,6 @@ func (s *Scenario) dependencies(j *journal.Journal[contract.Fact]) contract.Depe
 		GitHub:        contract.GitHub{APIURL: fakeGitHubURL, AppID: fakeAppID, PrivateKey: fakeAppKey(), Transport: s.github.transport()},
 		Agent:         s.agent,
 		WebhookSecret: fakeWebhookSecret,
+		Admin:         s.admin,
 	}
 }

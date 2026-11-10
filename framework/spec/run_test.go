@@ -561,3 +561,34 @@ func TestRunComparesFactsThatHoldLists(t *testing.T) {
 		})
 	}
 }
+
+func TestRunChecksHeaders(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		value string
+		want  []Problem
+	}{
+		{"the header matches", `Basic realm="gc"`, nil},
+		{"the header differs", `Bearer`, []Problem{headerMismatch{name: "WWW-Authenticate", expected: `Basic realm="gc"`, got: "Bearer"}}},
+		{"the header is missing", "", []Problem{headerMismatch{name: "WWW-Authenticate", expected: `Basic realm="gc"`}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Scenario[fact]{}
+			s.When(Get("/repositories")).
+				ExpectStatus(http.StatusUnauthorized).
+				ExpectFacts().
+				ExpectHeader("WWW-Authenticate", `Basic realm="gc"`)
+			app := func(*journal.Journal[fact]) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if tt.value != "" {
+						w.Header().Set("WWW-Authenticate", tt.value)
+					}
+					w.WriteHeader(http.StatusUnauthorized)
+				})
+			}
+			if problems := s.Run(app); !reflect.DeepEqual(problems, tt.want) {
+				t.Errorf("run returned %q, want %q", problems, tt.want)
+			}
+		})
+	}
+}
