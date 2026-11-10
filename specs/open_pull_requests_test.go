@@ -1,6 +1,7 @@
 package specs
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -344,19 +345,126 @@ func TestOpenPullRequests(t *testing.T) {
 			Expect(s.AgentAsked())
 	})
 
-	f.Run("a new run works alongside the previous one", func(s *extensions.Scenario) {
+	f.Run("runs of different repositories work alongside each other", func(s *extensions.Scenario) {
 		s.Covers("OPEN-2.1.3", "OPEN-2.1.4", "OPEN-2.1.5").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}, contract.RepositoryConnected{FullName: "acme/web"}).
+			GivenAgentHangs().
+			WhenRunning("14:59", 2*time.Minute).
+			Then("both runs start at 15:00, numbered in order").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/web"},
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/web", At: at("15:00")},
+				contract.AgentRunStarted{Run: 2, Repository: "acme/api", At: at("15:00")},
+			).
+			Expect(s.AgentAsked("acme/api", "acme/web"))
+	})
+
+	f.Run("a working run declines the next wake-up", func(s *extensions.Scenario) {
+		s.Covers("OPEN-1.5.1").
 			Given(contract.RepositoryConnected{FullName: "acme/api"}).
 			GivenAgentHangs().
 			WhenRunning("14:59", time.Hour+2*time.Minute).
-			Then("the second run starts while the first is still working").
+			Then("the 16:00 decision is a decline naming the working run, and no second run starts").
 			ExpectFacts(
 				contract.AdmissionApproved{Repository: "acme/api"},
 				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("15:00")},
+				contract.AdmissionDeclined{Repository: "acme/api", Running: 1},
+			).
+			Expect(s.AgentAsked("acme/api"))
+	})
+
+	f.Run("a working run declines a run request", func(s *extensions.Scenario) {
+		s.Covers("OPEN-1.5.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentHangs().
+			GivenRunRequestedAt("acme/api", "15:30").
+			GivenRunRequestedAt("acme/api", "15:31").
+			WhenRunning("14:59", 33*time.Minute).
+			Then("each request is declined while the 15:00 run works").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("15:00")},
+				contract.RunRequested{Repository: "acme/api"},
+				contract.AdmissionDeclined{Repository: "acme/api", Running: 1},
+				contract.RunRequested{Repository: "acme/api"},
+				contract.AdmissionDeclined{Repository: "acme/api", Running: 1},
+			).
+			Expect(s.AgentAsked("acme/api"))
+	})
+
+	f.Run("a double run request starts one run", func(s *extensions.Scenario) {
+		s.Covers("OPEN-1.5.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentHangs().
+			GivenRunRequestedAt("acme/api", "15:30:00").
+			GivenRunRequestedAt("acme/api", "15:30:01").
+			WhenRunning("15:29", 2*time.Minute).
+			Then("the first request starts a run, and the second is declined").
+			ExpectFacts(
+				contract.RunRequested{Repository: "acme/api"},
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("15:30")},
+				contract.RunRequested{Repository: "acme/api"},
+				contract.AdmissionDeclined{Repository: "acme/api", Running: 1},
+			).
+			Expect(s.AgentAsked("acme/api"))
+	})
+
+	f.Run("a working run declines even without room", func(s *extensions.Scenario) {
+		s.Covers("OPEN-1.5.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenOpenPRs("acme/api", 12).
+			Given(contract.AgentRunStarted{Run: 4, Repository: "acme/api", At: at("00:00")}).
+			WhenWokenUpFor(time.Minute).
+			Then("the decline names the working run, not the open PRs").
+			ExpectFacts(contract.AdmissionDeclined{Repository: "acme/api", Running: 4})
+	})
+
+	f.Run("a working run of another repository declines nothing", func(s *extensions.Scenario) {
+		s.Covers("OPEN-1.5.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			Given(contract.AgentRunStarted{Run: 1, Repository: "acme/web", At: at("00:00")}).
+			WhenWokenUpFor(time.Minute).
+			Then("a run of this repository starts too").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 2, Repository: "acme/api", At: at("00:00")},
+				contract.AgentRunFinished{Run: 2, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("00:00")},
+			)
+	})
+
+	for _, outcome := range []contract.Outcome{contract.OutcomePR, contract.OutcomeNoPR, contract.OutcomeFailed, contract.OutcomeTimedOut, contract.OutcomeInterrupted} {
+		f.Run("a run that finished "+string(outcome)+" frees the next decision", func(s *extensions.Scenario) {
+			s.Covers("OPEN-1.5.2").
+				Given(contract.RepositoryConnected{FullName: "acme/api"}).
+				Given(
+					contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("00:00")},
+					contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: outcome, At: at("00:30")},
+				).
+				WhenWokenUpFor(time.Minute).
+				Then("a new run starts").
+				ExpectFacts(
+					contract.AdmissionApproved{Repository: "acme/api"},
+					contract.AgentRunStarted{Run: 2, Repository: "acme/api", At: at("00:00")},
+					contract.AgentRunFinished{Run: 2, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("00:00")},
+				)
+		})
+	}
+
+	f.Run("a finished run frees the next wake-up", func(s *extensions.Scenario) {
+		s.Covers("OPEN-1.5.2").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenAgentWorksFor(30*time.Minute).
+			WhenRunning("14:59", time.Hour+2*time.Minute).
+			Then("the 16:00 decision starts a new run").
+			ExpectFacts(
+				contract.AdmissionApproved{Repository: "acme/api"},
+				contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at("15:00")},
+				contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("15:30")},
 				contract.AdmissionApproved{Repository: "acme/api"},
 				contract.AgentRunStarted{Run: 2, Repository: "acme/api", At: at("16:00")},
-			).
-			Expect(s.AgentAsked("acme/api", "acme/api"))
+			)
 	})
 
 	f.Run("a created PR takes a place at the next wake-up", func(s *extensions.Scenario) {
@@ -640,6 +748,75 @@ func TestOpenPullRequests(t *testing.T) {
 			GivenOpenPRs("acme/api", 2).
 			Given(contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 3, At: at("00:00")}).
 			Covers("OPEN-3.1.6").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the run is requested as usual").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+			ExpectText(`#repositories-panel [role="status"]`, "Run requested. Follow it on the runs page.")
+	})
+
+	f.Run("run a repository with a working run now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenOpenPRs("acme/api", 12).
+			Given(contract.AgentRunStarted{Run: 4, Repository: "acme/api", At: at("00:00")}).
+			Covers("OPEN-3.1.7").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the run is requested, and the block says a run is already working").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectText(`#repositories-panel [role="status"]`, "Already running: run 4. Follow it on the runs page.").
+			ExpectElement(`#repositories-panel [role="status"] a[href="/runs"]`)
+	})
+
+	f.Run("run a repository with a finished run now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			Given(
+				contract.AgentRunStarted{Run: 4, Repository: "acme/api", At: at("00:00")},
+				contract.AgentRunFinished{Run: 4, Repository: "acme/api", Outcome: contract.OutcomeNoPR, At: at("00:30")},
+			).
+			Covers("OPEN-3.1.7").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the run is requested as usual").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+			ExpectText(`#repositories-panel [role="status"]`, "Run requested. Follow it on the runs page.")
+	})
+
+	f.Run("run a repository with a pending request now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			GivenOpenPRs("acme/api", 12).
+			Given(contract.RunRequested{Repository: "acme/api"}).
+			Covers("OPEN-3.1.8").
+			When(spec.Post("/repositories/acme/api/run")).
+			Then("the run is requested, and the block says one is already requested").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+			ExpectElement(extensions.UpdatedBlock).
+			ExpectText(`#repositories-panel [role="status"]`, "A run is already requested. Follow it on the runs page.").
+			ExpectElement(`#repositories-panel [role="status"] a[href="/runs"]`)
+	})
+
+	for _, decision := range []contract.Fact{
+		contract.AdmissionApproved{Repository: "acme/api"},
+		contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12},
+	} {
+		f.Run(fmt.Sprintf("run a repository with a decided request now (%T)", decision), func(s *extensions.Scenario) {
+			s.Given(contract.RepositoryConnected{FullName: "acme/api"}).
+				Given(contract.RunRequested{Repository: "acme/api"}, decision).
+				Covers("OPEN-3.1.8").
+				When(spec.Post("/repositories/acme/api/run")).
+				Then("the run is requested as usual").
+				ExpectStatus(http.StatusOK).
+				ExpectFacts(contract.RunRequested{Repository: "acme/api"}).
+				ExpectText(`#repositories-panel [role="status"]`, "Run requested. Follow it on the runs page.")
+		})
+	}
+
+	f.Run("run a repository whose other repository has a pending request now", func(s *extensions.Scenario) {
+		s.Given(contract.RepositoryConnected{FullName: "acme/api"}, contract.RepositoryConnected{FullName: "acme/web"}).
+			Given(contract.RunRequested{Repository: "acme/web"}, contract.AgentRunStarted{Run: 4, Repository: "acme/web", At: at("00:00")}).
+			Covers("OPEN-3.1.7", "OPEN-3.1.8").
 			When(spec.Post("/repositories/acme/api/run")).
 			Then("the run is requested as usual").
 			ExpectStatus(http.StatusOK).

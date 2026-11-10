@@ -32,6 +32,11 @@ for the wake-up.
 
 **Run limit** — the longest a run may last: 2 hours.
 
+**Working run** — a run of the repository with `AgentRunStarted` and no `AgentRunFinished`.
+
+**Pending run request** — the latest `RunRequested` of the repository, when no
+`AdmissionApproved` or `AdmissionDeclined` of that repository was written after it.
+
 ## Clauses
 
 ### OPEN-1. Deciding to open a PR
@@ -89,6 +94,15 @@ again.
 OPEN-1.4.4. A PR without `PrCreated` is not ours: whatever `PrStateChanged` says about it, it
 neither takes nor frees a place.
 
+#### OPEN-1.5. One run at a time
+
+OPEN-1.5.1. If the repository has a working run, the decision is `AdmissionDeclined` with the
+repository and that run's number as `Running`, whatever the number of open PRs, and no run
+starts. This holds at a wake-up and on a run request alike.
+
+OPEN-1.5.2. Once the working run has finished, with any outcome, the next decision is made as in
+OPEN-1.2 and OPEN-1.3.
+
 ### OPEN-2. Running the agent
 
 #### OPEN-2.1. Starting runs
@@ -97,8 +111,8 @@ OPEN-2.1.1. Each `AdmissionApproved` starts one run for that repository.
 
 OPEN-2.1.2. A decline starts no run.
 
-OPEN-2.1.3. A new run does not wait for earlier ones: if a run of the same repository is still
-working, the new one works alongside it.
+OPEN-2.1.3. Runs of different repositories work alongside each other: a working run of one
+repository does not hold back a run of another.
 
 OPEN-2.1.4. When a run starts, `AgentRunStarted` with the run's number, the repository, and the
 time is written to the journal.
@@ -187,6 +201,14 @@ OPEN-3.1.6. If the repository has as many open PRs as its limit or more, the req
 `RunRequested`, but the block shows instead "No room: <open> of <limit> PRs are open. Merge or
 close some, or raise the limit in the settings.", where "settings" links to the repository's
 settings page, so the operator knows at once why no run will start.
+
+OPEN-3.1.7. If the repository has a working run, the request still writes `RunRequested`, but the
+block shows instead "Already running: run <number>. Follow it on the runs page.", where "runs
+page" links to `/runs`. This takes precedence over OPEN-3.1.6.
+
+OPEN-3.1.8. If the repository has no working run but a pending run request, the request still
+writes `RunRequested`, but the block shows instead "A run is already requested. Follow it on the
+runs page.", where "runs page" links to `/runs`. This takes precedence over OPEN-3.1.6.
 
 #### OPEN-3.2. The decision
 

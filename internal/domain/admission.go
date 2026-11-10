@@ -7,12 +7,18 @@ import (
 )
 
 func WakeUp(journal contract.Journal, now time.Time, defaultBaseURL string) []contract.AdmissionApproved {
+	return WakeUpWith(journal, now, func(repository string) (contract.AdmissionApproved, bool) {
+		return Admit(journal, repository, defaultBaseURL)
+	})
+}
+
+func WakeUpWith(journal contract.Journal, now time.Time, admit func(repository string) (contract.AdmissionApproved, bool)) []contract.AdmissionApproved {
 	var approved []contract.AdmissionApproved
 	for _, repository := range ConnectedRepositories(journal.Facts()) {
 		if !RepositorySettings(journal.Facts(), repository).Due(now) {
 			continue
 		}
-		if approval, ok := Admit(journal, repository, defaultBaseURL); ok {
+		if approval, ok := admit(repository); ok {
 			approved = append(approved, approval)
 		}
 	}
@@ -33,6 +39,30 @@ func Admit(journal contract.Journal, repository, defaultBaseURL string) (contrac
 	approval := contract.AdmissionApproved{Repository: repository, OpenAIBaseURL: OpenAIBaseURL(facts, defaultBaseURL)}
 	journal.Append(approval)
 	return approval, true
+}
+
+func WorkingRun(facts []contract.Fact, repository string) int {
+	for _, run := range Runs(facts) {
+		if run.Repository == repository && run.Running() {
+			return run.Number
+		}
+	}
+	return 0
+}
+
+func PendingRunRequest(facts []contract.Fact, repository string) bool {
+	pending := false
+	for _, f := range facts {
+		switch f := f.(type) {
+		case contract.RunRequested:
+			pending = pending || f.Repository == repository
+		case contract.AdmissionApproved:
+			pending = pending && f.Repository != repository
+		case contract.AdmissionDeclined:
+			pending = pending && f.Repository != repository
+		}
+	}
+	return pending
 }
 
 func openPRs(facts []contract.Fact, repository string) int {

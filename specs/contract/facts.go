@@ -98,6 +98,7 @@ type AdmissionDeclined struct {
 	Repository string
 	Open       int
 	Limit      int
+	Running    int
 }
 
 type MergeApproved struct {

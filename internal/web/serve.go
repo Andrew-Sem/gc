@@ -100,7 +100,9 @@ func wakeUpAt(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGr
 }
 
 func decide(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, planned time.Time) {
-	for _, approval := range domain.WakeUp(deps.Journal, planned, deps.OpenAIBaseURL) {
+	for _, approval := range domain.WakeUpWith(deps.Journal, planned, func(repository string) (contract.AdmissionApproved, bool) {
+		return admitOneAtATime(deps, repository)
+	}) {
 		start(ctx, deps, runs, approval)
 	}
 }
@@ -131,9 +133,17 @@ func runOnRequest(ctx context.Context, deps contract.Dependencies, runs *sync.Wa
 func runNow(ctx context.Context, deps contract.Dependencies, runs *sync.WaitGroup, turn turn, repository string) {
 	turn.take()
 	defer turn.give()
-	if approval, ok := domain.Admit(deps.Journal, repository, deps.OpenAIBaseURL); ok {
+	if approval, ok := admitOneAtATime(deps, repository); ok {
 		start(ctx, deps, runs, approval)
 	}
+}
+
+func admitOneAtATime(deps contract.Dependencies, repository string) (contract.AdmissionApproved, bool) {
+	if running := domain.WorkingRun(deps.Journal.Facts(), repository); running != 0 {
+		deps.Journal.Append(contract.AdmissionDeclined{Repository: repository, Running: running})
+		return contract.AdmissionApproved{}, false
+	}
+	return domain.Admit(deps.Journal, repository, deps.OpenAIBaseURL)
 }
 
 func sweepNow(ctx context.Context, deps contract.Dependencies, turn turn, repository string) {

@@ -46,6 +46,10 @@ templ repositoriesPanel(repositories []repositoryRow, state panelState) {
 				<p role="status">{ fmt.Sprintf("No room: %d of %d PRs are open. Merge or close some, or raise the limit in the ", state.open, state.limit) }<a href={ templ.SafeURL(settingsPath(state.repository)) }>settings</a>.</p>
 			case sweepRequested:
 				<p role="status">Sweep requested. Merged PRs show on GitHub.</p>
+			case alreadyRunning:
+				<p role="status">{ fmt.Sprintf("Already running: run %d. Follow it on the ", state.running) }<a href="/runs">runs page</a>.</p>
+			case alreadyRequested:
+				<p role="status">A run is already requested. Follow it on the <a href="/runs">runs page</a>.</p>
 			case runRequested:
 				<p role="status">Run requested. Follow it on the <a href="/runs">runs page</a>.</p>
 		}

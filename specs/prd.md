@@ -50,7 +50,8 @@ the 13:00 tick approves, Codex works for 70 minutes, the 14:00 tick approves aga
 This is deliberate: 12 is a health indicator, not a hard limit, and reservation would bring into
 the domain a lifetime the domain cannot end on its own — a crashed process would hold the slot
 forever. Protection against two concurrent runs on the same repository lives in the task
-executor, not in the domain.
+executor, not in the domain: while a run of the repository works, the executor writes
+`AdmissionDeclined` with that run's number instead of asking admission.
 
 **If allowed:** `AdmissionApproved`, the executor launches Codex, which opens a PR.
 **If not:** `AdmissionDeclined` with the numbers. A decline is always recorded — otherwise the

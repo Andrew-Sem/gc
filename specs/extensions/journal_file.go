@@ -173,7 +173,7 @@ func EveryKindOfFact() []contract.Fact {
 		contract.MergeDeclined{Repository: "acme/api", Number: 7, Reason: "draft"},
 		contract.MergeFailed{Repository: "acme/api", Number: 7, Reason: "GitHub answered 405"},
 		contract.AdmissionApproved{Repository: "acme/api", OpenAIBaseURL: "http://127.0.0.1:8317/v1"},
-		contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12},
+		contract.AdmissionDeclined{Repository: "acme/api", Open: 12, Limit: 12, Running: 3},
 		contract.AgentRunStarted{Run: 1, Repository: "acme/api", At: at},
 		contract.PrCreated{Repository: "acme/api", Number: 7},
 		contract.AgentRunFinished{Run: 1, Repository: "acme/api", Outcome: contract.OutcomePR, Number: 7, Explanation: "None", Tokens: contract.TokenUsage{Input: 3, Cached: 2, Output: 1}, At: at.Add(time.Minute)},

@@ -31,6 +31,8 @@ const (
 	notConnected
 	noRoom
 	sweepRequested
+	alreadyRunning
+	alreadyRequested
 )
 
 type server struct {
@@ -173,9 +175,18 @@ func (s *server) requestRun(w http.ResponseWriter, r *http.Request) {
 		s.renderPanel(w, r, http.StatusUnprocessableEntity, notConnected)
 		return
 	}
-	open, limit, room := domain.HasRoom(s.journal.Facts(), fullName)
+	facts := s.journal.Facts()
+	running, pending := domain.WorkingRun(facts, fullName), domain.PendingRunRequest(facts, fullName)
+	open, limit, room := domain.HasRoom(facts, fullName)
 	s.journal.Append(contract.RunRequested{Repository: fullName})
-	if !room {
+	switch {
+	case running != 0:
+		s.renderPanelWith(w, r, http.StatusOK, panelState{problem: alreadyRunning, running: running})
+		return
+	case pending:
+		s.renderPanel(w, r, http.StatusOK, alreadyRequested)
+		return
+	case !room:
 		s.renderPanelWith(w, r, http.StatusOK, panelState{problem: noRoom, repository: fullName, open: open, limit: limit})
 		return
 	}
@@ -200,6 +211,7 @@ type panelState struct {
 	problem     problem
 	repository  string
 	open, limit int
+	running     int
 }
 
 func (s *server) renderPanel(w http.ResponseWriter, r *http.Request, status int, p problem) {
