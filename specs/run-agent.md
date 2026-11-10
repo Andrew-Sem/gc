@@ -78,6 +78,15 @@ AGENT-2.1.6. The prompt tells the agent not to change anything in `.github` or `
 not to create a git repository inside the working copy, because a run that does fails and its
 work is lost (AGENT-4.2.1, AGENT-4.3.1, AGENT-4.3.2).
 
+AGENT-2.1.10. The prompt tells the agent to read the repository's `AGENTS.md` before choosing a
+change, and that the repository's rules come before the prompt's own guidance on how to make and
+prove a change. They never widen what the prompt says never to change, and the answer stays as
+the schema asks.
+
+AGENT-2.1.11. The prompt tells the agent that when the repository's rules forbid new tests, it
+proves the change without adding one: with the code itself, an existing test, or reasoning about
+the behavior before and after, and says which in `validation`.
+
 AGENT-2.1.7. Before Codex starts, `gc` asks GitHub for the repository's open PRs whose branch
 starts with `gc/`. The prompt lists the title and the changed files of each and asks the agent
 not to fix the same problem again, so one finding does not become a PR every hour. Other open PRs

@@ -322,6 +322,31 @@ func TestRunAgent(t *testing.T) {
 			ExpectPromptWith("anything in .github, or .gitmodules", "do not create a git repository inside this one")
 	})
 
+	f.RunAgent("the prompt puts the repository's rules first", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.10").
+			GivenRepositoryWithCommits(1).
+			WhenAgentRuns().
+			Then("the agent is told to read AGENTS.md and follow it over the prompt's guidance").
+			ExpectPromptWith(
+				"Read the repository's AGENTS.md",
+				"The repository's rules come before this prompt's guidance on how to make and prove a change",
+				"They never widen the list under \"Never change\"",
+				"the fields below stay as asked",
+			)
+	})
+
+	f.RunAgent("the prompt proves a change without a test where tests are forbidden", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.11").
+			GivenRepositoryWithCommits(1).
+			WhenAgentRuns().
+			Then("the agent is told how to prove a change without a new test").
+			ExpectPromptWith(
+				"If the repository's rules forbid new tests, do not add one",
+				"prove the change with the code itself, an existing test, or reasoning about the behavior before and after",
+				"say which in validation",
+			)
+	})
+
 	f.RunAgent("the prompt lists our open PRs", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.1.7").
 			GivenRepositoryWithCommits(1).
