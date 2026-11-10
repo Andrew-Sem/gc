@@ -75,6 +75,11 @@ the PR".
 
 MERGE-2.2.4. A closed PR gets no merge decision.
 
+MERGE-2.2.5. The sweep also reads each of our PRs whose latest `PrStateChanged` says it is closed
+but not whether it was merged, as facts written before `gc` recorded merging do. A read that
+differs is written as in MERGE-2.2.2. A read that fails writes nothing, with merging on or off,
+and the next sweep tries again.
+
 #### MERGE-2.3. Observing the checks
 
 MERGE-2.3.1. For each PR that the read shows open, whether merging is on or not, the sweep reads the

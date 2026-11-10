@@ -82,14 +82,14 @@ func (s *server) runsPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) pullsPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := pullsView(domain.OpenPulls(s.journal.Facts())).Render(r.Context(), w); err != nil {
+	if err := pullsView(domain.OpenPulls(s.journal.Facts()), domain.MergeRateOf(s.journal.Facts())).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the page", http.StatusInternalServerError)
 	}
 }
 
 func (s *server) pullsPanel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := pullsPanel(domain.OpenPulls(s.journal.Facts())).Render(r.Context(), w); err != nil {
+	if err := pullsPanel(domain.OpenPulls(s.journal.Facts()), domain.MergeRateOf(s.journal.Facts())).Render(r.Context(), w); err != nil {
 		http.Error(w, "cannot render the panel", http.StatusInternalServerError)
 	}
 }

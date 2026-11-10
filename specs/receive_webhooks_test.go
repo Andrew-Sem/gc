@@ -41,6 +41,7 @@ func snapshot(change func(*contract.PrStateChanged)) contract.PrStateChanged {
 		HeadSHA:    "abc123",
 		Base:       "main",
 		Open:       true,
+		Merged:     contract.MergedNo,
 		Mergeable:  contract.MergeableYes,
 		CreatedAt:  extensions.At("1999-12-31 08:00"),
 		UpdatedAt:  extensions.At("1999-12-31 10:00"),
@@ -92,22 +93,32 @@ func TestReceiveWebhooks(t *testing.T) {
 			ExpectFacts(snapshot(nil))
 	})
 
-	f.Run("record that our PR was closed", func(s *extensions.Scenario) {
-		s.Covers("HOOK-3.1.5").
+	f.Run("record that our PR was closed without merging", func(s *extensions.Scenario) {
+		s.Covers("HOOK-3.1.5", "HOOK-3.1.6").
 			Given(ourPR...).
 			When(delivery(func(pr *extensions.PullRequest) { pr.Action, pr.State = "closed", "closed" })).
-			Then("the PR is recorded as closed").
+			Then("the PR is recorded as closed and not merged").
 			ExpectStatus(http.StatusNoContent).
 			ExpectFacts(snapshot(func(p *contract.PrStateChanged) { p.Open = false }))
 	})
 
 	f.Run("record that our PR was merged", func(s *extensions.Scenario) {
-		s.Covers("HOOK-3.1.5").
+		s.Covers("HOOK-3.1.5", "HOOK-3.1.6").
 			Given(ourPR...).
 			When(delivery(func(pr *extensions.PullRequest) { pr.Action, pr.State, pr.Merged = "closed", "closed", true })).
-			Then("a merged PR is recorded as closed").
+			Then("the PR is recorded as closed and merged").
 			ExpectStatus(http.StatusNoContent).
-			ExpectFacts(snapshot(func(p *contract.PrStateChanged) { p.Open = false }))
+			ExpectFacts(snapshot(func(p *contract.PrStateChanged) { p.Open, p.Merged = false, contract.MergedYes }))
+	})
+
+	f.Run("record that a PR merged before is now known as merged", func(s *extensions.Scenario) {
+		s.Covers("HOOK-3.1.6").
+			Given(ourPR...).
+			Given(snapshot(func(p *contract.PrStateChanged) { p.Open, p.Merged = false, "" })).
+			When(delivery(func(pr *extensions.PullRequest) { pr.Action, pr.State, pr.Merged = "closed", "closed", true })).
+			Then("the snapshot that says merged differs from the old one and is recorded").
+			ExpectStatus(http.StatusNoContent).
+			ExpectFacts(snapshot(func(p *contract.PrStateChanged) { p.Open, p.Merged = false, contract.MergedYes }))
 	})
 
 	f.Run("reject a delivery without a signature", func(s *extensions.Scenario) {
@@ -177,6 +188,7 @@ func TestReceiveWebhooks(t *testing.T) {
 		"pull_request.base.ref",
 		"pull_request.draft",
 		"pull_request.state",
+		"pull_request.merged",
 		"pull_request.mergeable",
 		"pull_request.created_at",
 		"pull_request.updated_at",

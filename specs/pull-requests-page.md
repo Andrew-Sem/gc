@@ -34,6 +34,12 @@ app, its app is that app.
 
 **Passing conclusion** — `success`, `neutral`, or `skipped`.
 
+**Settled PR** — a PR of ours, in any repository, connected or not, whose latest `PrStateChanged`
+says it is closed and says whether it was merged. It is merged or closed without merging, whether
+`gc` or a person closed it.
+
+**Merge rate** — `#merge-rate` in the pull requests panel: how many settled PRs were merged.
+
 ## Clauses
 
 ### PULLS-1. The page
@@ -137,4 +143,20 @@ the [run history contract](run-history.md), which signals every new fact.
 
 PULLS-3.2.2. On each signal, and each time the stream connects, the page fires `pulls-changed` on
 `body`.
+
+### PULLS-4. The merge rate
+
+#### PULLS-4.1. The text
+
+PULLS-4.1.1. The pull requests panel, on the page and in the `GET /pulls/panel` answer, shows the
+merge rate as "Merged <merged> of <settled> closed agent PRs (<percent>%)", where <settled> counts
+settled PRs and <merged> those of them that were merged.
+
+PULLS-4.1.2. The percent is <merged> divided by <settled>, times 100, rounded to the nearest whole
+number, a half rounded up.
+
+PULLS-4.1.3. With no settled PRs, the merge rate reads "No closed agent PRs yet".
+
+PULLS-4.1.4. A PR that is open, including one reopened after it was closed, a closed PR whose
+`PrStateChanged` does not say whether it was merged, and a PR that is not ours do not count.
 

@@ -27,6 +27,13 @@ const (
 	MergeableUnknown Mergeable = "unknown"
 )
 
+type Merged string
+
+const (
+	MergedYes Merged = "yes"
+	MergedNo  Merged = "no"
+)
+
 type PrStateChanged struct {
 	Number     int
 	Repository string
@@ -34,6 +41,7 @@ type PrStateChanged struct {
 	Base       string
 	Draft      bool
 	Open       bool
+	Merged     Merged
 	Mergeable  Mergeable
 	CreatedAt  time.Time
 	UpdatedAt  time.Time

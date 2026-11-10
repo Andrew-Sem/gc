@@ -7,14 +7,14 @@ import (
 	"github.com/Andrew-Sem/gc/ui"
 )
 
-templ pullsView(pulls []domain.OpenPull) {
+templ pullsView(pulls []domain.OpenPull, rate domain.MergeRate) {
 	<!DOCTYPE html>
 	@ui.Head()
 	<title>Pull requests</title>
 	<h1>Pull requests</h1>
 	<a href="/repositories">Repositories</a>
 	<a href="/runs">Runs</a>
-	@pullsPanel(pulls)
+	@pullsPanel(pulls, rate)
 	<script>
 		const pullsChanged = () => document.body.dispatchEvent(new Event("pulls-changed"));
 		const pullsEvents = new EventSource("/runs/events");
@@ -23,8 +23,9 @@ templ pullsView(pulls []domain.OpenPull) {
 	</script>
 }
 
-templ pullsPanel(pulls []domain.OpenPull) {
+templ pullsPanel(pulls []domain.OpenPull, rate domain.MergeRate) {
 	<div id="pulls-panel" hx-get="/pulls/panel" hx-trigger="pulls-changed from:body, every 60s" hx-swap="outerHTML">
+		<p id="merge-rate">{ rate.Text() }</p>
 		if len(pulls) == 0 {
 			<p>No open PRs</p>
 		}

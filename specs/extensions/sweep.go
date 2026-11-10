@@ -25,6 +25,7 @@ var (
 // PullOnGitHub is a PR as GitHub gives it. Mergeable is "true", "false", or "null".
 type PullOnGitHub struct {
 	Closed         bool
+	Merged         bool
 	Draft          bool
 	Head           string
 	Base           string
@@ -50,9 +51,13 @@ func (p PullOnGitHub) Snapshot(repository string, number int) contract.PrStateCh
 	case "false":
 		mergeable = contract.MergeableNo
 	}
+	merged := contract.MergedNo
+	if p.Merged {
+		merged = contract.MergedYes
+	}
 	return contract.PrStateChanged{
 		Number: number, Repository: repository, HeadSHA: p.Head, Base: p.Base, Draft: p.Draft,
-		Open: !p.Closed, Mergeable: mergeable, CreatedAt: PullCreatedAt, UpdatedAt: p.UpdatedAt,
+		Open: !p.Closed, Merged: merged, Mergeable: mergeable, CreatedAt: PullCreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }
 
@@ -244,6 +249,7 @@ func servePull(w http.ResponseWriter, pull PullOnGitHub, number int, fail func(i
 	fields := map[string]any{
 		"number":          number,
 		"state":           state,
+		"merged":          pull.Merged,
 		"draft":           pull.Draft,
 		"head":            map[string]string{"sha": pull.Head},
 		"base":            map[string]string{"ref": pull.Base},
@@ -307,7 +313,7 @@ func (g *fakeGitHub) merge(w http.ResponseWriter, r *http.Request, repository st
 	}
 	g.mu.Lock()
 	pull := g.pulls[key]
-	pull.Closed, pull.UpdatedAt = true, PullMergedAt
+	pull.Closed, pull.Merged, pull.UpdatedAt = true, true, PullMergedAt
 	g.pulls[key] = pull
 	g.mu.Unlock()
 	fmt.Fprint(w, `{"merged":true}`)

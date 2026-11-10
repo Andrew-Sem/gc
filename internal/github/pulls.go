@@ -17,6 +17,7 @@ const mergeLimit = 60 * time.Second
 type Pull struct {
 	Number *int    `json:"number"`
 	State  *string `json:"state"`
+	Merged *bool   `json:"merged"`
 	Draft  *bool   `json:"draft"`
 	Head   struct {
 		SHA *string `json:"sha"`
@@ -31,7 +32,7 @@ type Pull struct {
 }
 
 func (p Pull) Snapshot(repository string) (contract.PrStateChanged, bool) {
-	if p.Number == nil || p.State == nil || p.Draft == nil || p.Head.SHA == nil ||
+	if p.Number == nil || p.State == nil || p.Merged == nil || p.Draft == nil || p.Head.SHA == nil ||
 		p.Base.Ref == nil || p.Mergeable == nil || p.CreatedAt == nil || p.UpdatedAt == nil {
 		return contract.PrStateChanged{}, false
 	}
@@ -42,6 +43,10 @@ func (p Pull) Snapshot(repository string) (contract.PrStateChanged, bool) {
 	case "false":
 		mergeable = contract.MergeableNo
 	}
+	merged := contract.MergedNo
+	if *p.Merged {
+		merged = contract.MergedYes
+	}
 	return contract.PrStateChanged{
 		Repository: repository,
 		Number:     *p.Number,
@@ -49,6 +54,7 @@ func (p Pull) Snapshot(repository string) (contract.PrStateChanged, bool) {
 		Base:       *p.Base.Ref,
 		Draft:      *p.Draft,
 		Open:       *p.State == "open",
+		Merged:     merged,
 		Mergeable:  mergeable,
 		CreatedAt:  p.CreatedAt.UTC(),
 		UpdatedAt:  p.UpdatedAt.UTC(),

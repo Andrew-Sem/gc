@@ -263,3 +263,111 @@ func TestPullRequestsPage(t *testing.T) {
 			ExpectElement(`a[href="/runs"]`)
 	})
 }
+
+func TestMergeRate(t *testing.T) {
+	f := extensions.NewFeature(t, "pull-requests-page.md")
+	state := func(repository string, number int, open bool, merged contract.Merged) contract.PrStateChanged {
+		return contract.PrStateChanged{Repository: repository, Number: number, Open: open, Merged: merged}
+	}
+	ours := func(repository string, numbers ...int) []contract.Fact {
+		var facts []contract.Fact
+		for _, n := range numbers {
+			facts = append(facts, contract.PrCreated{Repository: repository, Number: n})
+		}
+		return facts
+	}
+	api := contract.RepositoryConnected{FullName: "acme/api"}
+
+	f.Run("the merge rate counts merged and closed PRs", func(s *extensions.Scenario) {
+		s.Covers("PULLS-4.1.1", "PULLS-4.1.2").
+			Given(api).
+			Given(ours("acme/api", 1, 2, 3, 4, 5, 6, 7, 8, 9)...).
+			Given(
+				state("acme/api", 1, false, contract.MergedYes),
+				state("acme/api", 2, false, contract.MergedYes),
+				state("acme/api", 3, false, contract.MergedNo),
+				state("acme/api", 4, false, contract.MergedYes),
+				state("acme/api", 5, false, contract.MergedNo),
+				state("acme/api", 6, false, contract.MergedYes),
+				state("acme/api", 7, false, contract.MergedYes),
+				state("acme/api", 8, false, contract.MergedNo),
+				state("acme/api", 9, true, contract.MergedNo),
+			).
+			When(spec.Get("/pulls")).
+			Then("5 of 8 closed PRs were merged, 62.5% rounded up").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(`#pulls-panel #merge-rate`, "Merged 5 of 8 closed agent PRs (63%)")
+	})
+
+	for _, tt := range []struct {
+		name    string
+		results []contract.Merged
+		text    string
+	}{
+		{"one merged of three", []contract.Merged{contract.MergedYes, contract.MergedNo, contract.MergedNo}, "Merged 1 of 3 closed agent PRs (33%)"},
+		{"two merged of three", []contract.Merged{contract.MergedYes, contract.MergedYes, contract.MergedNo}, "Merged 2 of 3 closed agent PRs (67%)"},
+		{"all merged", []contract.Merged{contract.MergedYes}, "Merged 1 of 1 closed agent PRs (100%)"},
+		{"none merged", []contract.Merged{contract.MergedNo, contract.MergedNo}, "Merged 0 of 2 closed agent PRs (0%)"},
+	} {
+		f.Run("the merge rate with "+tt.name, func(s *extensions.Scenario) {
+			given := []contract.Fact{api}
+			for i, merged := range tt.results {
+				given = append(given, contract.PrCreated{Repository: "acme/api", Number: i + 1}, state("acme/api", i+1, false, merged))
+			}
+			s.Covers("PULLS-4.1.2").
+				Given(given...).
+				When(spec.Get("/pulls/panel")).
+				Then("the percent is rounded to a whole number").
+				ExpectStatus(http.StatusOK).
+				ExpectFacts().
+				ExpectText(`#pulls-panel #merge-rate`, tt.text)
+		})
+	}
+
+	f.Run("the merge rate with no closed PRs", func(s *extensions.Scenario) {
+		s.Covers("PULLS-4.1.3").
+			Given(api).
+			Given(ours("acme/api", 1)...).
+			When(spec.Get("/pulls")).
+			Then("it says there are none yet").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(`#pulls-panel #merge-rate`, "No closed agent PRs yet")
+	})
+
+	f.Run("the merge rate leaves out PRs that are not settled", func(s *extensions.Scenario) {
+		s.Covers("PULLS-4.1.4").
+			Given(api, contract.RepositoryConnected{FullName: "acme/web"}).
+			Given(ours("acme/api", 1, 2, 3, 4)...).
+			Given(
+				state("acme/api", 1, false, contract.MergedYes),
+				state("acme/api", 2, false, contract.MergedNo),
+				state("acme/api", 2, true, contract.MergedNo),
+				state("acme/api", 3, false, ""),
+				state("acme/api", 99, false, contract.MergedNo),
+				state("acme/web", 1, false, contract.MergedNo),
+			).
+			When(spec.Get("/pulls")).
+			Then("only the merged #1 counts: #2 was reopened, #3 is not known, #4 is open, and the rest are not ours").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(`#pulls-panel #merge-rate`, "Merged 1 of 1 closed agent PRs (100%)")
+	})
+
+	f.Run("the merge rate counts PRs of disconnected repositories", func(s *extensions.Scenario) {
+		s.Covers("PULLS-4.1.1").
+			Given(api).
+			Given(ours("acme/api", 1, 2)...).
+			Given(
+				state("acme/api", 1, false, contract.MergedYes),
+				state("acme/api", 2, false, contract.MergedNo),
+				contract.RepositoryDisconnected{FullName: "acme/api"},
+			).
+			When(spec.Get("/pulls")).
+			Then("both closed PRs still count").
+			ExpectStatus(http.StatusOK).
+			ExpectFacts().
+			ExpectText(`#pulls-panel #merge-rate`, "Merged 1 of 2 closed agent PRs (50%)")
+	})
+}

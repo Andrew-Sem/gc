@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"time"
 
@@ -25,7 +26,8 @@ func Sweep(ctx context.Context, deps contract.Dependencies) {
 
 func sweepRepository(ctx context.Context, journal contract.Journal, client *github.Client, repository string) {
 	facts := journal.Facts()
-	numbers := domain.OpenPRs(facts, repository)
+	open := domain.OpenPRs(facts, repository)
+	numbers := append(open, domain.UnsettledPRs(facts, repository)...)
 	if len(numbers) == 0 {
 		return
 	}
@@ -37,7 +39,7 @@ func sweepRepository(ctx context.Context, journal contract.Journal, client *gith
 		}
 		pull, snapshot, read := readPull(ctx, client, token, tokenErr, repository, number)
 		if !read {
-			if merging {
+			if merging && slices.Contains(open, number) {
 				journal.Append(contract.MergeDeclined{Repository: repository, Number: number, Reason: "GitHub did not give the PR"})
 			}
 			continue

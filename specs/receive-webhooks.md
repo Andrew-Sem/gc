@@ -29,8 +29,8 @@ repository and number.
 **PR snapshot** — what `PrStateChanged` carries, read from these fields of GitHub's event:
 repository (`repository.full_name`), number (`pull_request.number`), head commit
 (`pull_request.head.sha`), target branch (`pull_request.base.ref`), draft
-(`pull_request.draft`), open (`pull_request.state`), mergeable (`pull_request.mergeable`: yes,
-no, or unknown), creation date (`pull_request.created_at`), and update date
+(`pull_request.draft`), open (`pull_request.state`), merged (`pull_request.merged`: yes or no),
+mergeable (`pull_request.mergeable`: yes, no, or unknown), creation date (`pull_request.created_at`), and update date
 (`pull_request.updated_at`).
 
 **Known snapshot** — the snapshot in the latest `PrStateChanged` for that PR.
@@ -114,6 +114,10 @@ HOOK-3.1.4. GitHub's `mergeable: null` is recorded as unknown.
 
 HOOK-3.1.5. GitHub's `state` decides whether the snapshot says the PR is open: `open` means
 open, and `closed`, which also covers a merged PR, means closed.
+
+HOOK-3.1.6. GitHub's `merged` decides whether the snapshot says the PR was merged: `true` means
+merged and `false` means not merged, whoever closed the PR, `gc` or a person. So a closed PR is
+either merged or closed without merging.
 
 #### HOOK-3.2. Not our PR
 

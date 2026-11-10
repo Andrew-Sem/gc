@@ -18,7 +18,7 @@ func TestMergePullRequests(t *testing.T) {
 	mergeOn := contract.RepositorySettingsChanged{Repository: "acme/api", Pace: 1, Limit: 12, Merge: true, At: extensions.At("1999-12-31 09:00")}
 	open := extensions.OpenPullOnGitHub()
 	merged := open
-	merged.Closed, merged.UpdatedAt = true, extensions.PullMergedAt
+	merged.Closed, merged.Merged, merged.UpdatedAt = true, true, extensions.PullMergedAt
 	with := func(change func(*extensions.PullOnGitHub)) extensions.PullOnGitHub {
 		pull := open
 		change(&pull)
@@ -369,6 +369,48 @@ func TestMergePullRequests(t *testing.T) {
 			).
 			Expect(s.GitHubMergedNothing())
 	})
+
+	f.Run("a closed PR not known as merged is read again", func(s *extensions.Scenario) {
+		legacy := merged.Snapshot("acme/api", 7)
+		legacy.Merged = ""
+		s.Covers("MERGE-2.2.5").
+			Given(connected, mergeOn, created, legacy).
+			GivenPullOnGitHub("acme/api", 7, merged).
+			WhenSwept().
+			Then("the PR is recorded as merged, with no merge decision").
+			ExpectFacts(merged.Snapshot("acme/api", 7)).
+			Expect(s.GitHubReadPR("acme/api", 7, 1)).
+			Expect(s.GitHubMergedNothing())
+	})
+
+	f.Run("a closed PR not known as merged that GitHub does not give", func(s *extensions.Scenario) {
+		legacy := merged.Snapshot("acme/api", 7)
+		legacy.Merged = ""
+		s.Covers("MERGE-2.2.5").
+			Given(connected, mergeOn, created, legacy).
+			GivenPullOnGitHub("acme/api", 7, with(func(p *extensions.PullOnGitHub) { p.Unreadable = true })).
+			WhenSwept().
+			Then("nothing is recorded, not even a decline").
+			ExpectFacts().
+			Expect(s.GitHubReadPR("acme/api", 7, 1))
+	})
+
+	for _, tt := range []struct {
+		name   string
+		merged contract.Merged
+	}{{"merged", contract.MergedYes}, {"closed without merging", contract.MergedNo}} {
+		f.Run("a PR known as "+tt.name+" is not read again", func(s *extensions.Scenario) {
+			known := merged.Snapshot("acme/api", 7)
+			known.Merged = tt.merged
+			s.Covers("MERGE-2.2.5").
+				Given(connected, mergeOn, created, known).
+				GivenPullOnGitHub("acme/api", 7, merged).
+				WhenSwept().
+				Then("the sweep leaves it alone").
+				ExpectFacts().
+				Expect(s.GitHubReadPR("acme/api", 7, 0))
+		})
+	}
 
 	f.Run("a known state writes nothing", func(s *extensions.Scenario) {
 		s.Covers("MERGE-2.2.2").

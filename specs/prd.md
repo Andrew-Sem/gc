@@ -171,7 +171,7 @@ truth. Here are meaning and boundaries.
 
 | Fact | When it occurs |
 |---|---|
-| `PrStateChanged` | We saw a PR snapshot, not older than the known one, that differs from it. Carries head, target branch, draft, open, mergeable, creation and update dates. |
+| `PrStateChanged` | We saw a PR snapshot, not older than the known one, that differs from it. Carries head, target branch, draft, open, merged, mergeable, creation and update dates. |
 | `CheckRunStateChanged` | We saw a newer check run state. Carries raw data: id, required identity, status, conclusion, and times. Whether it is required is not derived from the webhook. |
 | `RequiredChecksObserved` | We fully obtained the required inventory and all attempts for one PR, head, and `sweepId`. A partial response cannot be this fact. |
 
@@ -196,7 +196,8 @@ complete. Merging is allowed only on the current sweep's `RequiredChecksObserved
 | `MergeApproved` | The merge gate of the current `sweepId` allowed the merge. This is a decision, not an accomplished fact. |
 
 A successful merge is not written as a separate fact: it will arrive as an observation. A human
-closed our PR by hand — that is also `PrStateChanged` with `open: false`.
+closed our PR by hand — that is also `PrStateChanged` with `open: false`; `merged` tells a merge
+from a close without merging, whoever did it.
 
 `AdmissionApproved` carries the agent settings from the due tick. It is a snapshot of a specific
 attempt, not a reference to the mutable current settings.

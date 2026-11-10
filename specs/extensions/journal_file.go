@@ -182,6 +182,7 @@ func EveryKindOfFact() []contract.Fact {
 			Repository: "acme/api",
 			HeadSHA:    "abc123",
 			Base:       "main",
+			Merged:     contract.MergedYes,
 			Draft:      true,
 			Open:       true,
 			Mergeable:  contract.MergeableUnknown,
