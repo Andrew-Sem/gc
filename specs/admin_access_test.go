@@ -20,6 +20,7 @@ func TestAdminAccess(t *testing.T) {
 		name    string
 		request spec.Request
 	}{
+		{"the bare address", spec.Get("/")},
 		{"the repositories page", spec.Get("/repositories")},
 		{"the runs page", spec.Get("/runs")},
 		{"the runs panel", spec.Get("/runs/panel")},

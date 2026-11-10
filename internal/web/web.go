@@ -48,6 +48,7 @@ func New(deps contract.Dependencies) http.Handler {
 	s := &server{journal: deps.Journal, github: github.New(deps.GitHub), webhookSecret: deps.WebhookSecret, defaultBaseURL: deps.OpenAIBaseURL, deliveries: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.Handle("GET /static/", ui.Static())
+	mux.Handle("GET /{$}", http.RedirectHandler("/repositories", http.StatusFound))
 	mux.HandleFunc("GET /repositories", s.repositoriesPage)
 	sameSite := http.NewCrossOriginProtection()
 	mux.Handle("POST /repositories", sameSite.Handler(http.HandlerFunc(s.connectRepository)))

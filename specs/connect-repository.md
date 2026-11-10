@@ -155,6 +155,13 @@ including when the submitted name differs only in casing or surrounding spaces.
 REPO-2.3.1. The response to the connect form or a disconnect button is the updated block, not
 a whole page: the connect form, the list, and the error if there is one.
 
+#### REPO-2.4. The admin's address
+
+REPO-2.4.1. `GET /` answers 302 with `Location: /repositories`, so the bare address of the admin
+opens the repositories page. It writes no facts.
+
+REPO-2.4.2. Any other path the admin does not have answers 404.
+
 ### REPO-3. Disconnecting
 
 #### REPO-3.1. Disconnect button

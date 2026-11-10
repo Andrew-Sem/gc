@@ -98,6 +98,26 @@ func TestConnectRepository(t *testing.T) {
 			ExpectText(`#repositories-panel [role="alert"]`, "The app is not installed on this repository")
 	})
 
+	f.Run("the bare address opens the repositories page", func(s *extensions.Scenario) {
+		s.Covers("REPO-2.4.1").
+			Given(contract.RepositoryConnected{FullName: "acme/api"}).
+			When(spec.Get("/")).
+			Then("the admin sends the browser to the repositories page").
+			ExpectStatus(http.StatusFound).
+			ExpectFacts().
+			ExpectHeader("Location", "/repositories")
+	})
+
+	for _, path := range []string{"/nothing", "/repositories/acme", "/index.html"} {
+		f.Run("an unknown address "+path, func(s *extensions.Scenario) {
+			s.Covers("REPO-2.4.2").
+				When(spec.Get(path)).
+				Then("it is not found").
+				ExpectStatus(http.StatusNotFound).
+				ExpectFacts()
+		})
+	}
+
 	for _, status := range []int{
 		http.StatusMovedPermanently,
 		http.StatusFound,
