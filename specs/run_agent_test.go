@@ -360,6 +360,25 @@ func TestRunAgent(t *testing.T) {
 			)
 	})
 
+	f.RunAgent("the prompt asks to install dependencies before the checks", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.12").
+			GivenRepositoryWithCommits(1).
+			WhenAgentRuns().
+			Then("the agent is told to install dependencies and to say which check could not run").
+			ExpectPromptWith(
+				"Before running the repository's checks, install its dependencies the way the repository documents, or with the package manager of its lockfile: a fresh working copy has none",
+				"If a check still cannot run, say which and why in validation",
+			)
+	})
+
+	f.RunAgent("the prompt says gc commits the change", func(s *extensions.AgentRun) {
+		s.Covers("AGENT-2.1.13").
+			GivenRepositoryWithCommits(1).
+			WhenAgentRuns().
+			Then("the agent is told not to call its change uncommitted").
+			ExpectPromptWith("gc commits and pushes your changes and opens the pull request after you finish, so describe the change as done and do not call it uncommitted")
+	})
+
 	f.RunAgent("the prompt lists our open PRs", func(s *extensions.AgentRun) {
 		s.Covers("AGENT-2.1.7").
 			GivenRepositoryWithCommits(1).

@@ -87,6 +87,14 @@ AGENT-2.1.11. The prompt tells the agent that when the repository's rules forbid
 proves the change without adding one: with the code itself, an existing test, or reasoning about
 the behavior before and after, and says which in `validation`.
 
+AGENT-2.1.12. The prompt tells the agent to install the repository's dependencies before running
+its checks, the way the repository documents or with the package manager of its lockfile, because
+a fresh working copy has none. If a check still cannot run, the agent says which and why in
+`validation`.
+
+AGENT-2.1.13. The prompt tells the agent that `gc` commits and pushes its changes and opens the PR
+after it finishes, so the answer describes the change as done and does not call it uncommitted.
+
 AGENT-2.1.7. Before Codex starts, `gc` asks GitHub for the repository's open PRs whose branch
 starts with `gc/`. The prompt lists the title and the changed files of each and asks the agent
 not to fix the same problem again, so one finding does not become a PR every hour. Other open PRs
